@@ -1,19 +1,26 @@
 import { useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
+  Dimensions,
+  FlatList,
+  Keyboard,
+  KeyboardAvoidingView,
+  Platform,
   Pressable,
-  ScrollView,
   StyleSheet,
   Text,
   TextInput,
   View,
 } from "react-native";
 
+import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { COLORS } from "@/constants/colors";
 import { useSupabase } from "@/hooks/useSupabase";
+
+const { width } = Dimensions.get("window");
 
 type CityOption = {
   id: string;
@@ -24,6 +31,7 @@ type CityOption = {
 
 export default function OnboardingPage() {
   const { session, supabase } = useSupabase();
+  const [step, setStep] = useState(0); // 0: Profile, 1: City
   const [fullName, setFullName] = useState("");
   const [displayName, setDisplayName] = useState("");
   const [selectedCityId, setSelectedCityId] = useState<string | null>(null);
@@ -32,6 +40,17 @@ export default function OnboardingPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
+  const [isKeyboardVisible, setKeyboardVisible] = useState(false);
+
+  useEffect(() => {
+    const showSubscription = Keyboard.addListener("keyboardDidShow", () => setKeyboardVisible(true));
+    const hideSubscription = Keyboard.addListener("keyboardDidHide", () => setKeyboardVisible(false));
+
+    return () => {
+      showSubscription.remove();
+      hideSubscription.remove();
+    };
+  }, []);
 
   useEffect(() => {
     const load = async () => {
@@ -82,18 +101,19 @@ export default function OnboardingPage() {
     });
   }, [cities, citySearch]);
 
+  const onNextStep = () => {
+    if (!fullName.trim()) {
+      setErrorMessage("Full name is required.");
+      return;
+    }
+    setErrorMessage("");
+    setStep(1);
+  };
+
   const onContinue = async () => {
     const userId = session?.user?.id;
     const email = session?.user?.email ?? "";
     if (!userId || isSaving) return;
-
-    const normalizedFullName = fullName.trim();
-    const normalizedDisplayName = displayName.trim();
-
-    if (!normalizedFullName) {
-      setErrorMessage("Full name is required.");
-      return;
-    }
 
     if (!selectedCityId) {
       setErrorMessage("Please choose your city.");
@@ -107,8 +127,8 @@ export default function OnboardingPage() {
         .from("profiles")
         .update({
           email,
-          full_name: normalizedFullName,
-          display_name: normalizedDisplayName || normalizedFullName,
+          full_name: fullName.trim(),
+          display_name: displayName.trim() || fullName.trim(),
           city_id: selectedCityId,
         })
         .eq("id", userId);
@@ -133,202 +153,420 @@ export default function OnboardingPage() {
   }
 
   return (
-    <SafeAreaView style={styles.container}>
-      <ScrollView contentContainerStyle={styles.scrollContent}>
-        <View style={styles.card}>
-          <Text style={styles.title}>Finish Your Profile</Text>
-          <Text style={styles.subtitle}>
-            Tell us a bit about you so your experience is personalized.
-          </Text>
+    <SafeAreaView style={styles.safeArea}>
+      <View style={styles.backgroundDecoration}>
+        <View style={[styles.blob, styles.blob1]} />
+        <View style={[styles.blob, styles.blob2]} />
+      </View>
 
-          <Text style={styles.label}>Full Name</Text>
-          <TextInput
-            value={fullName}
-            onChangeText={setFullName}
-            placeholder="Your full name"
-            placeholderTextColor={COLORS.secondary}
-            style={styles.input}
-          />
-
-          <Text style={styles.label}>Display Name (Optional)</Text>
-          <TextInput
-            value={displayName}
-            onChangeText={setDisplayName}
-            placeholder="How others see you"
-            placeholderTextColor={COLORS.secondary}
-            style={styles.input}
-          />
-
-          <Text style={styles.label}>City</Text>
-          <TextInput
-            value={citySearch}
-            onChangeText={setCitySearch}
-            placeholder="Search city"
-            placeholderTextColor={COLORS.secondary}
-            style={styles.input}
-          />
-
-          <View style={styles.cityList}>
-            <ScrollView nestedScrollEnabled style={styles.cityListScroll}>
-              {filteredCities.map((city) => {
-                const isSelected = selectedCityId === city.id;
-                return (
-                  <Pressable
-                    key={city.id}
-                    onPress={() => setSelectedCityId(city.id)}
-                    style={[
-                      styles.cityItem,
-                      isSelected && styles.cityItemSelected,
-                    ]}
-                  >
-                    <Text style={styles.cityName}>
-                      {city.name}
-                      {city.region ? `, ${city.region}` : ""}
-                    </Text>
-                    <Text style={styles.cityCountry}>{city.country_code}</Text>
-                  </Pressable>
-                );
-              })}
-              {filteredCities.length === 0 && (
-                <Text style={styles.emptyText}>No matching cities.</Text>
-              )}
-            </ScrollView>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+        style={styles.flex}
+        keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 20}
+      >
+        <View style={styles.content}>
+          <View style={[styles.header, isKeyboardVisible && step === 1 && styles.headerCompact]}>
+            {!isKeyboardVisible && (
+              <View style={styles.logoContainer}>
+                <Ionicons
+                  name={step === 0 ? "person-circle-outline" : "location-outline"}
+                  size={40}
+                  color={COLORS.primary}
+                />
+              </View>
+            )}
+            <Text style={[styles.title, isKeyboardVisible && step === 1 && styles.titleCompact]}>
+              {step === 0 ? "About You" : "Your Location"}
+            </Text>
+            {!isKeyboardVisible && (
+              <Text style={styles.subtitle}>
+                {step === 0
+                  ? "Help us personalize your experience"
+                  : "Connect with the community in your city"}
+              </Text>
+            )}
           </View>
 
-          {!!errorMessage && (
-            <Text style={styles.errorText}>{errorMessage}</Text>
-          )}
-
-          <Pressable
-            onPress={onContinue}
-            disabled={isSaving}
-            style={[styles.button, isSaving && styles.buttonDisabled]}
-          >
-            {isSaving ? (
-              <View style={styles.loadingRow}>
-                <ActivityIndicator color={COLORS.background} />
-                <Text style={styles.buttonText}>Saving...</Text>
+          {step === 0 ? (
+            <View style={styles.formContainer}>
+              <View style={styles.inputGroup}>
+                <Text style={styles.label}>Full Name</Text>
+                <View style={styles.inputWrapper}>
+                  <Ionicons
+                    name="person-outline"
+                    size={20}
+                    color={COLORS.secondary}
+                    style={styles.inputIcon}
+                  />
+                  <TextInput
+                    placeholder="Jane Doe"
+                    placeholderTextColor={COLORS.secondary + "80"}
+                    style={styles.input}
+                    value={fullName}
+                    onChangeText={setFullName}
+                  />
+                </View>
               </View>
-            ) : (
-              <Text style={styles.buttonText}>Continue</Text>
-            )}
-          </Pressable>
+
+              <View style={styles.inputGroup}>
+                <Text style={styles.label}>Display Name (Optional)</Text>
+                <View style={styles.inputWrapper}>
+                  <Ionicons
+                    name="at-outline"
+                    size={20}
+                    color={COLORS.secondary}
+                    style={styles.inputIcon}
+                  />
+                  <TextInput
+                    placeholder="How others see you"
+                    placeholderTextColor={COLORS.secondary + "80"}
+                    style={styles.input}
+                    value={displayName}
+                    onChangeText={setDisplayName}
+                  />
+                </View>
+              </View>
+
+              {!!errorMessage && (
+                <View style={styles.messageContainer}>
+                  <Ionicons
+                    name="alert-circle-outline"
+                    size={18}
+                    color={COLORS.secondary}
+                  />
+                  <Text style={styles.errorMessage}>{errorMessage}</Text>
+                </View>
+              )}
+
+              <Pressable onPress={onNextStep} style={styles.primaryButton}>
+                <Text style={styles.primaryButtonText}>Next</Text>
+                <Ionicons
+                  name="arrow-forward"
+                  size={20}
+                  color={COLORS.background}
+                />
+              </Pressable>
+            </View>
+          ) : (
+            <View style={styles.formContainer}>
+              <View style={styles.inputGroup}>
+                <View style={styles.inputWrapper}>
+                  <Ionicons
+                    name="search-outline"
+                    size={20}
+                    color={COLORS.secondary}
+                    style={styles.inputIcon}
+                  />
+                  <TextInput
+                    placeholder="Search your city..."
+                    placeholderTextColor={COLORS.secondary + "80"}
+                    style={styles.input}
+                    value={citySearch}
+                    onChangeText={setCitySearch}
+                  />
+                </View>
+              </View>
+
+              <FlatList
+                data={filteredCities}
+                keyExtractor={(item) => item.id}
+                style={styles.cityList}
+                showsVerticalScrollIndicator={false}
+                keyboardShouldPersistTaps="handled"
+                renderItem={({ item }) => {
+                  const isSelected = selectedCityId === item.id;
+                  return (
+                    <Pressable
+                      onPress={() => setSelectedCityId(item.id)}
+                      style={[
+                        styles.cityItem,
+                        isSelected && styles.cityItemSelected,
+                      ]}
+                    >
+                      <View style={styles.cityInfo}>
+                        <Text style={styles.cityName}>
+                          {item.name}
+                          {item.region ? `, ${item.region}` : ""}
+                        </Text>
+                        <Text style={styles.cityCountry}>
+                          {item.country_code}
+                        </Text>
+                      </View>
+                      {isSelected && (
+                        <Ionicons
+                          name="checkmark-circle"
+                          size={24}
+                          color={COLORS.primary}
+                        />
+                      )}
+                    </Pressable>
+                  );
+                }}
+                ListEmptyComponent={
+                  <View style={styles.emptyContainer}>
+                    <Text style={styles.emptyText}>No cities found.</Text>
+                  </View>
+                }
+              />
+
+              {!!errorMessage && (
+                <View style={styles.messageContainer}>
+                  <Ionicons
+                    name="alert-circle-outline"
+                    size={18}
+                    color={COLORS.secondary}
+                  />
+                  <Text style={styles.errorMessage}>{errorMessage}</Text>
+                </View>
+              )}
+
+              {!isKeyboardVisible && (
+                <View style={styles.footerButtons}>
+                  <Pressable
+                    onPress={() => setStep(0)}
+                    style={[styles.primaryButton, styles.secondaryButton]}
+                  >
+                    <Text style={styles.secondaryButtonText}>Back</Text>
+                  </Pressable>
+                  <Pressable
+                    disabled={isSaving || !selectedCityId}
+                    onPress={onContinue}
+                    style={[
+                      styles.primaryButton,
+                      styles.flex,
+                      (isSaving || !selectedCityId) && styles.disabledButton,
+                    ]}
+                  >
+                    {isSaving ? (
+                      <ActivityIndicator color={COLORS.background} />
+                    ) : (
+                      <>
+                        <Text style={styles.primaryButtonText}>Finish</Text>
+                        <Ionicons
+                          name="checkmark-done"
+                          size={20}
+                          color={COLORS.background}
+                        />
+                      </>
+                    )}
+                  </Pressable>
+                </View>
+              )}
+            </View>
+          )}
         </View>
-      </ScrollView>
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
+  flex: { flex: 1 },
+  safeArea: {
+    flex: 1,
+    backgroundColor: COLORS.background,
+  },
   loadingContainer: {
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
     backgroundColor: COLORS.background,
   },
-  container: {
-    flex: 1,
-    backgroundColor: COLORS.background,
+  backgroundDecoration: {
+    ...StyleSheet.absoluteFillObject,
+    overflow: "hidden",
+    zIndex: -1,
   },
-  scrollContent: {
-    padding: 20,
+  blob: {
+    position: "absolute",
+    width: width * 0.8,
+    height: width * 0.8,
+    borderRadius: width * 0.4,
+    opacity: 0.15,
   },
-  card: {
+  blob1: {
+    backgroundColor: COLORS.primary,
+    top: -width * 0.2,
+    right: -width * 0.2,
+  },
+  blob2: {
     backgroundColor: COLORS.accent,
-    borderColor: COLORS.secondary,
+    bottom: -width * 0.1,
+    left: -width * 0.3,
+  },
+  content: {
+    flex: 1,
+    padding: 24,
+  },
+  header: {
+    alignItems: "center",
+    marginBottom: 30,
+    marginTop: 20,
+  },
+  headerCompact: {
+    marginBottom: 10,
+    marginTop: 0,
+    alignItems: "flex-start",
+  },
+  logoContainer: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: COLORS.accent,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 20,
     borderWidth: 1,
-    borderRadius: 20,
-    padding: 18,
-    gap: 10,
+    borderColor: COLORS.primary + "30",
   },
   title: {
     color: COLORS.primary,
-    fontSize: 36,
+    fontSize: 38,
     fontFamily: "Boogaloo_400Regular",
+    textAlign: "center",
+  },
+  titleCompact: {
+    fontSize: 24,
+    textAlign: "left",
   },
   subtitle: {
     color: COLORS.text,
-    fontSize: 16,
+    fontSize: 18,
     fontFamily: "Boogaloo_400Regular",
-    marginBottom: 6,
+    textAlign: "center",
+    marginTop: 8,
+    opacity: 0.8,
+  },
+  formContainer: {
+    flex: 1,
+    gap: 20,
+  },
+  inputGroup: {
+    gap: 8,
   },
   label: {
     color: COLORS.text,
     fontSize: 16,
     fontFamily: "Boogaloo_400Regular",
+    marginLeft: 4,
+  },
+  inputWrapper: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: COLORS.accent + "40",
+    borderWidth: 1,
+    borderColor: COLORS.secondary + "30",
+    borderRadius: 16,
+    paddingHorizontal: 16,
+    minHeight: 56,
+  },
+  inputIcon: {
+    marginRight: 12,
   },
   input: {
-    backgroundColor: COLORS.background,
+    flex: 1,
     color: COLORS.primary,
-    borderWidth: 1,
-    borderColor: COLORS.secondary,
-    borderRadius: 12,
-    minHeight: 46,
-    paddingHorizontal: 12,
-    fontSize: 15,
+    fontSize: 16,
+    height: "100%",
+    fontFamily: "Boogaloo_400Regular",
   },
   cityList: {
+    flex: 1,
+    backgroundColor: COLORS.accent + "20",
+    borderRadius: 20,
     borderWidth: 1,
-    borderColor: COLORS.secondary,
-    borderRadius: 12,
-    backgroundColor: COLORS.background,
-    maxHeight: 220,
-  },
-  cityListScroll: {
-    paddingVertical: 4,
+    borderColor: COLORS.secondary + "10",
+    marginTop: -10,
   },
   cityItem: {
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.accent,
     flexDirection: "row",
-    justifyContent: "space-between",
     alignItems: "center",
+    justifyContent: "space-between",
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.secondary + "10",
   },
   cityItemSelected: {
-    backgroundColor: COLORS.accent,
+    backgroundColor: COLORS.accent + "60",
+  },
+  cityInfo: {
+    flex: 1,
   },
   cityName: {
     color: COLORS.primary,
-    fontSize: 15,
+    fontSize: 18,
     fontFamily: "Boogaloo_400Regular",
   },
   cityCountry: {
     color: COLORS.secondary,
-    fontSize: 13,
+    fontSize: 14,
     fontFamily: "Boogaloo_400Regular",
+    marginTop: 2,
   },
-  emptyText: {
-    color: COLORS.secondary,
-    fontSize: 15,
-    fontFamily: "Boogaloo_400Regular",
+  messageContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    backgroundColor: COLORS.accent + "60",
     padding: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: COLORS.secondary + "20",
   },
-  errorText: {
+  errorMessage: {
+    flex: 1,
     color: COLORS.secondary,
     fontSize: 14,
     fontFamily: "Boogaloo_400Regular",
   },
-  button: {
-    minHeight: 50,
-    borderRadius: 12,
-    marginTop: 6,
+  primaryButton: {
     backgroundColor: COLORS.primary,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  buttonDisabled: {
-    opacity: 0.6,
-  },
-  buttonText: {
-    color: COLORS.background,
-    fontSize: 18,
-    fontFamily: "Boogaloo_400Regular",
-  },
-  loadingRow: {
+    borderRadius: 18,
+    minHeight: 60,
     flexDirection: "row",
     alignItems: "center",
-    gap: 8,
+    justifyContent: "center",
+    gap: 10,
+    shadowColor: COLORS.primary,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  primaryButtonText: {
+    color: COLORS.background,
+    fontSize: 20,
+    fontFamily: "Boogaloo_400Regular",
+  },
+  secondaryButton: {
+    backgroundColor: "transparent",
+    borderWidth: 1,
+    borderColor: COLORS.primary,
+    shadowOpacity: 0,
+    elevation: 0,
+    paddingHorizontal: 20,
+  },
+  secondaryButtonText: {
+    color: COLORS.primary,
+    fontSize: 20,
+    fontFamily: "Boogaloo_400Regular",
+  },
+  footerButtons: {
+    flexDirection: "row",
+    gap: 12,
+    marginTop: "auto",
+    paddingBottom: 10,
+  },
+  disabledButton: {
+    opacity: 0.5,
+  },
+  emptyContainer: {
+    padding: 40,
+    alignItems: "center",
+  },
+  emptyText: {
+    color: COLORS.secondary,
+    fontSize: 16,
+    fontFamily: "Boogaloo_400Regular",
   },
 });

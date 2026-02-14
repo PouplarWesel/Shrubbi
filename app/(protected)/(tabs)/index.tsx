@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Alert, Pressable, StyleSheet, Text, View, Dimensions } from "react-native";
 
 import { Ionicons } from "@expo/vector-icons";
+import { router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { COLORS } from "@/constants/colors";
@@ -103,6 +104,16 @@ export default function Page() {
         </View>
 
         <View style={styles.footer}>
+          <Pressable
+            style={({ pressed }) => [
+              styles.onboardingButton,
+              pressed && styles.pressed,
+            ]}
+            onPress={() => router.push("/(protected)/onboarding")}
+          >
+            <Ionicons name="school-outline" size={20} color={COLORS.primary} />
+            <Text style={styles.onboardingText}>Onboarding</Text>
+          </Pressable>
           <Pressable
             style={({ pressed }) => [
               styles.signOutButton,
@@ -270,6 +281,21 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     borderWidth: 1,
     borderColor: COLORS.secondary + "20",
+  },
+  onboardingButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    padding: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: COLORS.primary + "30",
+    backgroundColor: COLORS.accent + "55",
+  },
+  onboardingText: {
+    color: COLORS.primary,
+    fontSize: 16,
+    fontFamily: "Boogaloo_400Regular",
   },
   signOutText: {
     color: COLORS.secondary,
