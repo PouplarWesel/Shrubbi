@@ -22,6 +22,8 @@ const COLUMN_WIDTH = (width - 40 - 12) / 2;
 const BRONZE = "#CD7F32";
 const SILVER = "#C0C0C0";
 const GOLD = "#D4AF37";
+const SILVER_MIN_ACHIEVEMENTS = 3;
+const GOLD_MIN_ACHIEVEMENTS = 5;
 
 function takeOne<T>(value: T | T[] | null | undefined): T | null {
   if (!value) return null;
@@ -57,6 +59,7 @@ export default function PlantsPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState("");
   const [plants, setPlants] = useState<UserPlantRow[]>([]);
+  const [earnedAchievementCount, setEarnedAchievementCount] = useState(0);
 
   const userId = session?.user?.id ?? null;
 
@@ -65,21 +68,31 @@ export default function PlantsPage() {
     setIsLoading(true);
     setErrorMessage("");
 
-    const { data, error } = await supabase
-      .from("user_plants")
-      .select(
-        "id, plant_id, custom_name, quantity, planted_on, notes, watering_points, plant:plants(common_name, scientific_name, default_co2_kg_per_year, type, plant_type:plant_types(display_name), is_native, is_endangered, is_invasive)",
-      )
-      .eq("user_id", userId)
-      .order("planted_on", { ascending: false });
+    const [{ data, error }, { count, error: achievementError }] =
+      await Promise.all([
+        supabase
+          .from("user_plants")
+          .select(
+            "id, plant_id, custom_name, quantity, planted_on, notes, watering_points, plant:plants(common_name, scientific_name, default_co2_kg_per_year, type, plant_type:plant_types(display_name), is_native, is_endangered, is_invasive)",
+          )
+          .eq("user_id", userId)
+          .order("planted_on", { ascending: false }),
+        supabase
+          .from("user_achievements")
+          .select("achievement_id", { count: "exact", head: true })
+          .eq("user_id", userId),
+      ]);
 
-    if (error) {
-      setErrorMessage(`Could not load your plants: ${error.message}`);
+    if (error || achievementError) {
+      const message =
+        error?.message ?? achievementError?.message ?? "Unknown error";
+      setErrorMessage(`Could not load your garden data: ${message}`);
       setIsLoading(false);
       return;
     }
 
     setPlants((data ?? []) as unknown as UserPlantRow[]);
+    setEarnedAchievementCount(count ?? 0);
     setIsLoading(false);
   }, [supabase, userId]);
 
@@ -104,10 +117,32 @@ export default function PlantsPage() {
     [plants],
   );
   const levelInfo = useMemo(() => {
-    if (totalPoints >= 500) return { level: 3, tier: "Gold", color: GOLD };
-    if (totalPoints >= 100) return { level: 2, tier: "Silver", color: SILVER };
+    if (totalPoints >= 500 && earnedAchievementCount >= GOLD_MIN_ACHIEVEMENTS) {
+      return { level: 3, tier: "Gold", color: GOLD };
+    }
+    if (
+      totalPoints >= 100 &&
+      earnedAchievementCount >= SILVER_MIN_ACHIEVEMENTS
+    ) {
+      return { level: 2, tier: "Silver", color: SILVER };
+    }
     return { level: 1, tier: "Bronze", color: BRONZE };
-  }, [totalPoints]);
+  }, [earnedAchievementCount, totalPoints]);
+  const levelRequirementText = useMemo(() => {
+    if (totalPoints < 100) {
+      return `Need ${formatPlantPoints(100 - totalPoints)} more pts and ${Math.max(SILVER_MIN_ACHIEVEMENTS - earnedAchievementCount, 0)} more achievements for Silver`;
+    }
+    if (earnedAchievementCount < SILVER_MIN_ACHIEVEMENTS) {
+      return `Need ${SILVER_MIN_ACHIEVEMENTS - earnedAchievementCount} more achievements for Silver`;
+    }
+    if (totalPoints < 500) {
+      return `Need ${formatPlantPoints(500 - totalPoints)} more pts and ${Math.max(GOLD_MIN_ACHIEVEMENTS - earnedAchievementCount, 0)} more achievements for Gold`;
+    }
+    if (earnedAchievementCount < GOLD_MIN_ACHIEVEMENTS) {
+      return `Need ${GOLD_MIN_ACHIEVEMENTS - earnedAchievementCount} more achievements for Gold`;
+    }
+    return "Gold requirements met";
+  }, [earnedAchievementCount, totalPoints]);
 
   const getPlantIcon = (type?: string | null) => {
     const t = type?.toLowerCase() || "";
@@ -138,6 +173,12 @@ export default function PlantsPage() {
             </Text>
             <Text style={styles.pointsSummary}>
               Total points: {formatPlantPoints(totalPoints)} pts
+            </Text>
+            <Text style={styles.pointsSummary}>
+              Achievements: {earnedAchievementCount}
+            </Text>
+            <Text style={styles.levelRequirementText}>
+              {levelRequirementText}
             </Text>
           </View>
           <View
@@ -297,6 +338,12 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontFamily: "Boogaloo_400Regular",
     opacity: 0.9,
+  },
+  levelRequirementText: {
+    color: COLORS.text,
+    fontSize: 13,
+    fontFamily: "Boogaloo_400Regular",
+    opacity: 0.7,
   },
   statBadge: {
     flexDirection: "row",

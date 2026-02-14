@@ -19,6 +19,7 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import { router, useFocusEffect } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { LinearGradient } from "expo-linear-gradient";
 
 import { CameraCapture } from "@/components/CameraCapture";
 import { SettingsSection } from "@/components/Settings";
@@ -41,7 +42,10 @@ const ACHIEVEMENT_CODES = [
 ] as const;
 const ACHIEVEMENT_IMAGE_BY_CODE: Partial<Record<string, any>> = {
   green_thumb: require("@/assets/achievments/green_thumb.webp"),
+  community_ledger: require("@/assets/achievments/community.webp"),
+  plant_parcut: require("@/assets/achievments/plant_Parent.webp"),
   native_protector: require("@/assets/achievments/native_protector.webp"),
+  so_thirsty: require("@/assets/achievments/so_thiursty.webp"),
   carbon_sink: require("@/assets/achievments/carbon_sink.webp"),
 };
 
@@ -277,7 +281,7 @@ export default function Page() {
       return;
     }
 
-    setIsTipHistoryLoading(true);
+    setIsDailyTipLoading(true);
     setTipHistoryError("");
 
     const today = formatLocalDate(new Date());
@@ -676,14 +680,14 @@ export default function Page() {
         <ScrollView
           contentContainerStyle={[
             styles.content,
-            { paddingTop: insets.top + 40, paddingBottom: insets.bottom + 28 },
+            { paddingTop: insets.top + 20, paddingBottom: insets.bottom + 120 },
           ]}
           showsVerticalScrollIndicator={false}
         >
           <View style={styles.header}>
             <View>
-              <Text style={styles.greeting}>Hello,</Text>
-              <Text style={styles.userName}>{userName}</Text>
+              <Text style={styles.greeting}>Good day,</Text>
+              <Text style={styles.userName}>{userName}!</Text>
             </View>
             <View style={styles.headerActions}>
               <Pressable
@@ -694,8 +698,8 @@ export default function Page() {
                 ]}
               >
                 <Ionicons
-                  name="trophy-outline"
-                  size={22}
+                  name="trophy"
+                  size={20}
                   color={COLORS.primary}
                 />
               </Pressable>
@@ -707,107 +711,144 @@ export default function Page() {
                 ]}
               >
                 <Ionicons
-                  name="settings-outline"
-                  size={24}
+                  name="settings"
+                  size={22}
                   color={COLORS.primary}
                 />
               </Pressable>
             </View>
           </View>
 
-          <View style={styles.statsContainer}>
+          <View style={styles.statsGrid}>
             <View style={styles.statCard}>
-              <Ionicons name="leaf-outline" size={24} color={COLORS.primary} />
-              <Text style={styles.statValue}>{plantTotal}</Text>
-              <Text style={styles.statLabel}>Plants</Text>
+              <LinearGradient
+                colors={[COLORS.accent + "90", COLORS.accent + "40"]}
+                style={styles.cardGradient}
+              >
+                <View style={styles.statIconContainer}>
+                  <Ionicons name="leaf" size={20} color={COLORS.primary} />
+                </View>
+                <Text style={styles.statValue}>{plantTotal}</Text>
+                <Text style={styles.statLabel}>Plants</Text>
+              </LinearGradient>
             </View>
             <View style={styles.statCard}>
-              <Ionicons name="water-outline" size={24} color={COLORS.primary} />
-              <Text style={styles.statValue}>{toWaterTotal}</Text>
-              <Text style={styles.statLabel}>To Water</Text>
+              <LinearGradient
+                colors={[COLORS.accent + "90", COLORS.accent + "40"]}
+                style={styles.cardGradient}
+              >
+                <View style={[styles.statIconContainer, { backgroundColor: COLORS.secondary + "20" }]}>
+                  <Ionicons name="water" size={20} color={COLORS.secondary} />
+                </View>
+                <Text style={[styles.statValue, { color: COLORS.secondary }]}>{toWaterTotal}</Text>
+                <Text style={styles.statLabel}>Need Water</Text>
+              </LinearGradient>
             </View>
           </View>
 
-          <View style={styles.mainCard}>
-            <Text style={styles.cardTitle}>Daily Tip</Text>
-            <Text style={styles.cardText}>
-              {isDailyTipLoading ? "Loading today's tip..." : dailyTipText}
-            </Text>
-            <Pressable
-              style={styles.cardButton}
-              onPress={handleOpenTipsHistory}
-            >
-              <Text style={styles.cardButtonText}>Learn More</Text>
+          <View style={styles.featuredContainer}>
+            <Text style={styles.sectionTitle}>Today's Tip</Text>
+            <Pressable onPress={handleOpenTipsHistory}>
+              <LinearGradient
+                colors={[COLORS.primary, COLORS.secondary]}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={styles.tipCard}
+              >
+                <View style={styles.tipHeader}>
+                  <Ionicons name="sparkles" size={18} color={COLORS.background} />
+                  <Text style={styles.tipTitle}>Green Insights</Text>
+                </View>
+                <Text style={styles.tipText}>
+                  {isDailyTipLoading ? "Nurturing a new tip..." : dailyTipText}
+                </Text>
+                <View style={styles.tipFooter}>
+                  <Text style={styles.tipActionText}>View previous tips</Text>
+                  <Ionicons name="arrow-forward" size={16} color={COLORS.background} />
+                </View>
+              </LinearGradient>
             </Pressable>
           </View>
 
-          <View style={styles.mainCard}>
-            <Text style={styles.cardTitle}>Daily Quest</Text>
+          <View style={styles.questContainer}>
+            <Text style={styles.sectionTitle}>Daily Quest</Text>
             {dailyQuest ? (
-              <>
-                <Text style={styles.questTitle}>{dailyQuest.title}</Text>
-                <Text style={styles.cardText}>{dailyQuest.description}</Text>
-                <View style={styles.questRow}>
-                  <Text style={styles.questProgress}>
-                    Progress: {dailyQuest.progress}/{dailyQuest.target}
-                  </Text>
-                  <Text style={styles.questPoints}>
-                    +{dailyQuest.points} pts
-                  </Text>
+              <View style={styles.questCard}>
+                <View style={styles.questInfo}>
+                  <View style={styles.questHeader}>
+                    <Text style={styles.questCardTitle}>{dailyQuest.title}</Text>
+                    <View style={styles.pointsBadge}>
+                      <Text style={styles.pointsBadgeText}>+{dailyQuest.points} pts</Text>
+                    </View>
+                  </View>
+                  <Text style={styles.questDescription}>{dailyQuest.description}</Text>
                 </View>
-                <Text style={styles.questStatus}>
-                  {dailyQuest.completed ? "Completed" : "In progress"}
-                </Text>
-              </>
+                
+                <View style={styles.progressContainer}>
+                  <View style={styles.progressBarBackground}>
+                    <View 
+                      style={[
+                        styles.progressBarFill, 
+                        { width: `${Math.min((dailyQuest.progress / dailyQuest.target) * 100, 100)}%` }
+                      ]} 
+                    />
+                  </View>
+                  <View style={styles.progressLabelRow}>
+                    <Text style={styles.progressText}>
+                      {dailyQuest.progress} of {dailyQuest.target} goals
+                    </Text>
+                    {dailyQuest.completed && (
+                      <View style={styles.completedBadge}>
+                        <Ionicons name="checkmark-circle" size={14} color={COLORS.primary} />
+                        <Text style={styles.completedBadgeText}>Done</Text>
+                      </View>
+                    )}
+                  </View>
+                </View>
+              </View>
             ) : (
-              <Text style={styles.cardText}>No daily quest is active.</Text>
+              <View style={styles.emptyQuestCard}>
+                <Text style={styles.emptyQuestText}>No active quests right now. Take a break!</Text>
+              </View>
             )}
           </View>
 
-          <View style={styles.footer}>
+          <View style={styles.quickActions}>
             <Pressable
               style={({ pressed }) => [
-                styles.onboardingButton,
+                styles.actionButton,
                 pressed && styles.pressed,
               ]}
               onPress={() => router.push("/(protected)/onboarding")}
             >
-              <Ionicons
-                name="school-outline"
-                size={20}
-                color={COLORS.primary}
-              />
-              <Text style={styles.onboardingText}>Onboarding</Text>
+              <Ionicons name="help-circle-outline" size={20} color={COLORS.primary} />
+              <Text style={styles.actionButtonText}>Help</Text>
             </Pressable>
             <Pressable
               style={({ pressed }) => [
-                styles.signOutButton,
+                styles.actionButton,
                 pressed && styles.pressed,
               ]}
               onPress={handleSignOut}
             >
-              <Ionicons
-                name="log-out-outline"
-                size={20}
-                color={COLORS.secondary}
-              />
-              <Text style={styles.signOutText}>Logout</Text>
-            </Pressable>
-            <Pressable
-              style={({ pressed }) => [
-                styles.deleteButton,
-                pressed && styles.pressed,
-                isDeleting && styles.disabledButton,
-              ]}
-              onPress={confirmDeleteAccount}
-              disabled={isDeleting}
-            >
-              <Ionicons name="trash-outline" size={20} color={COLORS.warning} />
-              <Text style={styles.deleteText}>
-                {isDeleting ? "Deleting..." : "Delete Account"}
-              </Text>
+              <Ionicons name="log-out-outline" size={20} color={COLORS.text} />
+              <Text style={[styles.actionButtonText, { color: COLORS.text }]}>Logout</Text>
             </Pressable>
           </View>
+
+          <Pressable
+            style={({ pressed }) => [
+              styles.dangerButton,
+              pressed && styles.pressed,
+              isDeleting && styles.disabledButton,
+            ]}
+            onPress={confirmDeleteAccount}
+            disabled={isDeleting}
+          >
+            <Text style={styles.dangerButtonText}>
+              {isDeleting ? "Deleting..." : "Delete Account"}
+            </Text>
+          </Pressable>
         </ScrollView>
 
         <BottomSheetModal
@@ -1045,271 +1086,275 @@ const styles = StyleSheet.create({
   },
   blob: {
     position: "absolute",
-    width: width * 0.8,
-    height: width * 0.8,
-    borderRadius: width * 0.4,
-    opacity: 0.1,
+    width: width * 1.0,
+    height: width * 1.0,
+    borderRadius: width * 0.5,
+    opacity: 0.15,
   },
   blob1: {
     backgroundColor: COLORS.primary,
-    top: -width * 0.2,
-    right: -width * 0.2,
+    top: -width * 0.3,
+    right: -width * 0.4,
   },
   blob2: {
     backgroundColor: COLORS.accent,
-    bottom: -width * 0.1,
-    left: -width * 0.3,
+    bottom: -width * 0.2,
+    left: -width * 0.5,
   },
   content: {
     paddingHorizontal: 24,
-    gap: 22,
+    gap: 28,
   },
   header: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: 32,
   },
   greeting: {
     color: COLORS.text,
-    fontSize: 18,
+    fontSize: 20,
     fontFamily: "Boogaloo_400Regular",
     opacity: 0.8,
   },
   userName: {
     color: COLORS.primary,
-    fontSize: 32,
+    fontSize: 42,
     fontFamily: "Boogaloo_400Regular",
     textTransform: "capitalize",
+    lineHeight: 46,
+  },
+  headerActions: {
+    flexDirection: "row",
+    gap: 12,
   },
   settingsIconButton: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
-    backgroundColor: COLORS.accent,
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: COLORS.accent + "80",
     alignItems: "center",
     justifyContent: "center",
     borderWidth: 1,
     borderColor: COLORS.primary + "30",
-    overflow: "hidden",
   },
-  headerActions: {
-    flexDirection: "row",
-    gap: 10,
-  },
-  statsContainer: {
+  statsGrid: {
     flexDirection: "row",
     gap: 16,
-    marginBottom: 24,
   },
   statCard: {
     flex: 1,
-    backgroundColor: COLORS.accent + "40",
-    borderRadius: 20,
-    padding: 20,
-    alignItems: "center",
+    height: 140,
+    borderRadius: 28,
+    overflow: "hidden",
     borderWidth: 1,
     borderColor: COLORS.secondary + "20",
   },
+  cardGradient: {
+    flex: 1,
+    padding: 20,
+    justifyContent: "center",
+    alignItems: "center",
+    gap: 2,
+  },
+  statIconContainer: {
+    width: 44,
+    height: 44,
+    borderRadius: 14,
+    backgroundColor: COLORS.primary + "20",
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 4,
+  },
   statValue: {
     color: COLORS.primary,
-    fontSize: 24,
+    fontSize: 34,
     fontFamily: "Boogaloo_400Regular",
-    marginTop: 8,
+    textAlign: "center",
   },
   statLabel: {
     color: COLORS.text,
     fontSize: 14,
     fontFamily: "Boogaloo_400Regular",
     opacity: 0.7,
+    textAlign: "center",
   },
-  mainCard: {
-    backgroundColor: COLORS.accent,
-    borderRadius: 24,
-    padding: 24,
-    borderWidth: 1,
-    borderColor: COLORS.primary + "20",
-    shadowColor: COLORS.primary,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 12,
-    elevation: 4,
-  },
-  cardTitle: {
-    color: COLORS.primary,
-    fontSize: 22,
+  sectionTitle: {
+    color: COLORS.secondary,
+    fontSize: 24,
     fontFamily: "Boogaloo_400Regular",
     marginBottom: 12,
+    marginLeft: 4,
   },
-  cardText: {
-    color: COLORS.text,
-    fontSize: 16,
-    fontFamily: "Boogaloo_400Regular",
-    lineHeight: 22,
-    opacity: 0.9,
-    marginBottom: 20,
+  featuredContainer: {
+    marginTop: 4,
   },
-  cardButton: {
-    backgroundColor: COLORS.primary,
-    borderRadius: 12,
-    paddingVertical: 10,
-    paddingHorizontal: 20,
-    alignSelf: "flex-start",
+  tipCard: {
+    borderRadius: 32,
+    padding: 24,
+    gap: 12,
+    elevation: 4,
+    shadowColor: COLORS.primary,
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.2,
+    shadowRadius: 16,
   },
-  cardButtonText: {
+  tipHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  tipTitle: {
     color: COLORS.background,
-    fontSize: 16,
+    fontSize: 18,
     fontFamily: "Boogaloo_400Regular",
+    opacity: 0.9,
   },
-  questTitle: {
-    color: COLORS.primary,
+  tipText: {
+    color: COLORS.background,
     fontSize: 20,
     fontFamily: "Boogaloo_400Regular",
-    marginBottom: 6,
+    lineHeight: 24,
   },
-  questRow: {
+  tipFooter: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "flex-end",
+    gap: 6,
+    marginTop: 4,
+  },
+  tipActionText: {
+    color: COLORS.background,
+    fontSize: 14,
+    fontFamily: "Boogaloo_400Regular",
+    opacity: 0.8,
+  },
+  questContainer: {
+    marginTop: 4,
+  },
+  questCard: {
+    backgroundColor: COLORS.accent + "50",
+    borderRadius: 28,
+    padding: 20,
+    borderWidth: 1,
+    borderColor: COLORS.primary + "20",
+    gap: 16,
+  },
+  questHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    marginTop: 4,
+    marginBottom: 4,
   },
-  questProgress: {
-    color: COLORS.secondary,
-    fontSize: 14,
-    fontFamily: "Boogaloo_400Regular",
-  },
-  questPoints: {
+  questCardTitle: {
     color: COLORS.primary,
-    fontSize: 14,
+    fontSize: 22,
     fontFamily: "Boogaloo_400Regular",
   },
-  questStatus: {
-    marginTop: 8,
-    color: COLORS.text,
-    fontSize: 14,
-    fontFamily: "Boogaloo_400Regular",
-    opacity: 0.8,
-  },
-  achievementList: {
-    gap: 10,
-  },
-  achievementItem: {
+  pointsBadge: {
+    backgroundColor: COLORS.primary + "20",
+    paddingHorizontal: 10,
+    paddingVertical: 4,
     borderRadius: 12,
-    borderWidth: 1,
-    borderColor: COLORS.secondary + "25",
-    backgroundColor: COLORS.background + "88",
-    padding: 10,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
   },
-  achievementItemEarned: {
-    borderColor: COLORS.primary + "40",
-    backgroundColor: COLORS.primary + "12",
-  },
-  achievementIconWrap: {
-    width: 24,
-    height: 24,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  achievementImage: {
-    width: 24,
-    height: 24,
-    borderRadius: 6,
-  },
-  achievementImageLocked: {
-    opacity: 0.35,
-  },
-  achievementImageOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: "#00000066",
-    borderRadius: 6,
-  },
-  achievementTextWrap: {
-    flex: 1,
-    gap: 2,
-  },
-  achievementTitle: {
+  pointsBadgeText: {
     color: COLORS.primary,
+    fontSize: 14,
+    fontFamily: "Boogaloo_400Regular",
+  },
+  questDescription: {
+    color: COLORS.text,
     fontSize: 16,
     fontFamily: "Boogaloo_400Regular",
-  },
-  achievementDesc: {
-    color: COLORS.text,
-    fontSize: 13,
-    fontFamily: "Boogaloo_400Regular",
     opacity: 0.8,
   },
-  achievementRight: {
-    alignItems: "flex-end",
-    gap: 2,
+  progressContainer: {
+    gap: 8,
   },
-  achievementPoints: {
-    color: COLORS.secondary,
-    fontSize: 13,
-    fontFamily: "Boogaloo_400Regular",
+  progressBarBackground: {
+    height: 10,
+    backgroundColor: COLORS.background + "80",
+    borderRadius: 5,
+    overflow: "hidden",
   },
-  achievementBadge: {
-    color: COLORS.text,
-    fontSize: 12,
-    fontFamily: "Boogaloo_400Regular",
-    opacity: 0.75,
+  progressBarFill: {
+    height: "100%",
+    backgroundColor: COLORS.primary,
+    borderRadius: 5,
   },
-  footer: {
-    marginTop: 4,
+  progressLabelRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
     alignItems: "center",
-    gap: 10,
   },
-  signOutButton: {
+  progressText: {
+    color: COLORS.text,
+    fontSize: 14,
+    fontFamily: "Boogaloo_400Regular",
+    opacity: 0.6,
+  },
+  completedBadge: {
     flexDirection: "row",
     alignItems: "center",
+    gap: 4,
+  },
+  completedBadgeText: {
+    color: COLORS.primary,
+    fontSize: 14,
+    fontFamily: "Boogaloo_400Regular",
+  },
+  emptyQuestCard: {
+    padding: 30,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: COLORS.accent + "20",
+    borderRadius: 28,
+    borderStyle: "dashed",
+    borderWidth: 1,
+    borderColor: COLORS.secondary + "40",
+  },
+  emptyQuestText: {
+    color: COLORS.text,
+    fontSize: 16,
+    fontFamily: "Boogaloo_400Regular",
+    textAlign: "center",
+    opacity: 0.5,
+  },
+  quickActions: {
+    flexDirection: "row",
+    gap: 12,
+  },
+  actionButton: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
     gap: 8,
-    padding: 12,
-    borderRadius: 12,
+    backgroundColor: COLORS.accent + "40",
+    paddingVertical: 14,
+    borderRadius: 20,
     borderWidth: 1,
     borderColor: COLORS.secondary + "20",
   },
-  onboardingButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    padding: 12,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: COLORS.primary + "30",
-    backgroundColor: COLORS.accent + "55",
-  },
-  onboardingText: {
+  actionButtonText: {
     color: COLORS.primary,
     fontSize: 16,
     fontFamily: "Boogaloo_400Regular",
   },
-  signOutText: {
-    color: COLORS.secondary,
-    fontSize: 16,
-    fontFamily: "Boogaloo_400Regular",
-  },
-  deleteButton: {
-    flexDirection: "row",
+  dangerButton: {
+    paddingVertical: 10,
     alignItems: "center",
-    gap: 8,
-    padding: 12,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: COLORS.warning + "55",
-    backgroundColor: COLORS.warning + "22",
   },
-  deleteText: {
+  dangerButtonText: {
     color: COLORS.warning,
-    fontSize: 16,
+    fontSize: 14,
     fontFamily: "Boogaloo_400Regular",
+    opacity: 0.6,
   },
   disabledButton: {
     opacity: 0.6,
   },
   pressed: {
-    opacity: 0.7,
+    opacity: 0.8,
     transform: [{ scale: 0.98 }],
   },
   bottomSheetBackground: {
@@ -1319,88 +1364,85 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.secondary + "AA",
   },
   bottomSheetContent: {
-    paddingHorizontal: 18,
-    paddingBottom: 28,
+    paddingHorizontal: 24,
+    paddingBottom: 40,
   },
   tipHistoryContent: {
     gap: 12,
   },
   tipHistoryTitle: {
     color: COLORS.primary,
-    fontSize: 28,
+    fontSize: 32,
     fontFamily: "Boogaloo_400Regular",
   },
   tipHistorySubtitle: {
     color: COLORS.text,
-    fontSize: 15,
+    fontSize: 16,
     fontFamily: "Boogaloo_400Regular",
-    opacity: 0.75,
-    marginBottom: 6,
+    opacity: 0.7,
+    marginBottom: 8,
   },
   tipHistoryStateContainer: {
     alignItems: "center",
     justifyContent: "center",
-    paddingVertical: 28,
-    gap: 10,
-  },
-  tipHistoryStateCard: {
-    borderRadius: 16,
-    padding: 14,
-    borderWidth: 1,
-    borderColor: COLORS.secondary + "25",
-    backgroundColor: COLORS.accent + "4A",
-    gap: 8,
-  },
-  tipHistoryStateTitle: {
-    color: COLORS.primary,
-    fontSize: 20,
-    fontFamily: "Boogaloo_400Regular",
+    paddingVertical: 40,
+    gap: 12,
   },
   tipHistoryStateText: {
     color: COLORS.text,
-    fontSize: 15,
-    lineHeight: 20,
+    fontSize: 18,
     fontFamily: "Boogaloo_400Regular",
-    opacity: 0.9,
+    opacity: 0.6,
+  },
+  tipHistoryStateCard: {
+    borderRadius: 24,
+    padding: 20,
+    borderWidth: 1,
+    borderColor: COLORS.secondary + "30",
+    backgroundColor: COLORS.accent + "30",
+    gap: 10,
+  },
+  tipHistoryStateTitle: {
+    color: COLORS.primary,
+    fontSize: 22,
+    fontFamily: "Boogaloo_400Regular",
   },
   tipHistoryRetryButton: {
     alignSelf: "flex-start",
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
+    borderRadius: 14,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
     backgroundColor: COLORS.primary,
+    marginTop: 8,
   },
   tipHistoryRetryText: {
     color: COLORS.background,
-    fontSize: 14,
+    fontSize: 16,
     fontFamily: "Boogaloo_400Regular",
   },
   tipHistoryCard: {
-    borderRadius: 16,
-    padding: 14,
+    borderRadius: 24,
+    padding: 20,
     borderWidth: 1,
-    borderColor: COLORS.primary + "22",
-    backgroundColor: COLORS.accent + "60",
-    gap: 8,
+    borderColor: COLORS.primary + "15",
+    backgroundColor: COLORS.accent + "40",
+    gap: 10,
   },
   tipHistoryCardHeader: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    gap: 8,
   },
   tipHistoryCardDate: {
     color: COLORS.primary,
-    fontSize: 16,
+    fontSize: 18,
     fontFamily: "Boogaloo_400Regular",
   },
   tipHistoryTodayBadge: {
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: COLORS.primary + "44",
-    backgroundColor: COLORS.primary + "16",
+    borderRadius: 12,
+    backgroundColor: COLORS.primary + "20",
     paddingHorizontal: 10,
-    paddingVertical: 2,
+    paddingVertical: 4,
   },
   tipHistoryTodayBadgeText: {
     color: COLORS.primary,
@@ -1409,13 +1451,81 @@ const styles = StyleSheet.create({
   },
   tipHistoryCardText: {
     color: COLORS.text,
-    fontSize: 16,
-    lineHeight: 22,
+    fontSize: 18,
+    lineHeight: 24,
     fontFamily: "Boogaloo_400Regular",
-    opacity: 0.94,
+    opacity: 0.9,
   },
   cameraOverlay: {
     ...StyleSheet.absoluteFillObject,
-    zIndex: 30,
+    zIndex: 100,
+  },
+  achievementList: {
+    gap: 12,
+  },
+  achievementItem: {
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: COLORS.secondary + "20",
+    backgroundColor: COLORS.accent + "20",
+    padding: 16,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 16,
+  },
+  achievementItemEarned: {
+    borderColor: COLORS.primary + "40",
+    backgroundColor: COLORS.primary + "10",
+  },
+  achievementIconWrap: {
+    width: 48,
+    height: 48,
+    borderRadius: 16,
+    backgroundColor: COLORS.background,
+    alignItems: "center",
+    justifyContent: "center",
+    overflow: "hidden",
+  },
+  achievementImage: {
+    width: "100%",
+    height: "100%",
+  },
+  achievementImageLocked: {
+    opacity: 0.2,
+    tintColor: "#000",
+  },
+  achievementImageOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "rgba(0,0,0,0.5)",
+  },
+  achievementTextWrap: {
+    flex: 1,
+    gap: 2,
+  },
+  achievementTitle: {
+    color: COLORS.primary,
+    fontSize: 20,
+    fontFamily: "Boogaloo_400Regular",
+  },
+  achievementDesc: {
+    color: COLORS.text,
+    fontSize: 14,
+    fontFamily: "Boogaloo_400Regular",
+    opacity: 0.7,
+  },
+  achievementRight: {
+    alignItems: "flex-end",
+    gap: 4,
+  },
+  achievementPoints: {
+    color: COLORS.secondary,
+    fontSize: 16,
+    fontFamily: "Boogaloo_400Regular",
+  },
+  achievementBadge: {
+    color: COLORS.text,
+    fontSize: 12,
+    fontFamily: "Boogaloo_400Regular",
+    opacity: 0.5,
   },
 });
