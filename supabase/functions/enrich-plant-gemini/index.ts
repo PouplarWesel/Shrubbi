@@ -182,8 +182,9 @@ Deno.serve(async (req) => {
   }
 
   if (!authenticatedUserId) {
-    console.error(`${requestTag} unauthorized (no auth context found)`);
-    return jsonResponse(401, { error: "Unauthorized." });
+    console.warn(
+      `${requestTag} no auth context found; continuing as unauthenticated request`,
+    );
   }
 
   const plantName = body.plantName?.trim();
