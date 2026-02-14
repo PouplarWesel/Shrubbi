@@ -8,13 +8,17 @@ import {
   Text,
   TextInput,
   View,
+  Dimensions,
 } from "react-native";
 
+import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { COLORS } from "@/constants/colors";
 import { useSignIn } from "@/hooks/useSignIn";
+
+const { width } = Dimensions.get("window");
 
 const getErrorMessage = (err: unknown, fallback: string) => {
   if (
@@ -84,47 +88,78 @@ export default function Page() {
 
   return (
     <SafeAreaView style={styles.safeArea}>
+      <View style={styles.backgroundDecoration}>
+        <View style={[styles.blob, styles.blob1]} />
+        <View style={[styles.blob, styles.blob2]} />
+      </View>
+
       <ScrollView
         automaticallyAdjustsScrollIndicatorInsets
         contentInsetAdjustmentBehavior="automatic"
         contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
       >
-        <Text style={styles.title}>Welcome Back</Text>
-        <Text style={styles.subtitle}>
-          Sign in to continue growing with Shrubbi
-        </Text>
+        <View style={styles.header}>
+          <View style={styles.logoContainer}>
+            <Ionicons name="leaf" size={40} color={COLORS.primary} />
+          </View>
+          <Text style={styles.title}>Welcome Back</Text>
+          <Text style={styles.subtitle}>
+            Sign in to continue growing with Shrubbi
+          </Text>
+        </View>
 
-        <View style={styles.formCard}>
-          <Text style={styles.label}>Email Address</Text>
-          <TextInput
-            autoCapitalize="none"
-            autoCorrect={false}
-            keyboardType="email-address"
-            placeholder="you@example.com"
-            placeholderTextColor={COLORS.secondary}
-            style={styles.input}
-            value={email}
-            onChangeText={setEmail}
-          />
+        <View style={styles.formContainer}>
+          <View style={styles.inputGroup}>
+            <Text style={styles.label}>Email Address</Text>
+            <View style={styles.inputWrapper}>
+              <Ionicons
+                name="mail-outline"
+                size={20}
+                color={COLORS.secondary}
+                style={styles.inputIcon}
+              />
+              <TextInput
+                autoCapitalize="none"
+                autoCorrect={false}
+                keyboardType="email-address"
+                placeholder="you@example.com"
+                placeholderTextColor={COLORS.secondary + "80"}
+                style={styles.input}
+                value={email}
+                onChangeText={setEmail}
+              />
+            </View>
+          </View>
 
-          <Text style={styles.label}>Password</Text>
-          <View style={styles.passwordRow}>
-            <TextInput
-              placeholder="Enter password"
-              placeholderTextColor={COLORS.secondary}
-              secureTextEntry={!showPassword}
-              style={[styles.input, styles.passwordInput]}
-              value={password}
-              onChangeText={setPassword}
-            />
-            <Pressable
-              onPress={() => setShowPassword((prev) => !prev)}
-              style={styles.toggleButton}
-            >
-              <Text style={styles.toggleButtonText}>
-                {showPassword ? "Hide" : "Show"}
-              </Text>
-            </Pressable>
+          <View style={styles.inputGroup}>
+            <Text style={styles.label}>Password</Text>
+            <View style={styles.inputWrapper}>
+              <Ionicons
+                name="lock-closed-outline"
+                size={20}
+                color={COLORS.secondary}
+                style={styles.inputIcon}
+              />
+              <TextInput
+                placeholder="Enter password"
+                placeholderTextColor={COLORS.secondary + "80"}
+                secureTextEntry={!showPassword}
+                style={[styles.input, styles.passwordInput]}
+                value={password}
+                onChangeText={setPassword}
+              />
+              <Pressable
+                onPress={() => setShowPassword((prev) => !prev)}
+                style={styles.toggleButton}
+              >
+                <Ionicons
+                  name={showPassword ? "eye-off-outline" : "eye-outline"}
+                  size={22}
+                  color={COLORS.secondary}
+                />
+              </Pressable>
+            </View>
           </View>
 
           <Pressable
@@ -135,36 +170,56 @@ export default function Page() {
           </Pressable>
 
           {!!resetMessage && (
-            <Text style={styles.resetMessage}>{resetMessage}</Text>
+            <View style={styles.messageContainer}>
+              <Ionicons
+                name="information-circle-outline"
+                size={18}
+                color={COLORS.text}
+              />
+              <Text style={styles.resetMessage}>{resetMessage}</Text>
+            </View>
           )}
+
           {!!errorMessage && (
-            <Text style={styles.errorMessage}>{errorMessage}</Text>
+            <View style={styles.messageContainer}>
+              <Ionicons
+                name="alert-circle-outline"
+                size={18}
+                color={COLORS.secondary}
+              />
+              <Text style={styles.errorMessage}>{errorMessage}</Text>
+            </View>
           )}
 
           <Pressable
             disabled={isDisabled}
             onPress={onSignInPress}
-            style={[styles.primaryButton, isDisabled && styles.disabledButton]}
+            style={({ pressed }) => [
+              styles.primaryButton,
+              isDisabled && styles.disabledButton,
+              pressed && !isDisabled && styles.pressedButton,
+            ]}
           >
             {isSubmitting ? (
-              <View style={styles.loadingRow}>
-                <ActivityIndicator color={COLORS.background} />
-                <Text style={styles.primaryButtonText}>Signing In...</Text>
-              </View>
+              <ActivityIndicator color={COLORS.background} />
             ) : (
-              <Text style={styles.primaryButtonText}>Continue</Text>
+              <>
+                <Text style={styles.primaryButtonText}>Continue</Text>
+                <Ionicons
+                  name="arrow-forward"
+                  size={20}
+                  color={COLORS.background}
+                />
+              </>
             )}
           </Pressable>
         </View>
 
-        <View style={styles.linkRow}>
+        <View style={styles.footer}>
           <Text style={styles.linkHint}>Don&apos;t have an account? </Text>
-          <Text
-            style={styles.linkText}
-            onPress={() => router.replace("/sign-up")}
-          >
-            Sign up
-          </Text>
+          <Pressable onPress={() => router.replace("/sign-up")}>
+            <Text style={styles.linkText}>Sign up</Text>
+          </Pressable>
         </View>
       </ScrollView>
     </SafeAreaView>
@@ -176,120 +231,175 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: COLORS.background,
   },
+  backgroundDecoration: {
+    ...StyleSheet.absoluteFillObject,
+    overflow: "hidden",
+    zIndex: -1,
+  },
+  blob: {
+    position: "absolute",
+    width: width * 0.8,
+    height: width * 0.8,
+    borderRadius: width * 0.4,
+    opacity: 0.15,
+  },
+  blob1: {
+    backgroundColor: COLORS.primary,
+    top: -width * 0.2,
+    right: -width * 0.2,
+  },
+  blob2: {
+    backgroundColor: COLORS.accent,
+    bottom: -width * 0.1,
+    left: -width * 0.3,
+  },
   scrollContent: {
-    padding: 20,
-    gap: 14,
+    padding: 24,
+    paddingTop: 60,
+    flexGrow: 1,
+  },
+  header: {
+    alignItems: "center",
+    marginBottom: 40,
+  },
+  logoContainer: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: COLORS.accent,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 20,
+    borderWidth: 1,
+    borderColor: COLORS.primary + "30",
   },
   title: {
     color: COLORS.primary,
-    fontSize: 34,
+    fontSize: 38,
     fontFamily: "Boogaloo_400Regular",
+    textAlign: "center",
+    lineHeight: 44,
   },
   subtitle: {
     color: COLORS.text,
-    fontSize: 16,
+    fontSize: 18,
     fontFamily: "Boogaloo_400Regular",
-    marginBottom: 8,
+    textAlign: "center",
+    marginTop: 8,
+    opacity: 0.8,
   },
-  formCard: {
-    backgroundColor: COLORS.accent,
-    borderColor: COLORS.secondary,
-    borderWidth: 1,
-    borderRadius: 16,
-    padding: 16,
-    gap: 10,
+  formContainer: {
+    gap: 20,
+  },
+  inputGroup: {
+    gap: 8,
   },
   label: {
     color: COLORS.text,
     fontSize: 16,
     fontFamily: "Boogaloo_400Regular",
+    marginLeft: 4,
+  },
+  inputWrapper: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: COLORS.accent + "40",
+    borderWidth: 1,
+    borderColor: COLORS.secondary + "30",
+    borderRadius: 16,
+    paddingHorizontal: 16,
+    minHeight: 56,
+  },
+  inputIcon: {
+    marginRight: 12,
   },
   input: {
-    backgroundColor: COLORS.background,
+    flex: 1,
     color: COLORS.primary,
-    borderWidth: 1,
-    borderColor: COLORS.secondary,
-    borderRadius: 12,
-    paddingHorizontal: 12,
-    minHeight: 46,
-    fontSize: 15,
-  },
-  passwordRow: {
-    flexDirection: "row",
-    gap: 8,
-    alignItems: "center",
+    fontSize: 16,
+    height: "100%",
   },
   passwordInput: {
-    flex: 1,
+    paddingRight: 8,
   },
   toggleButton: {
-    minHeight: 46,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: COLORS.secondary,
-    backgroundColor: COLORS.background,
-    paddingHorizontal: 12,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  toggleButtonText: {
-    color: COLORS.secondary,
-    fontSize: 14,
-    fontFamily: "Boogaloo_400Regular",
+    padding: 4,
   },
   forgotPassword: {
     alignSelf: "flex-end",
   },
   forgotPasswordText: {
-    color: COLORS.primary,
-    fontSize: 14,
+    color: COLORS.secondary,
+    fontSize: 15,
     fontFamily: "Boogaloo_400Regular",
-    textDecorationLine: "underline",
+  },
+  messageContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    backgroundColor: COLORS.accent + "60",
+    padding: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: COLORS.secondary + "20",
   },
   resetMessage: {
+    flex: 1,
     color: COLORS.text,
     fontSize: 14,
     fontFamily: "Boogaloo_400Regular",
   },
   errorMessage: {
+    flex: 1,
     color: COLORS.secondary,
     fontSize: 14,
     fontFamily: "Boogaloo_400Regular",
   },
-  loadingRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-  },
   primaryButton: {
     backgroundColor: COLORS.primary,
-    borderRadius: 12,
-    minHeight: 48,
+    borderRadius: 18,
+    minHeight: 60,
+    flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    marginTop: 6,
+    gap: 10,
+    marginTop: 10,
+    shadowColor: COLORS.primary,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  pressedButton: {
+    opacity: 0.9,
+    transform: [{ scale: 0.98 }],
   },
   primaryButtonText: {
     color: COLORS.background,
-    fontSize: 16,
+    fontSize: 20,
     fontFamily: "Boogaloo_400Regular",
   },
   disabledButton: {
     opacity: 0.5,
+    shadowOpacity: 0,
+    elevation: 0,
   },
-  linkRow: {
+  footer: {
     flexDirection: "row",
     justifyContent: "center",
-    marginTop: 4,
+    alignItems: "center",
+    marginTop: "auto",
+    paddingTop: 40,
+    paddingBottom: 20,
   },
   linkHint: {
     color: COLORS.text,
-    fontSize: 15,
+    fontSize: 16,
     fontFamily: "Boogaloo_400Regular",
   },
   linkText: {
     color: COLORS.primary,
-    fontSize: 15,
+    fontSize: 16,
     fontFamily: "Boogaloo_400Regular",
     textDecorationLine: "underline",
   },

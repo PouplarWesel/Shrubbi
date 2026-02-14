@@ -4,6 +4,7 @@ import { Boogaloo_400Regular } from "@expo-google-fonts/boogaloo";
 import { useFonts } from "expo-font";
 import { Stack } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
+import { StatusBar } from "expo-status-bar";
 
 import { useSupabase } from "@/hooks/useSupabase";
 import { SupabaseProvider } from "@/providers/supabase-provider";
@@ -38,21 +39,24 @@ function RootNavigator() {
   if (!isLoaded || !fontsLoaded) return null;
 
   return (
-    <Stack
-      screenOptions={{
-        headerShown: false,
-        gestureEnabled: false,
-        animation: "none",
-        animationDuration: 0,
-      }}
-    >
-      <Stack.Protected guard={!!session}>
-        <Stack.Screen name="(protected)" />
-      </Stack.Protected>
+    <>
+      <StatusBar style="light" />
+      <Stack
+        screenOptions={{
+          headerShown: false,
+          gestureEnabled: false,
+          animation: "none",
+          animationDuration: 0,
+        }}
+      >
+        <Stack.Protected guard={!!session}>
+          <Stack.Screen name="(protected)" />
+        </Stack.Protected>
 
-      <Stack.Protected guard={!session}>
-        <Stack.Screen name="(public)" />
-      </Stack.Protected>
-    </Stack>
+        <Stack.Protected guard={!session}>
+          <Stack.Screen name="(public)" />
+        </Stack.Protected>
+      </Stack>
+    </>
   );
 }
