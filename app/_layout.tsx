@@ -11,6 +11,7 @@ import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { AnimatedAppSplash } from "@/components/AnimatedAppSplash";
 import { useSupabase } from "@/hooks/useSupabase";
 import { SupabaseProvider } from "@/providers/supabase-provider";
+import "@/lib/mapbox";
 
 SplashScreen.setOptions({
   duration: 200,
