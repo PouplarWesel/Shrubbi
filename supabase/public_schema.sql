@@ -23,6 +23,24 @@ COMMENT ON SCHEMA "public" IS 'standard public schema';
 
 
 
+CREATE OR REPLACE FUNCTION "public"."delete_my_account"() RETURNS "void"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO ''
+    AS $$
+begin
+  if (select auth.uid()) is null then
+    raise exception 'Not authenticated';
+  end if;
+
+  delete from auth.users
+  where id = (select auth.uid());
+end;
+$$;
+
+
+ALTER FUNCTION "public"."delete_my_account"() OWNER TO "postgres";
+
+
 CREATE OR REPLACE FUNCTION "public"."enforce_team_city_membership"() RETURNS "trigger"
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO ''
@@ -64,7 +82,16 @@ CREATE OR REPLACE FUNCTION "public"."handle_new_user"() RETURNS "trigger"
     SET "search_path" TO ''
     AS $$
 begin
-  insert into public.profiles (id, email, display_name, full_name, city, avatar_url)
+  insert into public.profiles (
+    id,
+    email,
+    display_name,
+    full_name,
+    city,
+    state,
+    country,
+    avatar_url
+  )
   values (
     new.id,
     new.email,
@@ -81,6 +108,8 @@ begin
       split_part(new.email, '@', 1)
     ),
     nullif(trim(new.raw_user_meta_data ->> 'city'), ''),
+    nullif(trim(new.raw_user_meta_data ->> 'state'), ''),
+    nullif(trim(new.raw_user_meta_data ->> 'country'), ''),
     new.raw_user_meta_data ->> 'avatar_url'
   )
   on conflict (id) do update
@@ -88,6 +117,8 @@ begin
         display_name = coalesce(public.profiles.display_name, excluded.display_name),
         full_name = coalesce(public.profiles.full_name, excluded.full_name),
         city = coalesce(public.profiles.city, excluded.city),
+        state = coalesce(public.profiles.state, excluded.state),
+        country = coalesce(public.profiles.country, excluded.country),
         avatar_url = coalesce(public.profiles.avatar_url, excluded.avatar_url),
         updated_at = timezone('utc'::text, now());
 
@@ -207,9 +238,11 @@ CREATE OR REPLACE FUNCTION "public"."set_profile_city_name"() RETURNS "trigger"
 begin
   if new.city_id is null then
     new.city := null;
+    new.state := null;
+    new.country := null;
   else
-    select c.name
-    into new.city
+    select c.name, c.state, c.country
+    into new.city, new.state, new.country
     from public.cities as c
     where c.id = new.city_id;
   end if;
@@ -239,16 +272,27 @@ CREATE OR REPLACE FUNCTION "public"."sync_public_profile"() RETURNS "trigger"
     SET "search_path" TO ''
     AS $$
 begin
-  insert into public.public_profiles (id, display_name, city, avatar_url)
+  insert into public.public_profiles (
+    id,
+    display_name,
+    city,
+    state,
+    country,
+    avatar_url
+  )
   values (
     new.id,
     coalesce(new.display_name, new.full_name),
     new.city,
+    new.state,
+    new.country,
     new.avatar_url
   )
   on conflict (id) do update
     set display_name = excluded.display_name,
         city = excluded.city,
+        state = excluded.state,
+        country = excluded.country,
         avatar_url = excluded.avatar_url,
         updated_at = timezone('utc'::text, now());
 
@@ -271,6 +315,8 @@ CREATE TABLE IF NOT EXISTS "public"."cities" (
     "country_code" "text" DEFAULT 'US'::"text" NOT NULL,
     "created_at" timestamp with time zone DEFAULT "timezone"('utc'::"text", "now"()) NOT NULL,
     "updated_at" timestamp with time zone DEFAULT "timezone"('utc'::"text", "now"()) NOT NULL,
+    "state" "text",
+    "country" "text" DEFAULT 'United States'::"text" NOT NULL,
     CONSTRAINT "cities_country_code_len_chk" CHECK (("char_length"("country_code") = 2))
 );
 
@@ -301,7 +347,9 @@ CREATE TABLE IF NOT EXISTS "public"."profiles" (
     "updated_at" timestamp with time zone DEFAULT "timezone"('utc'::"text", "now"()) NOT NULL,
     "city" "text",
     "display_name" "text",
-    "city_id" "uuid"
+    "city_id" "uuid",
+    "state" "text",
+    "country" "text"
 );
 
 
@@ -328,10 +376,11 @@ CREATE TABLE IF NOT EXISTS "public"."user_plants" (
 ALTER TABLE "public"."user_plants" OWNER TO "postgres";
 
 
-CREATE OR REPLACE VIEW "public"."city_leaderboard" WITH ("security_invoker"='on') AS
+CREATE OR REPLACE VIEW "public"."city_leaderboard" WITH ("security_invoker"='true') AS
  SELECT "c"."id" AS "city_id",
     "c"."name" AS "city_name",
-    "c"."region" AS "city_region",
+    "c"."state" AS "city_state",
+    "c"."country" AS "city_country",
     "c"."country_code",
     "count"(DISTINCT "p"."id") AS "member_count",
     COALESCE("sum"("up"."quantity"), (0)::bigint) AS "total_plants",
@@ -343,7 +392,7 @@ CREATE OR REPLACE VIEW "public"."city_leaderboard" WITH ("security_invoker"='on'
   WHERE (EXISTS ( SELECT 1
            FROM "public"."profiles" "viewer"
           WHERE (("viewer"."id" = ( SELECT "auth"."uid"() AS "uid")) AND ("viewer"."city_id" IS NOT NULL))))
-  GROUP BY "c"."id", "c"."name", "c"."region", "c"."country_code";
+  GROUP BY "c"."id", "c"."name", "c"."state", "c"."country", "c"."country_code";
 
 
 ALTER VIEW "public"."city_leaderboard" OWNER TO "postgres";
@@ -366,7 +415,9 @@ CREATE TABLE IF NOT EXISTS "public"."public_profiles" (
     "city" "text",
     "avatar_url" "text",
     "created_at" timestamp with time zone DEFAULT "timezone"('utc'::"text", "now"()) NOT NULL,
-    "updated_at" timestamp with time zone DEFAULT "timezone"('utc'::"text", "now"()) NOT NULL
+    "updated_at" timestamp with time zone DEFAULT "timezone"('utc'::"text", "now"()) NOT NULL,
+    "state" "text",
+    "country" "text"
 );
 
 
@@ -399,11 +450,14 @@ CREATE TABLE IF NOT EXISTS "public"."teams" (
 ALTER TABLE "public"."teams" OWNER TO "postgres";
 
 
-CREATE OR REPLACE VIEW "public"."team_leaderboard" WITH ("security_invoker"='on') AS
+CREATE OR REPLACE VIEW "public"."team_leaderboard" WITH ("security_invoker"='true') AS
  SELECT "t"."id" AS "team_id",
     "t"."name" AS "team_name",
     "t"."city_id",
     "c"."name" AS "city_name",
+    "c"."state" AS "city_state",
+    "c"."country" AS "city_country",
+    "c"."country_code",
     "count"(DISTINCT "tm"."user_id") AS "member_count",
     COALESCE("sum"("up"."quantity"), (0)::bigint) AS "total_plants",
     (COALESCE("sum"((((COALESCE("up"."co2_kg_per_year_override", "pl"."default_co2_kg_per_year", (0)::numeric) * (GREATEST((CURRENT_DATE - "up"."planted_on"), 0))::numeric) / 365.0) * ("up"."quantity")::numeric)), (0)::numeric))::numeric(14,4) AS "total_co2_removed_kg"
@@ -415,7 +469,7 @@ CREATE OR REPLACE VIEW "public"."team_leaderboard" WITH ("security_invoker"='on'
   WHERE (EXISTS ( SELECT 1
            FROM "public"."profiles" "viewer"
           WHERE (("viewer"."id" = ( SELECT "auth"."uid"() AS "uid")) AND ("viewer"."city_id" IS NOT NULL))))
-  GROUP BY "t"."id", "t"."name", "t"."city_id", "c"."name";
+  GROUP BY "t"."id", "t"."name", "t"."city_id", "c"."name", "c"."state", "c"."country", "c"."country_code";
 
 
 ALTER VIEW "public"."team_leaderboard" OWNER TO "postgres";
@@ -691,6 +745,12 @@ GRANT USAGE ON SCHEMA "public" TO "service_role";
 
 
 
+REVOKE ALL ON FUNCTION "public"."delete_my_account"() FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."delete_my_account"() TO "service_role";
+GRANT ALL ON FUNCTION "public"."delete_my_account"() TO "authenticated";
+
+
+
 GRANT ALL ON FUNCTION "public"."enforce_team_city_membership"() TO "anon";
 GRANT ALL ON FUNCTION "public"."enforce_team_city_membership"() TO "authenticated";
 GRANT ALL ON FUNCTION "public"."enforce_team_city_membership"() TO "service_role";
@@ -747,8 +807,9 @@ GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE "public"."user_plants" TO "authentica
 
 
 
+GRANT ALL ON TABLE "public"."city_leaderboard" TO "anon";
+GRANT ALL ON TABLE "public"."city_leaderboard" TO "authenticated";
 GRANT ALL ON TABLE "public"."city_leaderboard" TO "service_role";
-GRANT SELECT ON TABLE "public"."city_leaderboard" TO "authenticated";
 
 
 
@@ -772,8 +833,9 @@ GRANT SELECT ON TABLE "public"."teams" TO "authenticated";
 
 
 
+GRANT ALL ON TABLE "public"."team_leaderboard" TO "anon";
+GRANT ALL ON TABLE "public"."team_leaderboard" TO "authenticated";
 GRANT ALL ON TABLE "public"."team_leaderboard" TO "service_role";
-GRANT SELECT ON TABLE "public"."team_leaderboard" TO "authenticated";
 
 
 
@@ -806,21 +868,5 @@ ALTER DEFAULT PRIVILEGES FOR ROLE "postgres" IN SCHEMA "public" GRANT ALL ON TAB
 
 
 
-CREATE OR REPLACE FUNCTION public.delete_my_account() RETURNS void
-    LANGUAGE plpgsql SECURITY DEFINER
-    SET search_path TO 'public'
-    AS $$
-begin
-  if auth.uid() is null then
-    raise exception 'Not authenticated';
-  end if;
-
-  delete from auth.users where id = auth.uid();
-end;
-$$;
-
-ALTER FUNCTION public.delete_my_account() OWNER TO "postgres";
-REVOKE ALL ON FUNCTION public.delete_my_account() FROM PUBLIC;
-GRANT EXECUTE ON FUNCTION public.delete_my_account() TO "authenticated";
 
 
