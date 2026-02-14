@@ -1,4 +1,5 @@
-import { Pressable, StyleSheet, Text, View, Dimensions } from "react-native";
+import { useState } from "react";
+import { Alert, Pressable, StyleSheet, Text, View, Dimensions } from "react-native";
 
 import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -9,14 +10,51 @@ import { useSupabase } from "@/hooks/useSupabase";
 const { width } = Dimensions.get("window");
 
 export default function Page() {
-  const { signOut, session } = useSupabase();
+  const { signOut, session, supabase } = useSupabase();
   const insets = useSafeAreaInsets();
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const handleSignOut = async () => {
     try {
       await signOut();
     } catch (err) {
       console.error(JSON.stringify(err, null, 2));
+    }
+  };
+
+  const confirmDeleteAccount = () => {
+    Alert.alert(
+      "Delete Account",
+      "This permanently deletes your account and profile data. This action cannot be undone.",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Delete",
+          style: "destructive",
+          onPress: handleDeleteAccount,
+        },
+      ],
+    );
+  };
+
+  const handleDeleteAccount = async () => {
+    if (isDeleting) return;
+
+    try {
+      setIsDeleting(true);
+      const { error } = await supabase.rpc("delete_my_account");
+
+      if (error) {
+        Alert.alert("Delete failed", error.message);
+        return;
+      }
+
+      await signOut();
+    } catch (err) {
+      Alert.alert("Delete failed", "Please try again.");
+      console.error(JSON.stringify(err, null, 2));
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -73,7 +111,21 @@ export default function Page() {
             onPress={handleSignOut}
           >
             <Ionicons name="log-out-outline" size={20} color={COLORS.secondary} />
-            <Text style={styles.signOutText}>Sign Out</Text>
+            <Text style={styles.signOutText}>Logout</Text>
+          </Pressable>
+          <Pressable
+            style={({ pressed }) => [
+              styles.deleteButton,
+              pressed && styles.pressed,
+              isDeleting && styles.disabledButton,
+            ]}
+            onPress={confirmDeleteAccount}
+            disabled={isDeleting}
+          >
+            <Ionicons name="trash-outline" size={20} color="#ffb3b3" />
+            <Text style={styles.deleteText}>
+              {isDeleting ? "Deleting..." : "Delete Account"}
+            </Text>
           </Pressable>
         </View>
       </View>
@@ -208,6 +260,7 @@ const styles = StyleSheet.create({
     marginTop: "auto",
     paddingBottom: 40,
     alignItems: "center",
+    gap: 10,
   },
   signOutButton: {
     flexDirection: "row",
@@ -222,6 +275,24 @@ const styles = StyleSheet.create({
     color: COLORS.secondary,
     fontSize: 16,
     fontFamily: "Boogaloo_400Regular",
+  },
+  deleteButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    padding: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#ff707033",
+    backgroundColor: "#35000066",
+  },
+  deleteText: {
+    color: "#ffb3b3",
+    fontSize: 16,
+    fontFamily: "Boogaloo_400Regular",
+  },
+  disabledButton: {
+    opacity: 0.6,
   },
   pressed: {
     opacity: 0.7,

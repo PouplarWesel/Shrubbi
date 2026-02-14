@@ -806,5 +806,21 @@ ALTER DEFAULT PRIVILEGES FOR ROLE "postgres" IN SCHEMA "public" GRANT ALL ON TAB
 
 
 
+CREATE OR REPLACE FUNCTION public.delete_my_account() RETURNS void
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+begin
+  if auth.uid() is null then
+    raise exception 'Not authenticated';
+  end if;
+
+  delete from auth.users where id = auth.uid();
+end;
+$$;
+
+ALTER FUNCTION public.delete_my_account() OWNER TO "postgres";
+REVOKE ALL ON FUNCTION public.delete_my_account() FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION public.delete_my_account() TO "authenticated";
 
 
