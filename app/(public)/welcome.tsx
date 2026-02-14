@@ -20,12 +20,6 @@ export default function Page() {
       </View>
       <View style={styles.actions}>
         <Pressable
-          style={[styles.button, styles.primaryButton]}
-          onPress={() => router.push("/sign-up")}
-        >
-          <Text style={styles.primaryButtonText}>Get Started</Text>
-        </Pressable>
-        <Pressable
           style={[styles.button, styles.secondaryButton]}
           onPress={() => router.push("/sign-up")}
         >
@@ -57,11 +51,12 @@ const styles = StyleSheet.create({
   title: {
     color: COLORS.primary,
     fontSize: 34,
-    fontWeight: "700",
+    fontFamily: "Boogaloo_400Regular",
   },
   subtitle: {
     color: COLORS.text,
     fontSize: 16,
+    fontFamily: "Boogaloo_400Regular",
   },
   actions: {
     gap: 12,
@@ -73,15 +68,6 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     borderWidth: 1,
   },
-  primaryButton: {
-    backgroundColor: COLORS.primary,
-    borderColor: COLORS.primary,
-  },
-  primaryButtonText: {
-    color: COLORS.background,
-    fontSize: 16,
-    fontWeight: "600",
-  },
   secondaryButton: {
     backgroundColor: COLORS.secondary,
     borderColor: COLORS.secondary,
@@ -89,7 +75,7 @@ const styles = StyleSheet.create({
   secondaryButtonText: {
     color: COLORS.background,
     fontSize: 16,
-    fontWeight: "600",
+    fontFamily: "Boogaloo_400Regular",
   },
   accentButton: {
     backgroundColor: COLORS.accent,
@@ -98,6 +84,6 @@ const styles = StyleSheet.create({
   accentButtonText: {
     color: COLORS.text,
     fontSize: 16,
-    fontWeight: "600",
+    fontFamily: "Boogaloo_400Regular",
   },
 });
