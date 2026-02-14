@@ -9,6 +9,7 @@ import {
   TextInput,
   View,
   Dimensions,
+  Image,
 } from "react-native";
 
 import { Ionicons } from "@expo/vector-icons";
@@ -101,7 +102,11 @@ export default function Page() {
       >
         <View style={styles.header}>
           <View style={styles.logoContainer}>
-            <Ionicons name="leaf" size={40} color={COLORS.primary} />
+            <Image
+              source={require("@/assets/icon.png")}
+              style={styles.logo}
+              resizeMode="contain"
+            />
           </View>
           <Text style={styles.title}>Welcome Back</Text>
           <Text style={styles.subtitle}>
@@ -272,6 +277,11 @@ const styles = StyleSheet.create({
     marginBottom: 20,
     borderWidth: 1,
     borderColor: COLORS.primary + "30",
+    overflow: "hidden",
+  },
+  logo: {
+    width: 60,
+    height: 60,
   },
   title: {
     color: COLORS.primary,

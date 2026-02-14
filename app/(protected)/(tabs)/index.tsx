@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Alert, Pressable, StyleSheet, Text, View, Dimensions } from "react-native";
+import { Alert, Pressable, StyleSheet, Text, View, Dimensions, Image } from "react-native";
 
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
@@ -76,7 +76,11 @@ export default function Page() {
             <Text style={styles.userName}>{userName}</Text>
           </View>
           <View style={styles.avatar}>
-            <Ionicons name="person" size={24} color={COLORS.primary} />
+            <Image
+              source={require("@/assets/icon.png")}
+              style={styles.logo}
+              resizeMode="contain"
+            />
           </View>
         </View>
 
@@ -133,7 +137,7 @@ export default function Page() {
             onPress={confirmDeleteAccount}
             disabled={isDeleting}
           >
-            <Ionicons name="trash-outline" size={20} color="#ffb3b3" />
+            <Ionicons name="trash-outline" size={20} color={COLORS.warning} />
             <Text style={styles.deleteText}>
               {isDeleting ? "Deleting..." : "Delete Account"}
             </Text>
@@ -202,6 +206,11 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     borderWidth: 1,
     borderColor: COLORS.primary + "30",
+    overflow: "hidden",
+  },
+  logo: {
+    width: 35,
+    height: 35,
   },
   statsContainer: {
     flexDirection: "row",
@@ -309,11 +318,11 @@ const styles = StyleSheet.create({
     padding: 12,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: "#ff707033",
-    backgroundColor: "#35000066",
+    borderColor: COLORS.warning + "55",
+    backgroundColor: COLORS.warning + "22",
   },
   deleteText: {
-    color: "#ffb3b3",
+    color: COLORS.warning,
     fontSize: 16,
     fontFamily: "Boogaloo_400Regular",
   },

@@ -1,4 +1,4 @@
-import { Pressable, StyleSheet, Text, View, Dimensions } from "react-native";
+import { Pressable, StyleSheet, Text, View, Dimensions, Image } from "react-native";
 
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
@@ -19,7 +19,11 @@ export default function Page() {
 
       <View style={styles.content}>
         <View style={styles.logoContainer}>
-          <Ionicons name="leaf" size={60} color={COLORS.primary} />
+          <Image
+            source={require("@/assets/icon.png")}
+            style={styles.logo}
+            resizeMode="contain"
+          />
         </View>
         <Text style={styles.title}>Shrubbi</Text>
         <Text style={styles.subtitle}>Grow your space with Shrubbi</Text>
@@ -117,6 +121,11 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.2,
     shadowRadius: 12,
     elevation: 8,
+    overflow: "hidden",
+  },
+  logo: {
+    width: 90,
+    height: 90,
   },
   title: {
     color: COLORS.primary,

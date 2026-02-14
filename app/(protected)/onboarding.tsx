@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Dimensions,
@@ -11,9 +11,12 @@ import {
   Text,
   TextInput,
   View,
+  Image,
 } from "react-native";
 
 import { Ionicons } from "@expo/vector-icons";
+import * as Location from "expo-location";
+import * as Notifications from "expo-notifications";
 import { router } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 
@@ -26,30 +29,110 @@ type CityOption = {
   id: string;
   name: string;
   region: string | null;
+  state: string | null;
+  country: string | null;
   country_code: string;
+};
+
+type PermissionState = "undetermined" | "granted" | "denied" | "unavailable";
+
+const normalizeValue = (value: string | null | undefined) =>
+  (value ?? "").trim().toLowerCase();
+
+const normalizePermissionState = (
+  status: string | null | undefined,
+): PermissionState => {
+  if (status === "granted") return "granted";
+  if (status === "denied") return "denied";
+  if (status === "undetermined") return "undetermined";
+  return "unavailable";
+};
+
+const getCameraPermissionState = async (): Promise<PermissionState> => {
+  try {
+    const Camera = await import("expo-camera");
+    const cameraResult = await Camera.Camera.getCameraPermissionsAsync();
+    return normalizePermissionState(cameraResult.status);
+  } catch {
+    return "unavailable";
+  }
+};
+
+const requestCameraPermissionState = async (): Promise<PermissionState> => {
+  try {
+    const Camera = await import("expo-camera");
+    const cameraResult = await Camera.Camera.requestCameraPermissionsAsync();
+    return normalizePermissionState(cameraResult.status);
+  } catch {
+    return "unavailable";
+  }
 };
 
 export default function OnboardingPage() {
   const { session, supabase } = useSupabase();
-  const [step, setStep] = useState(0); // 0: Profile, 1: City
+  const [step, setStep] = useState(0); // 0: Profile, 1: Permissions, 2: City
   const [fullName, setFullName] = useState("");
   const [displayName, setDisplayName] = useState("");
   const [selectedCityId, setSelectedCityId] = useState<string | null>(null);
   const [cities, setCities] = useState<CityOption[]>([]);
   const [citySearch, setCitySearch] = useState("");
+  const [locationPermission, setLocationPermission] =
+    useState<PermissionState>("undetermined");
+  const [cameraPermission, setCameraPermission] =
+    useState<PermissionState>("undetermined");
+  const [notificationPermission, setNotificationPermission] =
+    useState<PermissionState>("undetermined");
+  const [isDetectingCity, setIsDetectingCity] = useState(false);
+  const [locationHintMessage, setLocationHintMessage] = useState("");
+  const [detectedCityName, setDetectedCityName] = useState<string | null>(null);
+  const [detectedStateName, setDetectedStateName] = useState<string | null>(
+    null,
+  );
+  const [detectedCountryCode, setDetectedCountryCode] = useState<string | null>(
+    null,
+  );
+  const [hasTriedAutoCity, setHasTriedAutoCity] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
   const [isKeyboardVisible, setKeyboardVisible] = useState(false);
 
   useEffect(() => {
-    const showSubscription = Keyboard.addListener("keyboardDidShow", () => setKeyboardVisible(true));
-    const hideSubscription = Keyboard.addListener("keyboardDidHide", () => setKeyboardVisible(false));
+    const showSubscription = Keyboard.addListener("keyboardDidShow", () =>
+      setKeyboardVisible(true),
+    );
+    const hideSubscription = Keyboard.addListener("keyboardDidHide", () =>
+      setKeyboardVisible(false),
+    );
 
     return () => {
       showSubscription.remove();
       hideSubscription.remove();
     };
+  }, []);
+
+  useEffect(() => {
+    const loadPermissionStatuses = async () => {
+      try {
+        const locationResult = await Location.getForegroundPermissionsAsync();
+        setLocationPermission(normalizePermissionState(locationResult.status));
+      } catch {
+        setLocationPermission("unavailable");
+      }
+
+      setCameraPermission(await getCameraPermissionState());
+
+      try {
+        const notificationResult = await Notifications.getPermissionsAsync();
+        setNotificationPermission(
+          normalizePermissionState(notificationResult.status),
+        );
+      } catch {
+        setNotificationPermission("unavailable");
+      }
+    };
+
+    void loadPermissionStatuses();
   }, []);
 
   useEffect(() => {
@@ -71,7 +154,7 @@ export default function OnboardingPage() {
           .maybeSingle(),
         supabase
           .from("cities")
-          .select("id, name, region, country_code")
+          .select("id, name, region, state, country, country_code")
           .order("name", { ascending: true }),
       ]);
 
@@ -93,13 +176,60 @@ export default function OnboardingPage() {
 
   const filteredCities = useMemo(() => {
     const query = citySearch.trim().toLowerCase();
-    if (!query) return cities;
-    return cities.filter((city) => {
+    const rankingScore = (city: CityOption) => {
+      let score = 0;
+
+      if (
+        detectedCityName &&
+        normalizeValue(city.name) === normalizeValue(detectedCityName)
+      ) {
+        score += 5;
+      }
+
+      const cityState = city.state ?? city.region;
+      if (
+        detectedStateName &&
+        normalizeValue(cityState) === normalizeValue(detectedStateName)
+      ) {
+        score += 2;
+      }
+
+      if (
+        detectedCountryCode &&
+        normalizeValue(city.country_code) ===
+          normalizeValue(detectedCountryCode)
+      ) {
+        score += 1;
+      }
+
+      return score;
+    };
+
+    const sortedCities = [...cities].sort((a, b) => {
+      const scoreDiff = rankingScore(b) - rankingScore(a);
+      if (scoreDiff !== 0) return scoreDiff;
+      return a.name.localeCompare(b.name);
+    });
+
+    if (!query) return sortedCities;
+
+    return sortedCities.filter((city) => {
       const cityName = city.name.toLowerCase();
       const region = (city.region ?? "").toLowerCase();
-      return cityName.includes(query) || region.includes(query);
+      const state = (city.state ?? "").toLowerCase();
+      return (
+        cityName.includes(query) ||
+        region.includes(query) ||
+        state.includes(query)
+      );
     });
-  }, [cities, citySearch]);
+  }, [
+    cities,
+    citySearch,
+    detectedCityName,
+    detectedStateName,
+    detectedCountryCode,
+  ]);
 
   const onNextStep = () => {
     if (!fullName.trim()) {
@@ -109,6 +239,112 @@ export default function OnboardingPage() {
     setErrorMessage("");
     setStep(1);
   };
+
+  const onContinueFromPermissions = () => {
+    setErrorMessage("");
+    setStep(2);
+  };
+
+  const requestLocationPermission = async () => {
+    try {
+      const result = await Location.requestForegroundPermissionsAsync();
+      const normalizedState = normalizePermissionState(result.status);
+      setLocationPermission(normalizedState);
+    } catch {
+      setLocationPermission("unavailable");
+    }
+  };
+
+  const requestCameraPermission = async () => {
+    setCameraPermission(await requestCameraPermissionState());
+  };
+
+  const requestNotificationPermission = async () => {
+    try {
+      const result = await Notifications.requestPermissionsAsync();
+      setNotificationPermission(normalizePermissionState(result.status));
+    } catch {
+      setNotificationPermission("unavailable");
+    }
+  };
+
+  const autoSelectCityFromLocation = useCallback(async () => {
+    if (
+      locationPermission !== "granted" ||
+      cities.length === 0 ||
+      isDetectingCity
+    ) {
+      return;
+    }
+
+    setHasTriedAutoCity(true);
+    setIsDetectingCity(true);
+    setLocationHintMessage("");
+
+    try {
+      const position = await Location.getCurrentPositionAsync({
+        accuracy: Location.Accuracy.Balanced,
+      });
+
+      const [place] = await Location.reverseGeocodeAsync({
+        latitude: position.coords.latitude,
+        longitude: position.coords.longitude,
+      });
+
+      if (!place) {
+        setLocationHintMessage(
+          "Could not detect your city. You can still search and choose manually.",
+        );
+        return;
+      }
+
+      const detectedCity = place.city ?? place.subregion ?? "";
+      const detectedState = place.region ?? "";
+      const detectedCountry = place.isoCountryCode ?? "";
+
+      setDetectedCityName(detectedCity || null);
+      setDetectedStateName(detectedState || null);
+      setDetectedCountryCode(detectedCountry || null);
+
+      const matchingCity =
+        cities.find(
+          (city) =>
+            normalizeValue(city.name) === normalizeValue(detectedCity) &&
+            (normalizeValue(city.state) === normalizeValue(detectedState) ||
+              normalizeValue(city.region) === normalizeValue(detectedState)),
+        ) ??
+        cities.find(
+          (city) => normalizeValue(city.name) === normalizeValue(detectedCity),
+        );
+
+      if (matchingCity) {
+        setSelectedCityId(matchingCity.id);
+        setLocationHintMessage(
+          `Detected ${matchingCity.name}${matchingCity.state ? `, ${matchingCity.state}` : ""}.`,
+        );
+        return;
+      }
+
+      if (detectedCity && !citySearch.trim()) {
+        setCitySearch(detectedCity);
+      }
+      setLocationHintMessage(
+        "We found your area. Pick the closest city from the list or search manually.",
+      );
+    } catch {
+      setLocationHintMessage(
+        "We could not access your current location. Search and pick your city manually.",
+      );
+    } finally {
+      setIsDetectingCity(false);
+    }
+  }, [locationPermission, cities, isDetectingCity, citySearch]);
+
+  useEffect(() => {
+    if (step !== 2 || locationPermission !== "granted" || hasTriedAutoCity)
+      return;
+    void autoSelectCityFromLocation();
+  }, [step, locationPermission, hasTriedAutoCity, autoSelectCityFromLocation]);
 
   const onContinue = async () => {
     const userId = session?.user?.id;
@@ -144,6 +380,30 @@ export default function OnboardingPage() {
     }
   };
 
+  const headerIconName =
+    step === 0
+      ? "person-circle-outline"
+      : step === 1
+        ? "shield-checkmark-outline"
+        : "location-outline";
+
+  const headerTitle =
+    step === 0 ? "About You" : step === 1 ? "Permissions" : "Your Location";
+
+  const headerSubtitle =
+    step === 0
+      ? "Help us personalize your experience"
+      : step === 1
+        ? "Allow what you want. Everything here is optional."
+        : "We'll suggest nearby cities, then you can adjust.";
+
+  const permissionStateLabel = (state: PermissionState) => {
+    if (state === "granted") return "Allowed";
+    if (state === "denied") return "Denied";
+    if (state === "unavailable") return "Unavailable";
+    return "Not requested";
+  };
+
   if (isLoading) {
     return (
       <SafeAreaView style={styles.loadingContainer}>
@@ -165,25 +425,31 @@ export default function OnboardingPage() {
         keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 20}
       >
         <View style={styles.content}>
-          <View style={[styles.header, isKeyboardVisible && step === 1 && styles.headerCompact]}>
+          <View
+            style={[
+              styles.header,
+              isKeyboardVisible && step === 2 && styles.headerCompact,
+            ]}
+          >
             {!isKeyboardVisible && (
               <View style={styles.logoContainer}>
-                <Ionicons
-                  name={step === 0 ? "person-circle-outline" : "location-outline"}
-                  size={40}
-                  color={COLORS.primary}
+                <Image
+                  source={require("@/assets/icon.png")}
+                  style={styles.logo}
+                  resizeMode="contain"
                 />
               </View>
             )}
-            <Text style={[styles.title, isKeyboardVisible && step === 1 && styles.titleCompact]}>
-              {step === 0 ? "About You" : "Your Location"}
+            <Text
+              style={[
+                styles.title,
+                isKeyboardVisible && step === 2 && styles.titleCompact,
+              ]}
+            >
+              {headerTitle}
             </Text>
             {!isKeyboardVisible && (
-              <Text style={styles.subtitle}>
-                {step === 0
-                  ? "Help us personalize your experience"
-                  : "Connect with the community in your city"}
-              </Text>
+              <Text style={styles.subtitle}>{headerSubtitle}</Text>
             )}
           </View>
 
@@ -247,6 +513,120 @@ export default function OnboardingPage() {
                 />
               </Pressable>
             </View>
+          ) : step === 1 ? (
+            <View style={styles.formContainer}>
+              <View style={styles.permissionsList}>
+                <View style={styles.permissionItem}>
+                  <View style={styles.permissionIconCircle}>
+                    <Ionicons
+                      name="locate-outline"
+                      size={24}
+                      color={locationPermission === "granted" ? COLORS.primary : COLORS.secondary}
+                    />
+                  </View>
+                  <View style={styles.permissionTextContent}>
+                    <Text style={styles.permissionItemTitle}>Location</Text>
+                    <Text style={styles.permissionItemDescription}>
+                      Suggests your current city first.
+                    </Text>
+                  </View>
+                  <Pressable
+                    onPress={requestLocationPermission}
+                    disabled={locationPermission === "granted"}
+                    style={[
+                      styles.permissionAction,
+                      locationPermission === "granted" && styles.permissionActionGranted,
+                    ]}
+                  >
+                    {locationPermission === "granted" ? (
+                      <Ionicons name="checkmark-circle" size={24} color={COLORS.primary} />
+                    ) : (
+                      <Text style={styles.permissionActionText}>Allow</Text>
+                    )}
+                  </Pressable>
+                </View>
+
+                <View style={styles.permissionItem}>
+                  <View style={styles.permissionIconCircle}>
+                    <Ionicons
+                      name="camera-outline"
+                      size={24}
+                      color={cameraPermission === "granted" ? COLORS.primary : COLORS.secondary}
+                    />
+                  </View>
+                  <View style={styles.permissionTextContent}>
+                    <Text style={styles.permissionItemTitle}>Camera</Text>
+                    <Text style={styles.permissionItemDescription}>
+                      Upload plant photos instantly.
+                    </Text>
+                  </View>
+                  <Pressable
+                    onPress={requestCameraPermission}
+                    disabled={cameraPermission === "granted"}
+                    style={[
+                      styles.permissionAction,
+                      cameraPermission === "granted" && styles.permissionActionGranted,
+                    ]}
+                  >
+                    {cameraPermission === "granted" ? (
+                      <Ionicons name="checkmark-circle" size={24} color={COLORS.primary} />
+                    ) : (
+                      <Text style={styles.permissionActionText}>Allow</Text>
+                    )}
+                  </Pressable>
+                </View>
+
+                <View style={styles.permissionItem}>
+                  <View style={styles.permissionIconCircle}>
+                    <Ionicons
+                      name="notifications-outline"
+                      size={24}
+                      color={notificationPermission === "granted" ? COLORS.primary : COLORS.secondary}
+                    />
+                  </View>
+                  <View style={styles.permissionTextContent}>
+                    <Text style={styles.permissionItemTitle}>Notifications</Text>
+                    <Text style={styles.permissionItemDescription}>
+                      Stay updated with your garden.
+                    </Text>
+                  </View>
+                  <Pressable
+                    onPress={requestNotificationPermission}
+                    disabled={notificationPermission === "granted"}
+                    style={[
+                      styles.permissionAction,
+                      notificationPermission === "granted" && styles.permissionActionGranted,
+                    ]}
+                  >
+                    {notificationPermission === "granted" ? (
+                      <Ionicons name="checkmark-circle" size={24} color={COLORS.primary} />
+                    ) : (
+                      <Text style={styles.permissionActionText}>Allow</Text>
+                    )}
+                  </Pressable>
+                </View>
+              </View>
+
+              <View style={styles.footerButtons}>
+                <Pressable
+                  onPress={() => setStep(0)}
+                  style={[styles.primaryButton, styles.secondaryButton]}
+                >
+                  <Text style={styles.secondaryButtonText}>Back</Text>
+                </Pressable>
+                <Pressable
+                  onPress={onContinueFromPermissions}
+                  style={[styles.primaryButton, styles.flex]}
+                >
+                  <Text style={styles.primaryButtonText}>Continue</Text>
+                  <Ionicons
+                    name="arrow-forward"
+                    size={20}
+                    color={COLORS.background}
+                  />
+                </Pressable>
+              </View>
+            </View>
           ) : (
             <View style={styles.formContainer}>
               <View style={styles.inputGroup}>
@@ -267,6 +647,17 @@ export default function OnboardingPage() {
                 </View>
               </View>
 
+              {!!locationHintMessage && (
+                <View style={styles.messageContainer}>
+                  <Ionicons
+                    name="information-circle-outline"
+                    size={18}
+                    color={COLORS.secondary}
+                  />
+                  <Text style={styles.errorMessage}>{locationHintMessage}</Text>
+                </View>
+              )}
+
               <FlatList
                 data={filteredCities}
                 keyExtractor={(item) => item.id}
@@ -286,7 +677,11 @@ export default function OnboardingPage() {
                       <View style={styles.cityInfo}>
                         <Text style={styles.cityName}>
                           {item.name}
-                          {item.region ? `, ${item.region}` : ""}
+                          {item.state
+                            ? `, ${item.state}`
+                            : item.region
+                              ? `, ${item.region}`
+                              : ""}
                         </Text>
                         <Text style={styles.cityCountry}>
                           {item.country_code}
@@ -323,7 +718,7 @@ export default function OnboardingPage() {
               {!isKeyboardVisible && (
                 <View style={styles.footerButtons}>
                   <Pressable
-                    onPress={() => setStep(0)}
+                    onPress={() => setStep(1)}
                     style={[styles.primaryButton, styles.secondaryButton]}
                   >
                     <Text style={styles.secondaryButtonText}>Back</Text>
@@ -418,6 +813,11 @@ const styles = StyleSheet.create({
     marginBottom: 20,
     borderWidth: 1,
     borderColor: COLORS.primary + "30",
+    overflow: "hidden",
+  },
+  logo: {
+    width: 60,
+    height: 60,
   },
   title: {
     color: COLORS.primary,
@@ -440,6 +840,63 @@ const styles = StyleSheet.create({
   formContainer: {
     flex: 1,
     gap: 20,
+  },
+  permissionsList: {
+    gap: 16,
+    backgroundColor: COLORS.accent + "20",
+    borderRadius: 24,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: COLORS.secondary + "10",
+  },
+  permissionItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    paddingVertical: 8,
+  },
+  permissionIconCircle: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: COLORS.accent + "40",
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+    borderColor: COLORS.primary + "20",
+  },
+  permissionTextContent: {
+    flex: 1,
+    gap: 2,
+  },
+  permissionItemTitle: {
+    color: COLORS.primary,
+    fontSize: 18,
+    fontFamily: "Boogaloo_400Regular",
+  },
+  permissionItemDescription: {
+    color: COLORS.text,
+    fontSize: 14,
+    fontFamily: "Boogaloo_400Regular",
+    opacity: 0.7,
+  },
+  permissionAction: {
+    backgroundColor: COLORS.primary,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 12,
+    minWidth: 70,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  permissionActionGranted: {
+    backgroundColor: "transparent",
+    paddingHorizontal: 0,
+  },
+  permissionActionText: {
+    color: COLORS.background,
+    fontSize: 14,
+    fontFamily: "Boogaloo_400Regular",
   },
   inputGroup: {
     gap: 8,
@@ -476,7 +933,6 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     borderWidth: 1,
     borderColor: COLORS.secondary + "10",
-    marginTop: -10,
   },
   cityItem: {
     flexDirection: "row",

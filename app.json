@@ -14,7 +14,11 @@
     ],
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.flemingvincent.shrubbi"
+      "bundleIdentifier": "com.flemingvincent.shrubbi",
+      "infoPlist": {
+        "NSLocationWhenInUseUsageDescription": "Allow Shrubbi to use your location to suggest nearby cities.",
+        "NSCameraUsageDescription": "Allow Shrubbi to use your camera so you can add plant photos."
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -35,8 +39,10 @@
           "backgroundColor": "#ffffff"
         }
       ],
+      "expo-notifications",
       "@rnmapbox/maps",
-      "expo-secure-store"
+      "expo-secure-store",
+      "expo-camera"
     ],
     "experiments": {
       "typedRoutes": true,
