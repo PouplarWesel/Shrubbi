@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Platform,
@@ -15,7 +15,7 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import {
   Camera,
-  FillExtrusionLayer,
+  CircleLayer,
   FillLayer,
   LineLayer,
   MapView,
@@ -24,6 +24,7 @@ import {
   SymbolLayer,
 } from "@rnmapbox/maps";
 import { BlurView } from "expo-blur";
+import * as Location from "expo-location";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { COLORS } from "@/constants/colors";
@@ -125,15 +126,62 @@ export default function MapTab() {
 
   const cameraRef = useRef<Camera>(null);
   const sheetRef = useRef<BottomSheetModal>(null);
+  const selectedCityIdRef = useRef<string | null>(null);
 
   const [metric, setMetric] = useState<MetricKey>("co2");
-  const [is3d, setIs3d] = useState(true);
 
   const [rows, setRows] = useState<CityMapStatsRow[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState("");
 
   const [selectedCityId, setSelectedCityId] = useState<string | null>(null);
+  const [userLocation, setUserLocation] = useState<{
+    latitude: number;
+    longitude: number;
+  } | null>(null);
+  const [isLocating, setIsLocating] = useState(false);
+
+  useEffect(() => {
+    selectedCityIdRef.current = selectedCityId;
+  }, [selectedCityId]);
+
+  const fetchUserLocation = useCallback(
+    async (opts: { forceFresh?: boolean } = {}) => {
+      const forceFresh = Boolean(opts.forceFresh);
+
+      try {
+        const existing = await Location.getForegroundPermissionsAsync();
+        let status = existing.status;
+
+        if (status !== "granted") {
+          const requested = await Location.requestForegroundPermissionsAsync();
+          status = requested.status;
+        }
+
+        if (status !== "granted") return null;
+
+        const lastKnown = forceFresh
+          ? null
+          : await Location.getLastKnownPositionAsync({});
+        const position =
+          lastKnown ??
+          (await Location.getCurrentPositionAsync({
+            accuracy: Location.Accuracy.Balanced,
+          }));
+
+        const coords = {
+          latitude: position.coords.latitude,
+          longitude: position.coords.longitude,
+        };
+
+        setUserLocation(coords);
+        return coords;
+      } catch {
+        return null;
+      }
+    },
+    [],
+  );
 
   useEffect(() => {
     let isCancelled = false;
@@ -201,6 +249,30 @@ export default function MapTab() {
       isCancelled = true;
     };
   }, [supabase]);
+
+  useEffect(() => {
+    let isCancelled = false;
+
+    const centerOnUser = async () => {
+      const coords = await fetchUserLocation();
+      if (isCancelled || !coords) return;
+      if (selectedCityIdRef.current) return;
+
+      cameraRef.current?.setCamera({
+        centerCoordinate: [coords.longitude, coords.latitude],
+        zoomLevel: 11,
+        pitch: 0,
+        heading: 0,
+        animationDuration: 900,
+      });
+    };
+
+    void centerOnUser();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [fetchUserLocation]);
 
   const selectedCity = useMemo(() => {
     if (!selectedCityId) return null;
@@ -314,20 +386,6 @@ export default function MapTab() {
     ];
   }, [fillColors, maxScore]);
 
-  const extrusionHeightExpression = useMemo(() => {
-    // In meters. Keeps the tallest city readable without turning into a skyscraper city.
-    const maxHeight = 6000;
-    return [
-      "interpolate",
-      ["linear"],
-      ["get", "score"],
-      0,
-      0,
-      maxScore,
-      maxHeight,
-    ];
-  }, [maxScore]);
-
   const handleSelectCity = (cityId: string) => {
     setSelectedCityId(cityId);
     sheetRef.current?.present();
@@ -349,7 +407,7 @@ export default function MapTab() {
     cameraRef.current?.setCamera({
       centerCoordinate: [centerLon, centerLat],
       zoomLevel: 9,
-      pitch: is3d ? 50 : 0,
+      pitch: 0,
       heading: 0,
       animationDuration: 900,
     });
@@ -370,17 +428,6 @@ export default function MapTab() {
     handleSelectCity(cityId);
   };
 
-  const toggle3d = () => {
-    setIs3d((prev) => {
-      const next = !prev;
-      cameraRef.current?.setCamera({
-        pitch: next ? 50 : 0,
-        animationDuration: 500,
-      });
-      return next;
-    });
-  };
-
   const statsBreakdown = useMemo(() => {
     if (!selectedCity) return [];
     const breakdown = selectedCity.type_breakdown;
@@ -393,13 +440,52 @@ export default function MapTab() {
     return Math.max(1, statsBreakdown[0]?.value ?? 1);
   }, [statsBreakdown]);
 
+  const userLocationFeatureCollection = useMemo(() => {
+    if (!userLocation) return null;
+
+    return {
+      type: "FeatureCollection" as const,
+      features: [
+        {
+          type: "Feature" as const,
+          geometry: {
+            type: "Point" as const,
+            coordinates: [userLocation.longitude, userLocation.latitude],
+          },
+          properties: {},
+        },
+      ],
+    };
+  }, [userLocation]);
+
+  const locateButtonBottom = (insets.bottom > 0 ? insets.bottom : 24) + 68 + 16;
+
+  const handleLocatePress = useCallback(async () => {
+    setIsLocating(true);
+
+    try {
+      const coords = await fetchUserLocation({ forceFresh: true });
+      if (!coords) return;
+
+      cameraRef.current?.setCamera({
+        centerCoordinate: [coords.longitude, coords.latitude],
+        zoomLevel: 12,
+        pitch: 0,
+        heading: 0,
+        animationDuration: 800,
+      });
+    } finally {
+      setIsLocating(false);
+    }
+  }, [fetchUserLocation]);
+
   return (
     <BottomSheetModalProvider>
       <View style={styles.container}>
         <MapView
           style={styles.map}
           styleURL={StyleURL.Dark}
-          pitchEnabled
+          pitchEnabled={false}
           rotateEnabled
           attributionEnabled
         >
@@ -407,26 +493,9 @@ export default function MapTab() {
             ref={cameraRef}
             centerCoordinate={DEFAULT_CENTER}
             zoomLevel={5.3}
-            pitch={is3d ? 50 : 0}
+            pitch={0}
             animationMode="flyTo"
             animationDuration={0}
-          />
-
-          {/* Base 3D buildings from the style's composite source (nice backdrop for the city overlays). */}
-          <FillExtrusionLayer
-            id="shrubbi-3d-buildings"
-            existing={false}
-            sourceID="composite"
-            sourceLayerID="building"
-            filter={["==", "extrude", "true"]}
-            minZoomLevel={14}
-            maxZoomLevel={24}
-            style={{
-              fillExtrusionColor: "#2a2f33",
-              fillExtrusionOpacity: 0.45,
-              fillExtrusionHeight: ["get", "height"],
-              fillExtrusionBase: ["get", "min_height"],
-            }}
           />
 
           <ShapeSource
@@ -442,20 +511,6 @@ export default function MapTab() {
                 fillColor: fillColorExpression as any,
                 fillOpacity: 0.55,
                 fillAntialias: true,
-              }}
-            />
-
-            <FillExtrusionLayer
-              id="shrubbi-city-extrusion"
-              existing={false}
-              minZoomLevel={6}
-              maxZoomLevel={24}
-              style={{
-                fillExtrusionColor: fillColorExpression as any,
-                fillExtrusionHeight: is3d
-                  ? (extrusionHeightExpression as any)
-                  : 0,
-                fillExtrusionOpacity: is3d ? 0.72 : 0,
               }}
             />
 
@@ -515,7 +570,47 @@ export default function MapTab() {
               }}
             />
           </ShapeSource>
+
+          {userLocationFeatureCollection ? (
+            <ShapeSource
+              id="shrubbi-user-location"
+              shape={userLocationFeatureCollection as any}
+            >
+              <CircleLayer
+                id="shrubbi-user-location-halo"
+                style={{
+                  circleRadius: 14,
+                  circleColor: COLORS.primary,
+                  circleOpacity: 0.18,
+                }}
+              />
+              <CircleLayer
+                id="shrubbi-user-location-dot"
+                style={{
+                  circleRadius: 6,
+                  circleColor: COLORS.primary,
+                  circleOpacity: 0.95,
+                  circleStrokeColor: COLORS.background,
+                  circleStrokeWidth: 2,
+                }}
+              />
+            </ShapeSource>
+          ) : null}
         </MapView>
+
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Zoom to my location"
+          disabled={isLocating}
+          onPress={handleLocatePress}
+          style={[styles.locateButton, { bottom: locateButtonBottom }]}
+        >
+          {isLocating ? (
+            <ActivityIndicator color={COLORS.primary} />
+          ) : (
+            <Ionicons name="locate" size={20} color={COLORS.primary} />
+          )}
+        </Pressable>
 
         <View style={[styles.overlay, { paddingTop: insets.top + 10 }]}>
           <View style={styles.panel}>
@@ -534,15 +629,6 @@ export default function MapTab() {
                   Tap a city for stats and top plant types.
                 </Text>
               </View>
-
-              <Pressable onPress={toggle3d} style={styles.iconButton}>
-                <Ionicons
-                  name={is3d ? "cube" : "cube-outline"}
-                  size={18}
-                  color={COLORS.primary}
-                />
-                <Text style={styles.iconButtonText}>{is3d ? "3D" : "2D"}</Text>
-              </Pressable>
             </View>
 
             <View style={styles.segment}>
@@ -709,6 +795,24 @@ const styles = StyleSheet.create({
     right: 0,
     paddingHorizontal: 14,
   },
+  locateButton: {
+    position: "absolute",
+    right: 16,
+    width: 46,
+    height: 46,
+    borderRadius: 23,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: COLORS.background + "E6",
+    borderWidth: 1,
+    borderColor: COLORS.primary + "22",
+    zIndex: 50,
+    elevation: 10,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.25,
+    shadowRadius: 10,
+  },
   panel: {
     borderRadius: 18,
     overflow: "hidden",
@@ -738,22 +842,6 @@ const styles = StyleSheet.create({
     opacity: 0.85,
     marginTop: 2,
     fontSize: 12,
-  },
-  iconButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    paddingHorizontal: 10,
-    paddingVertical: 8,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: COLORS.primary + "30",
-    backgroundColor: COLORS.primary + "10",
-  },
-  iconButtonText: {
-    color: COLORS.primary,
-    fontSize: 12,
-    fontWeight: "700",
   },
   segment: {
     flexDirection: "row",
