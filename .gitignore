@@ -48,3 +48,6 @@ ios/
 
 # android
 android/
+
+# Supabase migrations (kept local unless explicitly force-added)
+supabase/migrations/*.sql

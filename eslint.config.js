@@ -6,6 +6,14 @@ module.exports = defineConfig([
   expoConfig,
   eslintPluginPrettierRecommended,
   {
-    ignores: ["dist/*"],
+    ignores: ["dist/*", "**/supabase/database.types.ts"],
+    rules: {
+      "prettier/prettier": [
+        "error",
+        {
+          endOfLine: "auto",
+        },
+      ],
+    },
   },
 ]);

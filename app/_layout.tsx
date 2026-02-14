@@ -5,6 +5,7 @@ import { useFonts } from "expo-font";
 import { Stack } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import { StatusBar } from "expo-status-bar";
+import { GestureHandlerRootView } from "react-native-gesture-handler";
 
 import { useSupabase } from "@/hooks/useSupabase";
 import { SupabaseProvider } from "@/providers/supabase-provider";
@@ -18,9 +19,11 @@ SplashScreen.preventAutoHideAsync();
 
 export default function RootLayout() {
   return (
-    <SupabaseProvider>
-      <RootNavigator />
-    </SupabaseProvider>
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <SupabaseProvider>
+        <RootNavigator />
+      </SupabaseProvider>
+    </GestureHandlerRootView>
   );
 }
 

@@ -1,18 +1,26 @@
-import { useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import {
   Alert,
+  Dimensions,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   View,
-  Dimensions,
-  Image,
 } from "react-native";
 
+import {
+  BottomSheetModal,
+  BottomSheetModalProvider,
+  BottomSheetScrollView,
+} from "@gorhom/bottom-sheet";
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import { CameraCapture } from "@/components/CameraCapture";
+import { SettingsSection } from "@/components/Settings";
+import type { SettingsSectionHandle } from "@/components/Settings";
 import { COLORS } from "@/constants/colors";
 import { useSupabase } from "@/hooks/useSupabase";
 
@@ -22,6 +30,11 @@ export default function Page() {
   const { signOut, session, supabase } = useSupabase();
   const insets = useSafeAreaInsets();
   const [isDeleting, setIsDeleting] = useState(false);
+  const [isCameraOpen, setIsCameraOpen] = useState(false);
+  const bottomSheetModalRef = useRef<BottomSheetModal>(null);
+  const snapPoints = useMemo(() => ["72%", "95%"], []);
+
+  const settingsRef = useRef<SettingsSectionHandle>(null);
 
   const handleSignOut = async () => {
     try {
@@ -67,97 +80,167 @@ export default function Page() {
     }
   };
 
+  const handleOpenSettings = () => {
+    bottomSheetModalRef.current?.present();
+  };
+
+  const handleRequestCamera = () => {
+    setIsCameraOpen(true);
+  };
+
+  const handleCameraCapture = (
+    uri: string,
+    mimeType: string,
+    base64?: string | null,
+  ) => {
+    void settingsRef.current?.handleCameraPhoto({ uri, mimeType, base64 });
+    setIsCameraOpen(false);
+  };
+
+  const handleCameraClose = () => {
+    setIsCameraOpen(false);
+  };
+
   const userEmail = session?.user?.email || "Gardener";
   const userName = userEmail.split("@")[0];
 
   return (
-    <View style={styles.container}>
-      <View style={styles.backgroundDecoration}>
-        <View style={[styles.blob, styles.blob1]} />
-        <View style={[styles.blob, styles.blob2]} />
-      </View>
-
-      <View style={[styles.content, { paddingTop: insets.top + 40 }]}>
-        <View style={styles.header}>
-          <View>
-            <Text style={styles.greeting}>Hello,</Text>
-            <Text style={styles.userName}>{userName}</Text>
-          </View>
-          <View style={styles.avatar}>
-            <Image
-              source={require("@/assets/icon.png")}
-              style={styles.logo}
-              resizeMode="contain"
-            />
-          </View>
+    <BottomSheetModalProvider>
+      <View style={styles.container}>
+        <View style={styles.backgroundDecoration}>
+          <View style={[styles.blob, styles.blob1]} />
+          <View style={[styles.blob, styles.blob2]} />
         </View>
 
-        <View style={styles.statsContainer}>
-          <View style={styles.statCard}>
-            <Ionicons name="leaf-outline" size={24} color={COLORS.primary} />
-            <Text style={styles.statValue}>12</Text>
-            <Text style={styles.statLabel}>Plants</Text>
+        <ScrollView
+          contentContainerStyle={[
+            styles.content,
+            { paddingTop: insets.top + 40, paddingBottom: insets.bottom + 28 },
+          ]}
+          showsVerticalScrollIndicator={false}
+        >
+          <View style={styles.header}>
+            <View>
+              <Text style={styles.greeting}>Hello,</Text>
+              <Text style={styles.userName}>{userName}</Text>
+            </View>
+            <Pressable
+              onPress={handleOpenSettings}
+              style={({ pressed }) => [
+                styles.settingsIconButton,
+                pressed && styles.pressed,
+              ]}
+            >
+              <Ionicons
+                name="settings-outline"
+                size={24}
+                color={COLORS.primary}
+              />
+            </Pressable>
           </View>
-          <View style={styles.statCard}>
-            <Ionicons name="water-outline" size={24} color={COLORS.primary} />
-            <Text style={styles.statValue}>3</Text>
-            <Text style={styles.statLabel}>To Water</Text>
+
+          <View style={styles.statsContainer}>
+            <View style={styles.statCard}>
+              <Ionicons name="leaf-outline" size={24} color={COLORS.primary} />
+              <Text style={styles.statValue}>12</Text>
+              <Text style={styles.statLabel}>Plants</Text>
+            </View>
+            <View style={styles.statCard}>
+              <Ionicons name="water-outline" size={24} color={COLORS.primary} />
+              <Text style={styles.statValue}>3</Text>
+              <Text style={styles.statLabel}>To Water</Text>
+            </View>
           </View>
-        </View>
 
-        <View style={styles.mainCard}>
-          <Text style={styles.cardTitle}>Daily Tip</Text>
-          <Text style={styles.cardText}>
-            Succulents love bright, indirect sunlight. Make sure yours are
-            getting enough light today!
-          </Text>
-          <Pressable style={styles.cardButton}>
-            <Text style={styles.cardButtonText}>Learn More</Text>
-          </Pressable>
-        </View>
-
-        <View style={styles.footer}>
-          <Pressable
-            style={({ pressed }) => [
-              styles.onboardingButton,
-              pressed && styles.pressed,
-            ]}
-            onPress={() => router.push("/(protected)/onboarding")}
-          >
-            <Ionicons name="school-outline" size={20} color={COLORS.primary} />
-            <Text style={styles.onboardingText}>Onboarding</Text>
-          </Pressable>
-          <Pressable
-            style={({ pressed }) => [
-              styles.signOutButton,
-              pressed && styles.pressed,
-            ]}
-            onPress={handleSignOut}
-          >
-            <Ionicons
-              name="log-out-outline"
-              size={20}
-              color={COLORS.secondary}
-            />
-            <Text style={styles.signOutText}>Logout</Text>
-          </Pressable>
-          <Pressable
-            style={({ pressed }) => [
-              styles.deleteButton,
-              pressed && styles.pressed,
-              isDeleting && styles.disabledButton,
-            ]}
-            onPress={confirmDeleteAccount}
-            disabled={isDeleting}
-          >
-            <Ionicons name="trash-outline" size={20} color={COLORS.warning} />
-            <Text style={styles.deleteText}>
-              {isDeleting ? "Deleting..." : "Delete Account"}
+          <View style={styles.mainCard}>
+            <Text style={styles.cardTitle}>Daily Tip</Text>
+            <Text style={styles.cardText}>
+              Succulents love bright, indirect sunlight. Make sure yours are
+              getting enough light today!
             </Text>
-          </Pressable>
-        </View>
+            <Pressable style={styles.cardButton}>
+              <Text style={styles.cardButtonText}>Learn More</Text>
+            </Pressable>
+          </View>
+
+          <View style={styles.footer}>
+            <Pressable
+              style={({ pressed }) => [
+                styles.onboardingButton,
+                pressed && styles.pressed,
+              ]}
+              onPress={() => router.push("/(protected)/onboarding")}
+            >
+              <Ionicons
+                name="school-outline"
+                size={20}
+                color={COLORS.primary}
+              />
+              <Text style={styles.onboardingText}>Onboarding</Text>
+            </Pressable>
+            <Pressable
+              style={({ pressed }) => [
+                styles.signOutButton,
+                pressed && styles.pressed,
+              ]}
+              onPress={handleSignOut}
+            >
+              <Ionicons
+                name="log-out-outline"
+                size={20}
+                color={COLORS.secondary}
+              />
+              <Text style={styles.signOutText}>Logout</Text>
+            </Pressable>
+            <Pressable
+              style={({ pressed }) => [
+                styles.deleteButton,
+                pressed && styles.pressed,
+                isDeleting && styles.disabledButton,
+              ]}
+              onPress={confirmDeleteAccount}
+              disabled={isDeleting}
+            >
+              <Ionicons name="trash-outline" size={20} color={COLORS.warning} />
+              <Text style={styles.deleteText}>
+                {isDeleting ? "Deleting..." : "Delete Account"}
+              </Text>
+            </Pressable>
+          </View>
+        </ScrollView>
+
+        <BottomSheetModal
+          ref={bottomSheetModalRef}
+          index={0}
+          snapPoints={snapPoints}
+          enableDismissOnClose={false}
+          enablePanDownToClose
+          backgroundStyle={styles.bottomSheetBackground}
+          handleIndicatorStyle={styles.bottomSheetHandle}
+        >
+          <BottomSheetScrollView
+            contentContainerStyle={[
+              styles.bottomSheetContent,
+              { paddingBottom: Math.max(insets.bottom, 24) },
+            ]}
+          >
+            <SettingsSection
+              ref={settingsRef}
+              onRequestCamera={handleRequestCamera}
+            />
+          </BottomSheetScrollView>
+        </BottomSheetModal>
+
+        {isCameraOpen && (
+          <View style={styles.cameraOverlay}>
+            <CameraCapture
+              onCapture={handleCameraCapture}
+              onClose={handleCameraClose}
+            />
+          </View>
+        )}
       </View>
-    </View>
+    </BottomSheetModalProvider>
   );
 }
 
@@ -189,8 +272,8 @@ const styles = StyleSheet.create({
     left: -width * 0.3,
   },
   content: {
-    flex: 1,
     paddingHorizontal: 24,
+    gap: 22,
   },
   header: {
     flexDirection: "row",
@@ -210,7 +293,7 @@ const styles = StyleSheet.create({
     fontFamily: "Boogaloo_400Regular",
     textTransform: "capitalize",
   },
-  avatar: {
+  settingsIconButton: {
     width: 50,
     height: 50,
     borderRadius: 25,
@@ -220,10 +303,6 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: COLORS.primary + "30",
     overflow: "hidden",
-  },
-  logo: {
-    width: 35,
-    height: 35,
   },
   statsContainer: {
     flexDirection: "row",
@@ -290,8 +369,7 @@ const styles = StyleSheet.create({
     fontFamily: "Boogaloo_400Regular",
   },
   footer: {
-    marginTop: "auto",
-    paddingBottom: 40,
+    marginTop: 4,
     alignItems: "center",
     gap: 10,
   },
@@ -345,5 +423,19 @@ const styles = StyleSheet.create({
   pressed: {
     opacity: 0.7,
     transform: [{ scale: 0.98 }],
+  },
+  bottomSheetBackground: {
+    backgroundColor: COLORS.background,
+  },
+  bottomSheetHandle: {
+    backgroundColor: COLORS.secondary + "AA",
+  },
+  bottomSheetContent: {
+    paddingHorizontal: 18,
+    paddingBottom: 28,
+  },
+  cameraOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    zIndex: 30,
   },
 });

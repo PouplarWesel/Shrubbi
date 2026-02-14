@@ -8,10 +8,7 @@
     "scheme": "shrubbi",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
-    "platforms": [
-      "ios",
-      "android"
-    ],
+    "platforms": ["ios", "android"],
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.flemingvincent.shrubbi",
@@ -23,7 +20,7 @@
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#ffffff"
+        "backgroundColor": "#001617"
       },
       "edgeToEdgeEnabled": true,
       "package": "com.shrubbi.sfhacks"
@@ -41,6 +38,13 @@
       ],
       "expo-notifications",
       "@rnmapbox/maps",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Allow Shrubbi to access your photos so you can upload profile and plant images.",
+          "cameraPermission": "Allow Shrubbi to use your camera so you can take profile and plant photos."
+        }
+      ],
       "expo-secure-store",
       "expo-camera"
     ],
