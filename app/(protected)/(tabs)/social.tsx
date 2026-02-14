@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -12,6 +12,7 @@ import {
   View,
   LayoutAnimation,
   KeyboardAvoidingView,
+  Modal,
 } from "react-native";
 
 import { Ionicons } from "@expo/vector-icons";
@@ -138,10 +139,16 @@ type KeyboardImageChangeEvent = {
   };
 };
 
-const QUICK_REACTIONS = ["🌱", "🔥", "💧", "👏", "😂"] as const;
-
+const QUICK_REACTIONS = [
+  "\u{1F331}",
+  "\u{1F525}",
+  "\u{1F4A7}",
+  "\u{1F44F}",
+  "\u{1F602}",
+] as const;
 const EVENT_DATE_TIME_REGEX =
   /^(\d{4})-(\d{2})-(\d{2})(?:\s+|T)(\d{2}):(\d{2})$/;
+const CHAT_MEDIA_SIGNED_URL_TTL_SECONDS = 6 * 60 * 60;
 
 const getFriendlyErrorMessage = (message: string) => {
   if (message.includes("teams_city_name_key")) {
@@ -209,6 +216,7 @@ const readImageUriAsBlob = async (uri: string) => {
 
 const base64ToUint8Array = (value: string) => {
   const normalized = value
+    .replace(/^data:[^;]+;base64,/, "")
     .replace(/[\r\n\s]/g, "")
     .replace(/-/g, "+")
     .replace(/_/g, "/");
@@ -405,9 +413,9 @@ export default function SocialPage() {
   const [eventAttendeesByEvent, setEventAttendeesByEvent] = useState<
     Record<string, EventAttendeeRow[]>
   >({});
-  const [eventOrganizersById, setEventOrganizersById] = useState<
-    Record<string, PublicProfileRow>
-  >({});
+  const [, setEventOrganizersById] = useState<Record<string, PublicProfileRow>>(
+    {},
+  );
   const [isCreateEventOpen, setIsCreateEventOpen] = useState(false);
   const [isCreatingEvent, setIsCreatingEvent] = useState(false);
   const [newEventTitle, setNewEventTitle] = useState("");
@@ -448,14 +456,54 @@ export default function SocialPage() {
   const [isThreadMode, setIsThreadMode] = useState(false);
   const [threadTitleDraft, setThreadTitleDraft] = useState("");
   const [replyToMessageId, setReplyToMessageId] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<"chat" | "events" | "groups">("chat");
+  const [activeTab, setActiveTab] = useState<"chat" | "events" | "groups">(
+    "chat",
+  );
+  const [selectedMessageId, setSelectedMessageId] = useState<string | null>(
+    null,
+  );
+  const [isReactionPickerOpen, setIsReactionPickerOpen] = useState(false);
 
   const userId = session?.user?.id ?? null;
 
-  const activeThread = useMemo(
-    () => threads.find((thread) => thread.id === activeThreadId) ?? null,
-    [threads, activeThreadId],
+  const messageIdSetRef = useRef<Set<string>>(new Set());
+  const profilesByIdRef = useRef<Record<string, PublicProfileRow>>({});
+  const signedAttachmentUrlsRef = useRef<Record<string, string>>({});
+  const attachmentsByMessageRef = useRef<Record<string, ChatAttachmentRow[]>>(
+    {},
   );
+  const pendingAttachmentsRef = useRef<Record<string, ChatAttachmentRow[]>>({});
+  const pendingReactionsRef = useRef<Record<string, ChatReactionRow[]>>({});
+  const messageHydrationTimersRef = useRef<
+    Record<string, ReturnType<typeof setTimeout>>
+  >({});
+
+  useEffect(() => {
+    messageIdSetRef.current = new Set(messages.map((message) => message.id));
+  }, [messages]);
+
+  useEffect(() => {
+    profilesByIdRef.current = profilesById;
+  }, [profilesById]);
+
+  useEffect(() => {
+    signedAttachmentUrlsRef.current = signedAttachmentUrls;
+  }, [signedAttachmentUrls]);
+
+  useEffect(() => {
+    attachmentsByMessageRef.current = attachmentsByMessage;
+  }, [attachmentsByMessage]);
+
+  useEffect(() => {
+    pendingAttachmentsRef.current = {};
+    pendingReactionsRef.current = {};
+
+    for (const timer of Object.values(messageHydrationTimersRef.current)) {
+      clearTimeout(timer);
+    }
+    messageHydrationTimersRef.current = {};
+  }, [activeChannelId]);
+
   const messageById = useMemo(() => {
     const next: Record<string, ChatMessageRow> = {};
     for (const message of messages) {
@@ -794,7 +842,7 @@ export default function SocialPage() {
     if (attachmentPaths.length > 0) {
       const { data: signedRows, error: signedError } = await supabase.storage
         .from("chat-media")
-        .createSignedUrls(attachmentPaths, 3600);
+        .createSignedUrls(attachmentPaths, CHAT_MEDIA_SIGNED_URL_TTL_SECONDS);
 
       if (signedError) {
         setErrorMessage(signedError.message);
@@ -827,6 +875,330 @@ export default function SocialPage() {
     void loadChatData();
   }, [loadChatData]);
 
+  const ensureProfiles = useCallback(
+    async (nextProfileIds: string[]) => {
+      const unique = Array.from(new Set(nextProfileIds.filter(Boolean)));
+      const missing = unique.filter((id) => !profilesByIdRef.current[id]);
+      if (missing.length === 0) return;
+
+      const { data, error } = await supabase
+        .from("public_profiles")
+        .select("id, display_name, avatar_url")
+        .in("id", missing);
+
+      if (error) {
+        console.error("Could not load profiles", error);
+        return;
+      }
+
+      const rows = (data ?? []) as PublicProfileRow[];
+      if (rows.length === 0) return;
+
+      setProfilesById((previous) => {
+        const next = { ...previous };
+        for (const row of rows) {
+          next[row.id] = row;
+        }
+        return next;
+      });
+    },
+    [supabase],
+  );
+
+  const ensureSignedAttachmentUrl = useCallback(
+    async (storagePath: string) => {
+      const path = storagePath.trim();
+      if (!path) return;
+      if (signedAttachmentUrlsRef.current[path]) return;
+
+      const { data, error } = await supabase.storage
+        .from("chat-media")
+        .createSignedUrl(path, CHAT_MEDIA_SIGNED_URL_TTL_SECONDS);
+
+      if (error) {
+        console.error("Could not sign attachment url", error);
+        return;
+      }
+
+      if (data?.signedUrl) {
+        setSignedAttachmentUrls((previous) => ({
+          ...previous,
+          [path]: data.signedUrl,
+        }));
+      }
+    },
+    [supabase],
+  );
+
+  const upsertMessageInState = useCallback((nextMessage: ChatMessageRow) => {
+    if (nextMessage.deleted_at) {
+      setMessages((previous) =>
+        previous.filter((message) => message.id !== nextMessage.id),
+      );
+      return;
+    }
+
+    setMessages((previous) => {
+      const index = previous.findIndex(
+        (message) => message.id === nextMessage.id,
+      );
+      const updated =
+        index === -1
+          ? [...previous, nextMessage]
+          : previous.map((message) =>
+              message.id === nextMessage.id ? nextMessage : message,
+            );
+
+      updated.sort((a, b) => a.created_at.localeCompare(b.created_at));
+      return updated.length > 250
+        ? updated.slice(updated.length - 250)
+        : updated;
+    });
+  }, []);
+
+  const removeMessageFromState = useCallback((messageId: string) => {
+    setMessages((previous) =>
+      previous.filter((message) => message.id !== messageId),
+    );
+
+    setAttachmentsByMessage((previous) => {
+      if (!previous[messageId]) return previous;
+      const next = { ...previous };
+      delete next[messageId];
+      return next;
+    });
+
+    setReactionsByMessage((previous) => {
+      if (!previous[messageId]) return previous;
+      const next = { ...previous };
+      delete next[messageId];
+      return next;
+    });
+
+    const attachmentPaths = (attachmentsByMessageRef.current[messageId] ?? [])
+      .filter((attachment) => attachment.storage_bucket === "chat-media")
+      .map((attachment) => attachment.storage_path);
+
+    if (attachmentPaths.length > 0) {
+      setSignedAttachmentUrls((previous) => {
+        let next: Record<string, string> | null = null;
+        for (const path of attachmentPaths) {
+          if (!previous[path]) continue;
+          if (!next) next = { ...previous };
+          delete next[path];
+        }
+        return next ?? previous;
+      });
+    }
+
+    setReplyToMessageId((previous) =>
+      previous === messageId ? null : previous,
+    );
+    setSelectedMessageId((previous) =>
+      previous === messageId ? null : previous,
+    );
+  }, []);
+
+  const upsertThreadInState = useCallback((nextThread: ChatThreadRow) => {
+    if (nextThread.archived_at) {
+      setThreads((previous) =>
+        previous.filter((thread) => thread.id !== nextThread.id),
+      );
+      return;
+    }
+
+    setThreads((previous) => {
+      const index = previous.findIndex((thread) => thread.id === nextThread.id);
+      const updated =
+        index === -1
+          ? [...previous, nextThread]
+          : previous.map((thread) =>
+              thread.id === nextThread.id ? nextThread : thread,
+            );
+      updated.sort((a, b) => b.created_at.localeCompare(a.created_at));
+      return updated.length > 60 ? updated.slice(0, 60) : updated;
+    });
+  }, []);
+
+  const removeThreadFromState = useCallback((threadId: string) => {
+    setThreads((previous) =>
+      previous.filter((thread) => thread.id !== threadId),
+    );
+    setActiveThreadId((previous) => (previous === threadId ? null : previous));
+  }, []);
+
+  const upsertAttachmentInState = useCallback(
+    (attachment: ChatAttachmentRow) => {
+      setAttachmentsByMessage((previous) => {
+        const list = previous[attachment.message_id] ?? [];
+        const index = list.findIndex((item) => item.id === attachment.id);
+        const nextList =
+          index === -1
+            ? [...list, attachment]
+            : list.map((item) =>
+                item.id === attachment.id ? attachment : item,
+              );
+        nextList.sort((a, b) => a.created_at.localeCompare(b.created_at));
+        return { ...previous, [attachment.message_id]: nextList };
+      });
+
+      if (attachment.storage_bucket === "chat-media") {
+        void ensureSignedAttachmentUrl(attachment.storage_path);
+      }
+    },
+    [ensureSignedAttachmentUrl],
+  );
+
+  const removeAttachmentInState = useCallback(
+    (attachment: ChatAttachmentRow) => {
+      setAttachmentsByMessage((previous) => {
+        const list = previous[attachment.message_id];
+        if (!list) return previous;
+        const nextList = list.filter((item) => item.id !== attachment.id);
+        const next = { ...previous };
+        if (nextList.length === 0) {
+          delete next[attachment.message_id];
+        } else {
+          next[attachment.message_id] = nextList;
+        }
+        return next;
+      });
+
+      if (attachment.storage_bucket === "chat-media") {
+        const path = attachment.storage_path;
+        setSignedAttachmentUrls((previous) => {
+          if (!previous[path]) return previous;
+          const next = { ...previous };
+          delete next[path];
+          return next;
+        });
+      }
+    },
+    [],
+  );
+
+  const upsertReactionInState = useCallback((reaction: ChatReactionRow) => {
+    setReactionsByMessage((previous) => {
+      const list = previous[reaction.message_id] ?? [];
+      const exists = list.some(
+        (item) =>
+          item.user_id === reaction.user_id && item.emoji === reaction.emoji,
+      );
+      if (exists) return previous;
+      return { ...previous, [reaction.message_id]: [...list, reaction] };
+    });
+  }, []);
+
+  const removeReactionInState = useCallback(
+    (reaction: Pick<ChatReactionRow, "message_id" | "user_id" | "emoji">) => {
+      setReactionsByMessage((previous) => {
+        const list = previous[reaction.message_id];
+        if (!list) return previous;
+        const nextList = list.filter(
+          (item) =>
+            !(
+              item.user_id === reaction.user_id && item.emoji === reaction.emoji
+            ),
+        );
+        const next = { ...previous };
+        if (nextList.length === 0) {
+          delete next[reaction.message_id];
+        } else {
+          next[reaction.message_id] = nextList;
+        }
+        return next;
+      });
+    },
+    [],
+  );
+
+  const hydrateMessageDetails = useCallback(
+    async (messageId: string) => {
+      const id = messageId.trim();
+      if (!id) return;
+
+      const [
+        { data: attachmentRows, error: attachmentsError },
+        { data: reactionRows, error: reactionsError },
+      ] = await Promise.all([
+        supabase
+          .from("chat_message_attachments")
+          .select(
+            "id, message_id, kind, storage_bucket, storage_path, mime_type, file_size_bytes, width, height, uploaded_by, created_at",
+          )
+          .eq("message_id", id),
+        supabase
+          .from("chat_message_reactions")
+          .select("message_id, user_id, emoji, created_at")
+          .eq("message_id", id),
+      ]);
+
+      if (attachmentsError || reactionsError) {
+        console.error("Could not hydrate message details", {
+          attachmentsError,
+          reactionsError,
+        });
+        return;
+      }
+
+      const attachments = (attachmentRows ?? []) as ChatAttachmentRow[];
+      const reactions = (reactionRows ?? []) as ChatReactionRow[];
+
+      attachments.forEach((row) => upsertAttachmentInState(row));
+      reactions.forEach((row) => upsertReactionInState(row));
+
+      const profileIds = Array.from(
+        new Set([
+          ...attachments.map((row) => row.uploaded_by),
+          ...reactions.map((row) => row.user_id),
+        ]),
+      );
+      void ensureProfiles(profileIds);
+    },
+    [ensureProfiles, supabase, upsertAttachmentInState, upsertReactionInState],
+  );
+
+  const scheduleHydrateMediaMessage = useCallback(
+    (message: ChatMessageRow) => {
+      if (!message?.id) return;
+      if (message.kind !== "image" && message.kind !== "gif") return;
+      if (messageHydrationTimersRef.current[message.id]) return;
+
+      messageHydrationTimersRef.current[message.id] = setTimeout(() => {
+        delete messageHydrationTimersRef.current[message.id];
+
+        if (!messageIdSetRef.current.has(message.id)) return;
+        const hasAttachments =
+          (attachmentsByMessageRef.current[message.id] ?? []).length > 0;
+
+        if (!hasAttachments) {
+          void hydrateMessageDetails(message.id);
+        }
+      }, 650);
+    },
+    [hydrateMessageDetails],
+  );
+
+  useEffect(() => {
+    const messageIds = new Set(messages.map((message) => message.id));
+
+    for (const [messageId, rows] of Object.entries(
+      pendingAttachmentsRef.current,
+    )) {
+      if (!messageIds.has(messageId)) continue;
+      delete pendingAttachmentsRef.current[messageId];
+      rows.forEach((attachment) => upsertAttachmentInState(attachment));
+    }
+
+    for (const [messageId, rows] of Object.entries(
+      pendingReactionsRef.current,
+    )) {
+      if (!messageIds.has(messageId)) continue;
+      delete pendingReactionsRef.current[messageId];
+      rows.forEach((reaction) => upsertReactionInState(reaction));
+    }
+  }, [messages, upsertAttachmentInState, upsertReactionInState]);
+
   useEffect(() => {
     if (!activeChannelId) return;
 
@@ -840,8 +1212,29 @@ export default function SocialPage() {
           table: "chat_messages",
           filter: `channel_id=eq.${activeChannelId}`,
         },
-        () => {
-          void loadChatData();
+        (payload) => {
+          const eventType = payload.eventType as "INSERT" | "UPDATE" | "DELETE";
+          if (eventType === "DELETE") {
+            const oldRow = payload.old as ChatMessageRow;
+            if (oldRow?.id) {
+              removeMessageFromState(oldRow.id);
+            }
+            return;
+          }
+
+          const row = payload.new as ChatMessageRow;
+          if (!row?.id) return;
+
+          if (row.deleted_at) {
+            removeMessageFromState(row.id);
+            return;
+          }
+
+          upsertMessageInState(row);
+          void ensureProfiles([row.sender_id]);
+          if (eventType === "INSERT") {
+            scheduleHydrateMediaMessage(row);
+          }
         },
       )
       .on(
@@ -852,8 +1245,103 @@ export default function SocialPage() {
           table: "chat_threads",
           filter: `channel_id=eq.${activeChannelId}`,
         },
-        () => {
-          void loadChatData();
+        (payload) => {
+          const eventType = payload.eventType as "INSERT" | "UPDATE" | "DELETE";
+          if (eventType === "DELETE") {
+            const oldRow = payload.old as ChatThreadRow;
+            if (oldRow?.id) {
+              removeThreadFromState(oldRow.id);
+            }
+            return;
+          }
+
+          const row = payload.new as ChatThreadRow;
+          if (!row?.id) return;
+
+          if (row.archived_at) {
+            removeThreadFromState(row.id);
+            return;
+          }
+
+          upsertThreadInState(row);
+          void ensureProfiles([row.created_by]);
+        },
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "chat_message_attachments",
+        },
+        (payload) => {
+          const eventType = payload.eventType as "INSERT" | "UPDATE" | "DELETE";
+          const row = (eventType === "DELETE" ? payload.old : payload.new) as
+            | ChatAttachmentRow
+            | undefined;
+
+          if (!row?.message_id) return;
+
+          const isKnownMessage = messageIdSetRef.current.has(row.message_id);
+          if (!isKnownMessage) {
+            if (eventType === "DELETE") return;
+
+            const pending = pendingAttachmentsRef.current[row.message_id] ?? [];
+            const exists = pending.some((item) => item.id === row.id);
+            if (!exists) {
+              pendingAttachmentsRef.current[row.message_id] = [...pending, row];
+              if (Object.keys(pendingAttachmentsRef.current).length > 200) {
+                pendingAttachmentsRef.current = {};
+              }
+            }
+            return;
+          }
+
+          if (eventType === "DELETE") {
+            removeAttachmentInState(row);
+          } else {
+            upsertAttachmentInState(row);
+          }
+        },
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "chat_message_reactions",
+        },
+        (payload) => {
+          const eventType = payload.eventType as "INSERT" | "UPDATE" | "DELETE";
+          const row = (eventType === "DELETE" ? payload.old : payload.new) as
+            | ChatReactionRow
+            | undefined;
+
+          if (!row?.message_id) return;
+
+          const isKnownMessage = messageIdSetRef.current.has(row.message_id);
+          if (!isKnownMessage) {
+            if (eventType === "DELETE") return;
+
+            const pending = pendingReactionsRef.current[row.message_id] ?? [];
+            const exists = pending.some(
+              (item) =>
+                item.user_id === row.user_id && item.emoji === row.emoji,
+            );
+            if (!exists) {
+              pendingReactionsRef.current[row.message_id] = [...pending, row];
+              if (Object.keys(pendingReactionsRef.current).length > 200) {
+                pendingReactionsRef.current = {};
+              }
+            }
+            return;
+          }
+
+          if (eventType === "DELETE") {
+            removeReactionInState(row);
+          } else {
+            upsertReactionInState(row);
+          }
         },
       )
       .subscribe();
@@ -861,7 +1349,20 @@ export default function SocialPage() {
     return () => {
       void supabase.removeChannel(channel);
     };
-  }, [activeChannelId, loadChatData, supabase]);
+  }, [
+    activeChannelId,
+    ensureProfiles,
+    scheduleHydrateMediaMessage,
+    removeAttachmentInState,
+    removeMessageFromState,
+    removeReactionInState,
+    removeThreadFromState,
+    supabase,
+    upsertAttachmentInState,
+    upsertMessageInState,
+    upsertReactionInState,
+    upsertThreadInState,
+  ]);
 
   useEffect(() => {
     if (!cityId) return;
@@ -898,14 +1399,6 @@ export default function SocialPage() {
     };
   }, [cityId, loadEventsData, supabase]);
 
-  const joinedTeams = useMemo(
-    () => teams.filter((team) => joinedTeamIds.includes(team.id)),
-    [joinedTeamIds, teams],
-  );
-  const availableTeams = useMemo(
-    () => teams.filter((team) => !joinedTeamIds.includes(team.id)),
-    [joinedTeamIds, teams],
-  );
   const visibleMessages = useMemo(
     () =>
       messages.filter((message) =>
@@ -1246,6 +1739,18 @@ export default function SocialPage() {
       (reaction) => reaction.user_id === userId && reaction.emoji === emoji,
     );
 
+    // Optimistic UI update (realtime will converge state afterwards).
+    if (hasReaction) {
+      removeReactionInState({ message_id: messageId, user_id: userId, emoji });
+    } else {
+      upsertReactionInState({
+        message_id: messageId,
+        user_id: userId,
+        emoji,
+        created_at: new Date().toISOString(),
+      });
+    }
+
     const { error } = hasReaction
       ? await supabase
           .from("chat_message_reactions")
@@ -1259,10 +1764,63 @@ export default function SocialPage() {
 
     if (error) {
       setErrorMessage(error.message);
+      // Revert optimistic update on failure.
+      if (hasReaction) {
+        upsertReactionInState({
+          message_id: messageId,
+          user_id: userId,
+          emoji,
+          created_at: new Date().toISOString(),
+        });
+      } else {
+        removeReactionInState({
+          message_id: messageId,
+          user_id: userId,
+          emoji,
+        });
+      }
       return;
     }
+  };
 
-    await loadChatData();
+  const deleteMyMessage = async (message: ChatMessageRow) => {
+    if (!userId || message.sender_id !== userId) return;
+
+    setErrorMessage("");
+
+    // Optimistically remove from UI. If the request fails we refresh as fallback.
+    removeMessageFromState(message.id);
+
+    const attachmentPaths = (attachmentsByMessage[message.id] ?? [])
+      .filter((attachment) => attachment.storage_bucket === "chat-media")
+      .map((attachment) => attachment.storage_path);
+
+    if (attachmentPaths.length > 0) {
+      const { error: storageError } = await supabase.storage
+        .from("chat-media")
+        .remove(attachmentPaths);
+
+      if (storageError) {
+        console.error("Failed to remove chat-media attachments", storageError);
+      }
+    }
+
+    const { error } = await supabase
+      .from("chat_messages")
+      .delete()
+      .eq("id", message.id)
+      .eq("sender_id", userId);
+
+    if (error) {
+      setErrorMessage(error.message);
+      void loadChatData();
+      return;
+    }
+  };
+
+  const openMessageActions = (message: ChatMessageRow) => {
+    setSelectedMessageId(message.id);
+    setIsReactionPickerOpen(true);
   };
 
   const sendComposer = async () => {
@@ -1294,20 +1852,64 @@ export default function SocialPage() {
         return;
       }
 
-      setActiveThreadId(data?.[0]?.thread_id ?? null);
+      const threadId = data?.[0]?.thread_id ?? null;
+      const rootMessageId = data?.[0]?.root_message_id ?? null;
+      setActiveThreadId(threadId);
+      if (threadId) {
+        upsertThreadInState({
+          id: threadId,
+          title: threadTitleDraft.trim() || null,
+          channel_id: activeChannelId,
+          created_by: userId,
+          created_at: new Date().toISOString(),
+          archived_at: null,
+        });
+      }
+      if (rootMessageId && threadId) {
+        upsertMessageInState({
+          id: rootMessageId,
+          channel_id: activeChannelId,
+          thread_id: threadId,
+          sender_id: userId,
+          reply_to_message_id: null,
+          kind: "text",
+          body: textBody,
+          metadata: {},
+          created_at: new Date().toISOString(),
+          deleted_at: null,
+        });
+      }
     } else {
-      const { error } = await supabase.rpc("chat_send_message", {
-        p_channel_id: activeChannelId,
-        p_body: textBody,
-        p_kind: "text",
-        p_thread_id: activeThreadId ?? null,
-        p_reply_to_message_id: replyToMessageId ?? null,
-      });
+      const { data: messageId, error } = await supabase.rpc(
+        "chat_send_message",
+        {
+          p_channel_id: activeChannelId,
+          p_body: textBody,
+          p_kind: "text",
+          p_thread_id: activeThreadId ?? null,
+          p_reply_to_message_id: replyToMessageId ?? null,
+        },
+      );
 
       if (error) {
         setErrorMessage(error.message);
         setIsSendingMessage(false);
         return;
+      }
+
+      if (messageId) {
+        upsertMessageInState({
+          id: messageId,
+          channel_id: activeChannelId,
+          thread_id: activeThreadId ?? null,
+          sender_id: userId,
+          reply_to_message_id: replyToMessageId ?? null,
+          kind: "text",
+          body: textBody,
+          metadata: {},
+          created_at: new Date().toISOString(),
+          deleted_at: null,
+        });
       }
     }
 
@@ -1315,7 +1917,6 @@ export default function SocialPage() {
     setReplyToMessageId(null);
     setThreadTitleDraft("");
     setIsThreadMode(false);
-    await loadChatData();
     setIsSendingMessage(false);
   };
 
@@ -1381,9 +1982,48 @@ export default function SocialPage() {
         return;
       }
 
-      const { error: attachmentError } = await supabase
-        .from("chat_message_attachments")
-        .insert({
+      const { data: insertedAttachment, error: attachmentError } =
+        await supabase
+          .from("chat_message_attachments")
+          .insert({
+            message_id: messageId,
+            uploaded_by: userId,
+            kind: attachmentKind,
+            storage_bucket: "chat-media",
+            storage_path: storagePath,
+            mime_type: mimeType,
+            file_size_bytes: Math.max(1, mediaBytes.byteLength),
+            width: null,
+            height: null,
+          })
+          .select(
+            "id, message_id, kind, storage_bucket, storage_path, mime_type, file_size_bytes, width, height, uploaded_by, created_at",
+          )
+          .single();
+
+      if (attachmentError) {
+        setErrorMessage(attachmentError.message);
+        setIsUploadingImage(false);
+        return;
+      }
+
+      upsertMessageInState({
+        id: messageId,
+        channel_id: activeChannelId,
+        thread_id: activeThreadId ?? null,
+        sender_id: userId,
+        reply_to_message_id: replyToMessageId ?? null,
+        kind: attachmentKind,
+        body: composerText.trim() || null,
+        metadata,
+        created_at: new Date().toISOString(),
+        deleted_at: null,
+      });
+      if (insertedAttachment) {
+        upsertAttachmentInState(insertedAttachment as ChatAttachmentRow);
+      } else {
+        upsertAttachmentInState({
+          id: `local-${messageId}`,
           message_id: messageId,
           uploaded_by: userId,
           kind: attachmentKind,
@@ -1393,19 +2033,14 @@ export default function SocialPage() {
           file_size_bytes: Math.max(1, mediaBytes.byteLength),
           width: null,
           height: null,
+          created_at: new Date().toISOString(),
         });
-
-      if (attachmentError) {
-        setErrorMessage(attachmentError.message);
-        setIsUploadingImage(false);
-        return;
       }
 
       setComposerText("");
       setReplyToMessageId(null);
       setThreadTitleDraft("");
       setIsThreadMode(false);
-      await loadChatData();
     } catch (error) {
       setErrorMessage(
         error instanceof Error
@@ -1436,6 +2071,7 @@ export default function SocialPage() {
       quality: 0.85,
       allowsEditing: false,
       exif: false,
+      base64: true,
     });
 
     if (pickerResult.canceled || !pickerResult.assets?.length) {
@@ -1452,7 +2088,10 @@ export default function SocialPage() {
       const storagePath = `${activeChannelId}/${userId}/${Date.now()}-${Math.random()
         .toString(36)
         .slice(2, 8)}.${extension}`;
-      const imageBody = await readImageUriAsBlob(asset.uri);
+      const imageBody =
+        asset.base64 && asset.base64.trim().length > 0
+          ? base64ToUint8Array(asset.base64)
+          : await readImageUriAsBlob(asset.uri);
 
       const { error: uploadError } = await supabase.storage
         .from("chat-media")
@@ -1463,7 +2102,17 @@ export default function SocialPage() {
         });
 
       if (uploadError) {
-        setErrorMessage(uploadError.message);
+        const normalizedMessage = uploadError.message.toLowerCase();
+        if (
+          normalizedMessage.includes("bucket") &&
+          normalizedMessage.includes("not found")
+        ) {
+          setErrorMessage(
+            "Supabase bucket `chat-media` is missing. Run chat storage migration and try again.",
+          );
+        } else {
+          setErrorMessage(uploadError.message);
+        }
         setIsUploadingImage(false);
         return;
       }
@@ -1487,9 +2136,57 @@ export default function SocialPage() {
         return;
       }
 
-      const { error: attachmentError } = await supabase
-        .from("chat_message_attachments")
-        .insert({
+      const { data: insertedAttachment, error: attachmentError } =
+        await supabase
+          .from("chat_message_attachments")
+          .insert({
+            message_id: messageId,
+            uploaded_by: userId,
+            kind: "image",
+            storage_bucket: "chat-media",
+            storage_path: storagePath,
+            mime_type: mimeType,
+            file_size_bytes: Math.max(
+              1,
+              Math.round(
+                asset.fileSize ??
+                  (imageBody instanceof Blob
+                    ? imageBody.size
+                    : imageBody.byteLength) ??
+                  1,
+              ),
+            ),
+            width: asset.width ?? null,
+            height: asset.height ?? null,
+          })
+          .select(
+            "id, message_id, kind, storage_bucket, storage_path, mime_type, file_size_bytes, width, height, uploaded_by, created_at",
+          )
+          .single();
+
+      if (attachmentError) {
+        setErrorMessage(attachmentError.message);
+        setIsUploadingImage(false);
+        return;
+      }
+
+      upsertMessageInState({
+        id: messageId,
+        channel_id: activeChannelId,
+        thread_id: activeThreadId ?? null,
+        sender_id: userId,
+        reply_to_message_id: replyToMessageId ?? null,
+        kind: "image",
+        body: composerText.trim() || null,
+        metadata: {},
+        created_at: new Date().toISOString(),
+        deleted_at: null,
+      });
+      if (insertedAttachment) {
+        upsertAttachmentInState(insertedAttachment as ChatAttachmentRow);
+      } else {
+        upsertAttachmentInState({
+          id: `local-${messageId}`,
           message_id: messageId,
           uploaded_by: userId,
           kind: "image",
@@ -1498,25 +2195,37 @@ export default function SocialPage() {
           mime_type: mimeType,
           file_size_bytes: Math.max(
             1,
-            Math.round(asset.fileSize ?? imageBody.size ?? 1),
+            Math.round(
+              asset.fileSize ??
+                (imageBody instanceof Blob
+                  ? imageBody.size
+                  : imageBody.byteLength) ??
+                1,
+            ),
           ),
           width: asset.width ?? null,
           height: asset.height ?? null,
+          created_at: new Date().toISOString(),
         });
-
-      if (attachmentError) {
-        setErrorMessage(attachmentError.message);
-        setIsUploadingImage(false);
-        return;
       }
 
       setComposerText("");
       setReplyToMessageId(null);
-      await loadChatData();
     } catch (error) {
-      setErrorMessage(
-        error instanceof Error ? error.message : "Could not upload image.",
-      );
+      const message = error instanceof Error ? error.message.toLowerCase() : "";
+      if (message.includes("network request failed")) {
+        setErrorMessage(
+          "Could not upload image due to a network error. Check connection and Supabase URL.",
+        );
+      } else if (message.includes("could not read image")) {
+        setErrorMessage(
+          "Could not read image file on this device. Please try another image.",
+        );
+      } else {
+        setErrorMessage(
+          error instanceof Error ? error.message : "Could not upload image.",
+        );
+      }
     } finally {
       setIsUploadingImage(false);
     }
@@ -1538,42 +2247,44 @@ export default function SocialPage() {
           <Text style={styles.title}>The Grove</Text>
           <View style={styles.locationTag}>
             <Ionicons name="location" size={14} color={COLORS.primary} />
-            <Text style={styles.subtitle}>
-              {cityName || "Global Root"}
-            </Text>
+            <Text style={styles.subtitle}>{cityName || "Global Root"}</Text>
           </View>
         </View>
-        
+
         {activeTab === "groups" && (
-          <Pressable 
+          <Pressable
             disabled={!cityId}
             onPress={() => {
-              LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+              LayoutAnimation.configureNext(
+                LayoutAnimation.Presets.easeInEaseOut,
+              );
               setIsCreateOpen(!isCreateOpen);
             }}
             style={[styles.fab, isCreateOpen && styles.fabActive]}
           >
-            <Ionicons 
-              name={isCreateOpen ? "close" : "people-outline"} 
-              size={24} 
-              color={isCreateOpen ? COLORS.primary : COLORS.background} 
+            <Ionicons
+              name={isCreateOpen ? "close" : "people-outline"}
+              size={24}
+              color={isCreateOpen ? COLORS.primary : COLORS.background}
             />
           </Pressable>
         )}
-        
+
         {activeTab === "events" && (
-          <Pressable 
+          <Pressable
             disabled={!cityId}
             onPress={() => {
-              LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+              LayoutAnimation.configureNext(
+                LayoutAnimation.Presets.easeInEaseOut,
+              );
               setIsCreateEventOpen(!isCreateEventOpen);
             }}
             style={[styles.fab, isCreateEventOpen && styles.fabActive]}
           >
-            <Ionicons 
-              name={isCreateEventOpen ? "close" : "calendar-outline"} 
-              size={24} 
-              color={isCreateEventOpen ? COLORS.primary : COLORS.background} 
+            <Ionicons
+              name={isCreateEventOpen ? "close" : "calendar-outline"}
+              size={24}
+              color={isCreateEventOpen ? COLORS.primary : COLORS.background}
             />
           </Pressable>
         )}
@@ -1582,25 +2293,33 @@ export default function SocialPage() {
       {/* Segmented Control */}
       <View style={styles.tabBarContainer}>
         {Platform.OS === "ios" && (
-          <BlurView intensity={30} tint="dark" style={StyleSheet.absoluteFill} />
+          <BlurView
+            intensity={30}
+            tint="dark"
+            style={StyleSheet.absoluteFill}
+          />
         )}
         <View style={styles.tabBar}>
           {(["chat", "events", "groups"] as const).map((tab) => (
             <Pressable
               key={tab}
               onPress={() => {
-                LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+                LayoutAnimation.configureNext(
+                  LayoutAnimation.Presets.easeInEaseOut,
+                );
                 setActiveTab(tab);
               }}
               style={[
                 styles.tabItem,
-                activeTab === tab && styles.tabItemActive
+                activeTab === tab && styles.tabItemActive,
               ]}
             >
-              <Text style={[
-                styles.tabText,
-                activeTab === tab && styles.tabTextActive
-              ]}>
+              <Text
+                style={[
+                  styles.tabText,
+                  activeTab === tab && styles.tabTextActive,
+                ]}
+              >
                 {tab.charAt(0).toUpperCase() + tab.slice(1)}
               </Text>
             </Pressable>
@@ -1620,13 +2339,17 @@ export default function SocialPage() {
 
       {/* Tab Content */}
       {activeTab === "chat" && (
-        <KeyboardAvoidingView 
-          style={styles.flexOne} 
+        <KeyboardAvoidingView
+          style={styles.flexOne}
           behavior={Platform.OS === "ios" ? "padding" : undefined}
           keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 0}
         >
           <View style={styles.chatNav}>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chatRail}>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.chatRail}
+            >
               {channels.map((channel) => {
                 const isActive = channel.id === activeChannelId;
                 return (
@@ -1639,26 +2362,48 @@ export default function SocialPage() {
                     }}
                     style={[styles.chatChip, isActive && styles.chatChipActive]}
                   >
-                    <Ionicons 
-                      name={channel.scope === "city" ? "business" : "people"} 
-                      size={14} 
-                      color={isActive ? COLORS.background : COLORS.primary} 
+                    <Ionicons
+                      name={channel.scope === "city" ? "business" : "people"}
+                      size={14}
+                      color={isActive ? COLORS.background : COLORS.primary}
                     />
-                    <Text style={[styles.chatChipText, isActive && styles.chatChipTextActive]}>
+                    <Text
+                      style={[
+                        styles.chatChipText,
+                        isActive && styles.chatChipTextActive,
+                      ]}
+                    >
                       {channel.display_name}
                     </Text>
                   </Pressable>
                 );
               })}
             </ScrollView>
-            
+
             {threads.length > 0 && (
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chatRail}>
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.chatRail}
+              >
                 <Pressable
-                  onPress={() => { setActiveThreadId(null); setReplyToMessageId(null); }}
-                  style={[styles.threadChip, !activeThreadId && styles.threadChipActive]}
+                  onPress={() => {
+                    setActiveThreadId(null);
+                    setReplyToMessageId(null);
+                  }}
+                  style={[
+                    styles.threadChip,
+                    !activeThreadId && styles.threadChipActive,
+                  ]}
                 >
-                  <Text style={[styles.threadChipText, !activeThreadId && styles.threadChipTextActive]}>Main</Text>
+                  <Text
+                    style={[
+                      styles.threadChipText,
+                      !activeThreadId && styles.threadChipTextActive,
+                    ]}
+                  >
+                    Main
+                  </Text>
                 </Pressable>
                 {threads.map((thread) => {
                   const isActive = thread.id === activeThreadId;
@@ -1666,10 +2411,22 @@ export default function SocialPage() {
                   return (
                     <Pressable
                       key={thread.id}
-                      onPress={() => { setActiveThreadId(thread.id); setReplyToMessageId(null); }}
-                      style={[styles.threadChip, isActive && styles.threadChipActive]}
+                      onPress={() => {
+                        setActiveThreadId(thread.id);
+                        setReplyToMessageId(null);
+                      }}
+                      style={[
+                        styles.threadChip,
+                        isActive && styles.threadChipActive,
+                      ]}
                     >
-                      <Text style={[styles.threadChipText, isActive && styles.threadChipTextActive]} numberOfLines={1}>
+                      <Text
+                        style={[
+                          styles.threadChipText,
+                          isActive && styles.threadChipTextActive,
+                        ]}
+                        numberOfLines={1}
+                      >
                         {`${thread.title?.trim() || "Thread"} (${count})`}
                       </Text>
                     </Pressable>
@@ -1686,86 +2443,160 @@ export default function SocialPage() {
               </View>
             ) : visibleMessages.length === 0 ? (
               <View style={styles.center}>
-                <Ionicons name="chatbubbles-outline" size={48} color={COLORS.secondary + "40"} />
-                <Text style={styles.emptyText}>No messages yet. Sprout the conversation!</Text>
+                <Ionicons
+                  name="chatbubbles-outline"
+                  size={48}
+                  color={COLORS.secondary + "40"}
+                />
+                <Text style={styles.emptyText}>
+                  No messages yet. Sprout the conversation!
+                </Text>
               </View>
             ) : (
-              <ScrollView 
-                style={styles.chatFeedScroll} 
+              <ScrollView
+                style={styles.chatFeedScroll}
                 contentContainerStyle={styles.chatFeedContent}
                 showsVerticalScrollIndicator={false}
               >
                 {visibleMessages.map((message) => {
                   const isMine = message.sender_id === userId;
                   const sender = profilesById[message.sender_id];
+                  const senderName =
+                    sender?.display_name?.trim() || (isMine ? "You" : "Member");
                   const attachments = attachmentsByMessage[message.id] ?? [];
                   const reactions = reactionsByMessage[message.id] ?? [];
-                  const reactionSummary = reactions.reduce((acc, r) => {
-                    if (!acc[r.emoji]) acc[r.emoji] = { count: 0, mine: false };
-                    acc[r.emoji].count += 1;
-                    if (r.user_id === userId) acc[r.emoji].mine = true;
-                    return acc;
-                  }, {} as Record<string, { count: number; mine: boolean }>);
+                  const reactionSummary = reactions.reduce(
+                    (acc, r) => {
+                      if (!acc[r.emoji])
+                        acc[r.emoji] = { count: 0, mine: false };
+                      acc[r.emoji].count += 1;
+                      if (r.user_id === userId) acc[r.emoji].mine = true;
+                      return acc;
+                    },
+                    {} as Record<string, { count: number; mine: boolean }>,
+                  );
 
                   return (
-                    <View key={message.id} style={[styles.messageRow, isMine && styles.messageRowMine]}>
+                    <View
+                      key={message.id}
+                      style={[
+                        styles.messageRow,
+                        isMine && styles.messageRowMine,
+                      ]}
+                    >
                       {!isMine && (
                         <View style={styles.avatarPlaceholder}>
                           <Text style={styles.avatarText}>
-                            {(sender?.display_name || "M").charAt(0)}
+                            {(senderName || "M").charAt(0).toUpperCase()}
                           </Text>
                         </View>
                       )}
                       <View style={styles.messageContent}>
-                        {!isMine && (
-                          <Text style={styles.messageSenderName}>
-                            {sender?.display_name || "Member"}
-                          </Text>
-                        )}
-                        <View style={[
-                          styles.messageBubble,
-                          isMine ? styles.messageBubbleMine : styles.messageBubbleOther
-                        ]}>
+                        <Text
+                          style={[
+                            styles.messageSenderName,
+                            isMine && styles.messageSenderNameMine,
+                          ]}
+                        >
+                          {senderName}
+                        </Text>
+                        <Pressable
+                          onPress={() => {
+                            openMessageActions(message);
+                          }}
+                          style={[
+                            styles.messageBubble,
+                            isMine
+                              ? styles.messageBubbleMine
+                              : styles.messageBubbleOther,
+                          ]}
+                        >
                           {message.reply_to_message_id && (
                             <View style={styles.replyPreviewInline}>
-                              <Text style={styles.replyPreviewTextInline} numberOfLines={1}>
-                                {messagePreview(messageById[message.reply_to_message_id])}
+                              <Text
+                                style={styles.replyPreviewTextInline}
+                                numberOfLines={1}
+                              >
+                                {messagePreview(
+                                  messageById[message.reply_to_message_id],
+                                )}
                               </Text>
                             </View>
                           )}
                           {message.kind !== "image" && !!message.body && (
-                            <Text style={[styles.messageText, isMine && styles.messageTextMine]}>
+                            <Text
+                              style={[
+                                styles.messageText,
+                                isMine && styles.messageTextMine,
+                              ]}
+                            >
                               {message.body}
                             </Text>
                           )}
                           {getGifUrl(message) && (
-                            <Image source={{ uri: getGifUrl(message)! }} style={styles.messageMedia} />
+                            <Image
+                              source={{ uri: getGifUrl(message)! }}
+                              style={styles.messageMedia}
+                            />
                           )}
-                          {attachments.map(a => (
-                            signedAttachmentUrls[a.storage_path] && (
-                              <Image key={a.id} source={{ uri: signedAttachmentUrls[a.storage_path] }} style={styles.messageMedia} />
-                            )
-                          ))}
-                        </View>
-                        
-                        <View style={[styles.messageMeta, isMine && styles.messageMetaMine]}>
-                          <Text style={styles.messageTime}>{formatTime(message.created_at)}</Text>
-                          <Pressable onPress={() => { setReplyToMessageId(message.id); setIsThreadMode(false); }}>
+                          {attachments.map(
+                            (a) =>
+                              signedAttachmentUrls[a.storage_path] && (
+                                <Image
+                                  key={a.id}
+                                  source={{
+                                    uri: signedAttachmentUrls[a.storage_path],
+                                  }}
+                                  style={styles.messageMedia}
+                                />
+                              ),
+                          )}
+                        </Pressable>
+
+                        <View
+                          style={[
+                            styles.messageMeta,
+                            isMine && styles.messageMetaMine,
+                          ]}
+                        >
+                          <Text style={styles.messageTime}>
+                            {formatTime(message.created_at)}
+                          </Text>
+                          <Pressable
+                            onPress={() => {
+                              setReplyToMessageId(message.id);
+                              setIsThreadMode(false);
+                            }}
+                          >
                             <Text style={styles.messageActionText}>Reply</Text>
                           </Pressable>
                         </View>
 
-                        {(Object.keys(reactionSummary).length > 0) && (
-                          <View style={[styles.reactionList, isMine && styles.reactionListMine]}>
-                            {Object.entries(reactionSummary).map(([emoji, data]) => (
-                              <Pressable 
-                                key={emoji} 
-                                onPress={() => void toggleReaction(message.id, emoji)}
-                                style={[styles.reactionChip, data.mine && styles.reactionChipMine]}
-                              >
-                                <Text style={styles.reactionChipText}>{`${emoji} ${data.count}`}</Text>
-                              </Pressable>
-                            ))}
+                        {Object.keys(reactionSummary).length > 0 && (
+                          <View
+                            style={[
+                              styles.reactionList,
+                              isMine && styles.reactionListMine,
+                            ]}
+                          >
+                            {Object.entries(reactionSummary).map(
+                              ([emoji, data]) => (
+                                <Pressable
+                                  key={emoji}
+                                  onPress={() =>
+                                    void toggleReaction(message.id, emoji)
+                                  }
+                                  style={[
+                                    styles.reactionChip,
+                                    data.mine && styles.reactionChipMine,
+                                  ]}
+                                >
+                                  <Text
+                                    style={styles.reactionChipText}
+                                  >{`${emoji} ${data.count}`}</Text>
+                                </Pressable>
+                              ),
+                            )}
                           </View>
                         )}
                       </View>
@@ -1780,24 +2611,39 @@ export default function SocialPage() {
           <View style={styles.composerContainer}>
             {replyToMessage && (
               <View style={styles.replyBar}>
-                <Ionicons name="return-down-forward" size={14} color={COLORS.primary} />
+                <Ionicons
+                  name="return-down-forward"
+                  size={14}
+                  color={COLORS.primary}
+                />
                 <Text style={styles.replyBarText} numberOfLines={1}>
                   Replying to: {messagePreview(replyToMessage)}
                 </Text>
                 <Pressable onPress={() => setReplyToMessageId(null)}>
-                  <Ionicons name="close-circle" size={18} color={COLORS.secondary} />
+                  <Ionicons
+                    name="close-circle"
+                    size={18}
+                    color={COLORS.secondary}
+                  />
                 </Pressable>
               </View>
             )}
-            
+
             <View style={styles.composerControls}>
-              <Pressable 
+              <Pressable
                 onPress={() => setIsThreadMode(!isThreadMode)}
-                style={[styles.controlButton, isThreadMode && styles.controlButtonActive]}
+                style={[
+                  styles.controlButton,
+                  isThreadMode && styles.controlButtonActive,
+                ]}
               >
-                <Ionicons name="list" size={18} color={isThreadMode ? COLORS.background : COLORS.primary} />
+                <Ionicons
+                  name="list"
+                  size={18}
+                  color={isThreadMode ? COLORS.background : COLORS.primary}
+                />
               </Pressable>
-              <Pressable 
+              <Pressable
                 onPress={() => void uploadImageMessage()}
                 style={styles.controlButton}
               >
@@ -1821,19 +2667,27 @@ export default function SocialPage() {
                 placeholderTextColor={COLORS.text + "60"}
                 value={composerText}
                 onChangeText={setComposerText}
-                onImageChange={(event) => void uploadKeyboardMediaMessage(event)}
+                onImageChange={(event) =>
+                  void uploadKeyboardMediaMessage(event)
+                }
                 style={styles.composerInput}
                 multiline
               />
-              <Pressable 
+              <Pressable
                 onPress={() => void sendComposer()}
-                disabled={isSendingMessage || isUploadingImage || !activeChannelId}
+                disabled={
+                  isSendingMessage || isUploadingImage || !activeChannelId
+                }
                 style={styles.sendButton}
               >
                 {isSendingMessage || isUploadingImage ? (
                   <ActivityIndicator color={COLORS.background} size="small" />
                 ) : (
-                  <Ionicons name="arrow-up" size={20} color={COLORS.background} />
+                  <Ionicons
+                    name="arrow-up"
+                    size={20}
+                    color={COLORS.background}
+                  />
                 )}
               </Pressable>
             </View>
@@ -1841,23 +2695,164 @@ export default function SocialPage() {
         </KeyboardAvoidingView>
       )}
 
+      {/* Reaction Picker Modal */}
+      <Modal
+        visible={isReactionPickerOpen}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setIsReactionPickerOpen(false)}
+      >
+        <Pressable
+          style={styles.modalOverlay}
+          onPress={() => setIsReactionPickerOpen(false)}
+        >
+          <BlurView
+            intensity={20}
+            tint="dark"
+            style={StyleSheet.absoluteFill}
+          />
+          <View style={styles.reactionPickerContainer}>
+            <Text style={styles.reactionPickerTitle}>React</Text>
+            <View style={styles.quickReactionGrid}>
+              {QUICK_REACTIONS.map((emoji) => (
+                <Pressable
+                  key={emoji}
+                  onPress={() => {
+                    if (selectedMessageId) {
+                      void toggleReaction(selectedMessageId, emoji);
+                    }
+                    setIsReactionPickerOpen(false);
+                  }}
+                  style={styles.bigReactionButton}
+                >
+                  <Text style={styles.bigReactionText}>{emoji}</Text>
+                </Pressable>
+              ))}
+            </View>
+
+            <View style={styles.pickerActions}>
+              {selectedMessageId &&
+                messageById[selectedMessageId]?.sender_id === userId && (
+                  <Pressable
+                    style={styles.pickerActionButton}
+                    onPress={() => {
+                      const msg = messageById[selectedMessageId!];
+                      setIsReactionPickerOpen(false);
+                      Alert.alert(
+                        "Delete message?",
+                        "This removes the message for everyone.",
+                        [
+                          { text: "Cancel", style: "cancel" },
+                          {
+                            text: "Delete",
+                            style: "destructive",
+                            onPress: () => void deleteMyMessage(msg),
+                          },
+                        ],
+                      );
+                    }}
+                  >
+                    <Ionicons
+                      name="trash-outline"
+                      size={20}
+                      color={COLORS.warning}
+                    />
+                    <Text style={styles.pickerActionTextDanger}>
+                      Delete Message
+                    </Text>
+                  </Pressable>
+                )}
+              <Pressable
+                style={styles.pickerActionButton}
+                onPress={() => {
+                  if (selectedMessageId) {
+                    setReplyToMessageId(selectedMessageId);
+                    setIsThreadMode(false);
+                  }
+                  setIsReactionPickerOpen(false);
+                }}
+              >
+                <Ionicons
+                  name="return-up-back-outline"
+                  size={20}
+                  color={COLORS.primary}
+                />
+                <Text style={styles.pickerActionText}>Reply to Message</Text>
+              </Pressable>
+            </View>
+          </View>
+        </Pressable>
+      </Modal>
+
       {activeTab === "events" && (
-        <ScrollView contentContainerStyle={styles.tabContentScroll} showsVerticalScrollIndicator={false}>
+        <ScrollView
+          contentContainerStyle={styles.tabContentScroll}
+          showsVerticalScrollIndicator={false}
+        >
           {isCreateEventOpen && (
             <View style={styles.formCard}>
               <Text style={styles.formTitle}>Sprout an Event</Text>
-              <TextInput placeholder="Event Title" placeholderTextColor={COLORS.text + "60"} value={newEventTitle} onChangeText={setNewEventTitle} style={styles.formInput} />
-              <TextInput placeholder="Type (Cleanup, Social, etc.)" placeholderTextColor={COLORS.text + "60"} value={newEventActivityType} onChangeText={setNewEventActivityType} style={styles.formInput} />
-              <TextInput placeholder="Location Name" placeholderTextColor={COLORS.text + "60"} value={newEventLocationName} onChangeText={setNewEventLocationName} style={styles.formInput} />
-              <TextInput placeholder="Address" placeholderTextColor={COLORS.text + "60"} value={newEventLocationAddress} onChangeText={setNewEventLocationAddress} style={styles.formInput} />
-              <TextInput placeholder="Starts (YYYY-MM-DD HH:mm)" placeholderTextColor={COLORS.text + "60"} value={newEventStartsAt} onChangeText={setNewEventStartsAt} style={styles.formInput} />
-              <TextInput placeholder="Ends (YYYY-MM-DD HH:mm)" placeholderTextColor={COLORS.text + "60"} value={newEventEndsAt} onChangeText={setNewEventEndsAt} style={styles.formInput} />
-              <TextInput placeholder="Description" placeholderTextColor={COLORS.text + "60"} value={newEventDescription} onChangeText={setNewEventDescription} style={[styles.formInput, styles.formInputMulti]} multiline />
+              <TextInput
+                placeholder="Event Title"
+                placeholderTextColor={COLORS.text + "60"}
+                value={newEventTitle}
+                onChangeText={setNewEventTitle}
+                style={styles.formInput}
+              />
+              <TextInput
+                placeholder="Type (Cleanup, Social, etc.)"
+                placeholderTextColor={COLORS.text + "60"}
+                value={newEventActivityType}
+                onChangeText={setNewEventActivityType}
+                style={styles.formInput}
+              />
+              <TextInput
+                placeholder="Location Name"
+                placeholderTextColor={COLORS.text + "60"}
+                value={newEventLocationName}
+                onChangeText={setNewEventLocationName}
+                style={styles.formInput}
+              />
+              <TextInput
+                placeholder="Address"
+                placeholderTextColor={COLORS.text + "60"}
+                value={newEventLocationAddress}
+                onChangeText={setNewEventLocationAddress}
+                style={styles.formInput}
+              />
+              <TextInput
+                placeholder="Starts (YYYY-MM-DD HH:mm)"
+                placeholderTextColor={COLORS.text + "60"}
+                value={newEventStartsAt}
+                onChangeText={setNewEventStartsAt}
+                style={styles.formInput}
+              />
+              <TextInput
+                placeholder="Ends (YYYY-MM-DD HH:mm)"
+                placeholderTextColor={COLORS.text + "60"}
+                value={newEventEndsAt}
+                onChangeText={setNewEventEndsAt}
+                style={styles.formInput}
+              />
+              <TextInput
+                placeholder="Description"
+                placeholderTextColor={COLORS.text + "60"}
+                value={newEventDescription}
+                onChangeText={setNewEventDescription}
+                style={[styles.formInput, styles.formInputMulti]}
+                multiline
+              />
               <View style={styles.formActions}>
-                <Pressable onPress={resetCreateEventDrafts} style={styles.secondaryButton}>
+                <Pressable
+                  onPress={resetCreateEventDrafts}
+                  style={styles.secondaryButton}
+                >
                   <Text style={styles.secondaryButtonText}>Reset</Text>
                 </Pressable>
-                <Pressable onPress={() => void createEvent()} style={styles.primaryButton}>
+                <Pressable
+                  onPress={() => void createEvent()}
+                  style={styles.primaryButton}
+                >
                   <Text style={styles.primaryButtonText}>Create Event</Text>
                 </Pressable>
               </View>
@@ -1866,21 +2861,32 @@ export default function SocialPage() {
 
           {upcomingEvents.length === 0 ? (
             <View style={styles.emptyState}>
-              <Ionicons name="calendar-outline" size={48} color={COLORS.secondary + "40"} />
-              <Text style={styles.emptyText}>No upcoming events in {cityName || "your region"}.</Text>
+              <Ionicons
+                name="calendar-outline"
+                size={48}
+                color={COLORS.secondary + "40"}
+              />
+              <Text style={styles.emptyText}>
+                No upcoming events in {cityName || "your region"}.
+              </Text>
             </View>
           ) : (
-            upcomingEvents.map(event => {
-              const attendeeSummary = eventAttendeeSummaryByEvent[event.id] || { going: 0, waitlist: 0 };
+            upcomingEvents.map((event) => {
+              const attendeeSummary = eventAttendeeSummaryByEvent[event.id] || {
+                going: 0,
+                waitlist: 0,
+              };
               const myAttendance = myEventAttendanceByEvent[event.id];
               const isCreator = event.created_by === userId;
-              
+
               return (
                 <View key={event.id} style={styles.eventCard}>
                   <View style={styles.eventCardHeader}>
                     <View style={{ flex: 1 }}>
                       <Text style={styles.eventCardTitle}>{event.title}</Text>
-                      <Text style={styles.eventCardType}>{event.activity_type}</Text>
+                      <Text style={styles.eventCardType}>
+                        {event.activity_type}
+                      </Text>
                     </View>
                     {event.is_cancelled && (
                       <View style={styles.cancelledBadge}>
@@ -1888,41 +2894,72 @@ export default function SocialPage() {
                       </View>
                     )}
                   </View>
-                  
+
                   <View style={styles.eventInfoRow}>
-                    <Ionicons name="time-outline" size={14} color={COLORS.primary} />
-                    <Text style={styles.eventInfoText}>{formatEventWindow(event.starts_at, event.ends_at)}</Text>
+                    <Ionicons
+                      name="time-outline"
+                      size={14}
+                      color={COLORS.primary}
+                    />
+                    <Text style={styles.eventInfoText}>
+                      {formatEventWindow(event.starts_at, event.ends_at)}
+                    </Text>
                   </View>
                   <View style={styles.eventInfoRow}>
-                    <Ionicons name="location-outline" size={14} color={COLORS.primary} />
-                    <Text style={styles.eventInfoText}>{event.location_name}</Text>
+                    <Ionicons
+                      name="location-outline"
+                      size={14}
+                      color={COLORS.primary}
+                    />
+                    <Text style={styles.eventInfoText}>
+                      {event.location_name}
+                    </Text>
                   </View>
 
                   {event.description && (
-                    <Text style={styles.eventCardDesc} numberOfLines={2}>{event.description}</Text>
+                    <Text style={styles.eventCardDesc} numberOfLines={2}>
+                      {event.description}
+                    </Text>
                   )}
 
                   <View style={styles.eventFooter}>
                     <View style={styles.attendeePill}>
                       <Text style={styles.attendeePillText}>
-                        {event.max_attendees ? `${attendeeSummary.going}/${event.max_attendees} Going` : `${attendeeSummary.going} Going`}
+                        {event.max_attendees
+                          ? `${attendeeSummary.going}/${event.max_attendees} Going`
+                          : `${attendeeSummary.going} Going`}
                       </Text>
                     </View>
-                    
+
                     <View style={styles.eventActions}>
                       {myAttendance ? (
-                        <Pressable onPress={() => void leaveEvent(event.id)} style={styles.leaveButton}>
+                        <Pressable
+                          onPress={() => void leaveEvent(event.id)}
+                          style={styles.leaveButton}
+                        >
                           <Text style={styles.leaveButtonText}>Leave</Text>
                         </Pressable>
                       ) : (
-                        <Pressable onPress={() => void upsertEventAttendance(event.id, "going")} style={styles.joinButton}>
+                        <Pressable
+                          onPress={() =>
+                            void upsertEventAttendance(event.id, "going")
+                          }
+                          style={styles.joinButton}
+                        >
                           <Text style={styles.joinButtonText}>Join</Text>
                         </Pressable>
                       )}
-                      
+
                       {isCreator && (
-                        <Pressable onPress={() => void toggleEventCancelled(event)} style={styles.adminButton}>
-                          <Ionicons name="settings-outline" size={16} color={COLORS.secondary} />
+                        <Pressable
+                          onPress={() => void toggleEventCancelled(event)}
+                          style={styles.adminButton}
+                        >
+                          <Ionicons
+                            name="settings-outline"
+                            size={16}
+                            color={COLORS.secondary}
+                          />
                         </Pressable>
                       )}
                     </View>
@@ -1936,13 +2973,32 @@ export default function SocialPage() {
       )}
 
       {activeTab === "groups" && (
-        <ScrollView contentContainerStyle={styles.tabContentScroll} showsVerticalScrollIndicator={false}>
+        <ScrollView
+          contentContainerStyle={styles.tabContentScroll}
+          showsVerticalScrollIndicator={false}
+        >
           {isCreateOpen && (
             <View style={styles.formCard}>
               <Text style={styles.formTitle}>New Group</Text>
-              <TextInput placeholder="Group Name" placeholderTextColor={COLORS.text + "60"} value={newTeamName} onChangeText={setNewTeamName} style={styles.formInput} />
-              <TextInput placeholder="Description" placeholderTextColor={COLORS.text + "60"} value={newTeamDescription} onChangeText={setNewTeamDescription} style={[styles.formInput, styles.formInputMulti]} multiline />
-              <Pressable onPress={() => void createTeam()} style={styles.primaryButton}>
+              <TextInput
+                placeholder="Group Name"
+                placeholderTextColor={COLORS.text + "60"}
+                value={newTeamName}
+                onChangeText={setNewTeamName}
+                style={styles.formInput}
+              />
+              <TextInput
+                placeholder="Description"
+                placeholderTextColor={COLORS.text + "60"}
+                value={newTeamDescription}
+                onChangeText={setNewTeamDescription}
+                style={[styles.formInput, styles.formInputMulti]}
+                multiline
+              />
+              <Pressable
+                onPress={() => void createTeam()}
+                style={styles.primaryButton}
+              >
                 <Text style={styles.primaryButtonText}>Create Group</Text>
               </Pressable>
             </View>
@@ -1951,10 +3007,12 @@ export default function SocialPage() {
           <Text style={styles.sectionLabel}>Regional Groups</Text>
           {teams.length === 0 ? (
             <View style={styles.emptyState}>
-              <Text style={styles.emptyText}>No groups found. Be the first to start one!</Text>
+              <Text style={styles.emptyText}>
+                No groups found. Be the first to start one!
+              </Text>
             </View>
           ) : (
-            teams.map(team => {
+            teams.map((team) => {
               const isJoined = joinedTeamIds.includes(team.id);
               return (
                 <View key={team.id} style={styles.teamCard}>
@@ -1963,13 +3021,27 @@ export default function SocialPage() {
                   </View>
                   <View style={{ flex: 1 }}>
                     <Text style={styles.teamName}>{team.name}</Text>
-                    {team.description && <Text style={styles.teamDesc} numberOfLines={1}>{team.description}</Text>}
+                    {team.description && (
+                      <Text style={styles.teamDesc} numberOfLines={1}>
+                        {team.description}
+                      </Text>
+                    )}
                   </View>
-                  <Pressable 
-                    onPress={() => isJoined ? leaveTeam(team.id) : joinTeam(team.id)}
-                    style={[styles.teamActionBtn, isJoined && styles.teamActionBtnJoined]}
+                  <Pressable
+                    onPress={() =>
+                      isJoined ? leaveTeam(team.id) : joinTeam(team.id)
+                    }
+                    style={[
+                      styles.teamActionBtn,
+                      isJoined && styles.teamActionBtnJoined,
+                    ]}
                   >
-                    <Text style={[styles.teamActionBtnText, isJoined && styles.teamActionBtnTextJoined]}>
+                    <Text
+                      style={[
+                        styles.teamActionBtnText,
+                        isJoined && styles.teamActionBtnTextJoined,
+                      ]}
+                    >
                       {isJoined ? "Leave" : "Join"}
                     </Text>
                   </Pressable>
@@ -2206,6 +3278,11 @@ const styles = StyleSheet.create({
     fontFamily: "Boogaloo_400Regular",
     marginBottom: 4,
     marginLeft: 4,
+  },
+  messageSenderNameMine: {
+    textAlign: "right",
+    marginRight: 4,
+    marginLeft: 0,
   },
   messageBubble: {
     padding: 12,
@@ -2610,5 +3687,72 @@ const styles = StyleSheet.create({
     fontSize: 14,
     textAlign: "center",
     marginTop: 8,
+  },
+  /* Modal Styles */
+  modalOverlay: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 24,
+  },
+  reactionPickerContainer: {
+    width: "100%",
+    backgroundColor: COLORS.background,
+    borderRadius: 32,
+    padding: 24,
+    borderWidth: 1,
+    borderColor: COLORS.primary + "30",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.5,
+    shadowRadius: 20,
+    elevation: 10,
+  },
+  reactionPickerTitle: {
+    color: COLORS.primary,
+    fontSize: 24,
+    fontFamily: "Boogaloo_400Regular",
+    textAlign: "center",
+    marginBottom: 20,
+  },
+  quickReactionGrid: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    marginBottom: 24,
+  },
+  bigReactionButton: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    backgroundColor: COLORS.accent + "30",
+    justifyContent: "center",
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: COLORS.primary + "20",
+  },
+  bigReactionText: {
+    fontSize: 24,
+  },
+  pickerActions: {
+    gap: 12,
+  },
+  pickerActionButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    backgroundColor: COLORS.accent + "15",
+    borderRadius: 16,
+    gap: 12,
+  },
+  pickerActionText: {
+    color: COLORS.primary,
+    fontSize: 16,
+    fontFamily: "Boogaloo_400Regular",
+  },
+  pickerActionTextDanger: {
+    color: COLORS.warning,
+    fontSize: 16,
+    fontFamily: "Boogaloo_400Regular",
   },
 });
