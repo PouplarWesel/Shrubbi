@@ -1,11 +1,11 @@
 {
   "expo": {
-    "name": "expo-supabase-starter",
-    "slug": "expo-supabase-starter",
+    "name": "Shrubbi",
+    "slug": "shrubbi",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
-    "scheme": "expo-supabase-starter",
+    "scheme": "shrubbi",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "platforms": [
@@ -14,7 +14,7 @@
     ],
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.flemingvincent.expo-supabase-starter"
+      "bundleIdentifier": "com.flemingvincent.shrubbi"
     },
     "android": {
       "adaptiveIcon": {
@@ -22,7 +22,7 @@
         "backgroundColor": "#ffffff"
       },
       "edgeToEdgeEnabled": true,
-      "package": "com.flemingvincent.exposupabasestarter"
+      "package": "com.shrubbi.sfhacks"
     },
     "plugins": [
       "expo-router",

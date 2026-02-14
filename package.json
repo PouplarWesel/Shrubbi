@@ -1,7 +1,8 @@
 {
-  "name": "expo-supabase-starter",
+  "name": "shrubbi",
   "license": "MIT",
   "version": "1.0.0",
+  "packageManager": "npm@10.9.2",
   "main": "expo-router/entry",
   "scripts": {
     "start": "expo start",
