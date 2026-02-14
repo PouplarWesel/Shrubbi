@@ -31,6 +31,7 @@ function takeOne<T>(value: T | T[] | null | undefined): T | null {
 type PlantCatalogRow = {
   common_name: string;
   scientific_name: string | null;
+  default_co2_kg_per_year?: number | null;
   type?: string | null;
   types?: string | null;
   plant_type?: { display_name: string } | null;
@@ -67,7 +68,7 @@ export default function PlantsPage() {
     const { data, error } = await supabase
       .from("user_plants")
       .select(
-        "id, plant_id, custom_name, quantity, planted_on, notes, watering_points, plant:plants(common_name, scientific_name, type, plant_type:plant_types(display_name), is_native, is_endangered, is_invasive)",
+        "id, plant_id, custom_name, quantity, planted_on, notes, watering_points, plant:plants(common_name, scientific_name, default_co2_kg_per_year, type, plant_type:plant_types(display_name), is_native, is_endangered, is_invasive)",
       )
       .eq("user_id", userId)
       .order("planted_on", { ascending: false });

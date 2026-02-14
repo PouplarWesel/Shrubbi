@@ -67,7 +67,8 @@ export const readImageUriAsBlob = async (uri: string) => {
     // Some platforms return `content://` URIs which fetch() can't read.
     return await new Promise<Blob>((resolve, reject) => {
       const xhr = new XMLHttpRequest();
-      xhr.onerror = () => reject(new Error("Could not read image from device."));
+      xhr.onerror = () =>
+        reject(new Error("Could not read image from device."));
       xhr.onload = () => resolve(xhr.response as Blob);
       xhr.responseType = "blob";
       xhr.open("GET", uri, true);
@@ -75,4 +76,3 @@ export const readImageUriAsBlob = async (uri: string) => {
     });
   }
 };
-

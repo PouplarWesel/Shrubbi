@@ -35,12 +35,16 @@ export default function AddPlantPage() {
   const [step, setStep] = useState<1 | 2>(1);
   const [isSaving, setIsSaving] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
-  
+
   // Search State (Step 1)
   const [searchQuery, setSearchQuery] = useState("");
   const [isSearchingPlants, setIsSearchingPlants] = useState(false);
-  const [plantSuggestions, setPlantSuggestions] = useState<PlantSearchResult[]>([]);
-  const [selectedPlant, setSelectedPlant] = useState<PlantSearchResult | null>(null);
+  const [plantSuggestions, setPlantSuggestions] = useState<PlantSearchResult[]>(
+    [],
+  );
+  const [selectedPlant, setSelectedPlant] = useState<PlantSearchResult | null>(
+    null,
+  );
 
   // Details State (Step 2)
   const [nicknameInput, setNicknameInput] = useState("");
@@ -135,10 +139,17 @@ export default function AddPlantPage() {
   const renderStep1 = () => (
     <View style={styles.stepContainer}>
       <Text style={styles.title}>Find a Plant</Text>
-      <Text style={styles.subtitle}>Search our catalog for the species you're planting.</Text>
-      
+      <Text style={styles.subtitle}>
+        Search our catalog for the species you're planting.
+      </Text>
+
       <View style={styles.searchContainer}>
-        <Ionicons name="search" size={20} color={COLORS.primary} style={styles.searchIcon} />
+        <Ionicons
+          name="search"
+          size={20}
+          color={COLORS.primary}
+          style={styles.searchIcon}
+        />
         <TextInput
           value={searchQuery}
           onChangeText={setSearchQuery}
@@ -149,7 +160,7 @@ export default function AddPlantPage() {
         />
       </View>
 
-      <ScrollView 
+      <ScrollView
         style={styles.resultsList}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
@@ -167,8 +178,10 @@ export default function AddPlantPage() {
         ) : plantSuggestions.length === 0 ? (
           <View style={styles.centerContent}>
             <Ionicons name="search-outline" size={48} color={COLORS.accent} />
-            <Text style={styles.infoText}>No plants found matching "{searchQuery}"</Text>
-            <Pressable 
+            <Text style={styles.infoText}>
+              No plants found matching "{searchQuery}"
+            </Text>
+            <Pressable
               style={styles.customAddButton}
               onPress={() => {
                 setSelectedPlant(null);
@@ -176,7 +189,9 @@ export default function AddPlantPage() {
                 setStep(2);
               }}
             >
-              <Text style={styles.customAddButtonText}>Add as Custom Plant</Text>
+              <Text style={styles.customAddButtonText}>
+                Add as Custom Plant
+              </Text>
             </Pressable>
           </View>
         ) : (
@@ -192,10 +207,16 @@ export default function AddPlantPage() {
               <View style={styles.resultText}>
                 <Text style={styles.resultName}>{plant.common_name}</Text>
                 {!!plant.scientific_name && (
-                  <Text style={styles.resultScientific}>{plant.scientific_name}</Text>
+                  <Text style={styles.resultScientific}>
+                    {plant.scientific_name}
+                  </Text>
                 )}
               </View>
-              <Ionicons name="chevron-forward" size={20} color={COLORS.secondary} />
+              <Ionicons
+                name="chevron-forward"
+                size={20}
+                color={COLORS.secondary}
+              />
             </Pressable>
           ))
         )}
@@ -212,11 +233,13 @@ export default function AddPlantPage() {
 
       <Text style={styles.title}>Plant Details</Text>
       <Text style={styles.subtitle}>
-        {selectedPlant ? `Adding ${selectedPlant.common_name}` : "Adding a custom plant"}
+        {selectedPlant
+          ? `Adding ${selectedPlant.common_name}`
+          : "Adding a custom plant"}
       </Text>
 
-      <ScrollView 
-        style={styles.formScroll} 
+      <ScrollView
+        style={styles.formScroll}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.formContent}
       >
@@ -288,7 +311,11 @@ export default function AddPlantPage() {
               <ActivityIndicator color={COLORS.background} />
             ) : (
               <>
-                <Ionicons name="checkmark-circle" size={24} color={COLORS.background} />
+                <Ionicons
+                  name="checkmark-circle"
+                  size={24}
+                  color={COLORS.background}
+                />
                 <Text style={styles.saveButtonText}>Confirm Planting</Text>
               </>
             )}
@@ -299,11 +326,16 @@ export default function AddPlantPage() {
   );
 
   return (
-    <KeyboardAvoidingView 
+    <KeyboardAvoidingView
       behavior={Platform.OS === "ios" ? "padding" : "height"}
       style={styles.container}
     >
-      <View style={[styles.content, { paddingTop: insets.top + 10, paddingBottom: insets.bottom + 10 }]}>
+      <View
+        style={[
+          styles.content,
+          { paddingTop: insets.top + 10, paddingBottom: insets.bottom + 10 },
+        ]}
+      >
         {step === 1 ? renderStep1() : renderStep2()}
       </View>
     </KeyboardAvoidingView>
