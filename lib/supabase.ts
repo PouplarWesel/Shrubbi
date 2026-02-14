@@ -18,6 +18,14 @@ const globalWithSupabase = globalThis as typeof globalThis & {
   __supabaseClient?: SupabaseClient;
 };
 
+const nonTimingOutLock = async <R>(
+  name: string,
+  _acquireTimeout: number,
+  fn: () => Promise<R>,
+) => {
+  return processLock(name, -1, fn);
+};
+
 if (!globalWithSupabase.__supabaseClient) {
   globalWithSupabase.__supabaseClient = createClient(supabaseUrl, supabaseKey, {
     auth: {
@@ -25,8 +33,7 @@ if (!globalWithSupabase.__supabaseClient) {
       autoRefreshToken: true,
       persistSession: true,
       detectSessionInUrl: false,
-      lock: processLock,
-      lockAcquireTimeout: 30000,
+      lock: nonTimingOutLock,
     },
   });
 }

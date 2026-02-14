@@ -1,5 +1,6 @@
 import { useState } from "react";
 import {
+  ActivityIndicator,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -21,43 +22,81 @@ const COLORS = {
   accent: "#072900",
 };
 
+const getErrorMessage = (err: unknown, fallback: string) => {
+  if (
+    err &&
+    typeof err === "object" &&
+    "message" in err &&
+    typeof err.message === "string"
+  ) {
+    return err.message;
+  }
+  return fallback;
+};
+
+const isValidEmail = (value: string) => /\S+@\S+\.\S+/.test(value.trim());
+
 export default function Page() {
   const { isLoaded, signUp, verifyOtp } = useSignUp();
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [pendingVerification, setPendingVerification] = useState(false);
   const [token, setToken] = useState("");
+  const [errorMessage, setErrorMessage] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isVerifying, setIsVerifying] = useState(false);
 
   const onSignUpPress = async () => {
-    if (!isLoaded) return;
+    if (!isLoaded || isSubmitting) return;
+    if (!isValidEmail(email)) {
+      setErrorMessage("Enter a valid email address.");
+      return;
+    }
+    if (password.trim().length < 6) {
+      setErrorMessage("Password must be at least 6 characters.");
+      return;
+    }
 
     try {
+      setErrorMessage("");
+      setIsSubmitting(true);
       await signUp({
         email,
         password,
       });
       setPendingVerification(true);
     } catch (err) {
-      console.error(JSON.stringify(err, null, 2));
+      setErrorMessage(getErrorMessage(err, "Could not create account."));
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
   const onVerifyPress = async () => {
-    if (!isLoaded) return;
+    if (!isLoaded || isVerifying) return;
+    if (!token.trim()) {
+      setErrorMessage("Enter the verification code.");
+      return;
+    }
 
     try {
+      setErrorMessage("");
+      setIsVerifying(true);
       await verifyOtp({
         email,
         token,
       });
     } catch (err) {
-      console.error(JSON.stringify(err, null, 2));
+      setErrorMessage(getErrorMessage(err, "Could not verify code."));
+    } finally {
+      setIsVerifying(false);
     }
   };
 
-  const signUpDisabled = !email || !password || !isLoaded;
-  const verifyDisabled = !token || !isLoaded;
+  const signUpDisabled = !email || !password || !isLoaded || isSubmitting;
+  const verifyDisabled = !token || !isLoaded || isVerifying;
 
   if (pendingVerification) {
     return (
@@ -89,8 +128,18 @@ export default function Page() {
                 verifyDisabled && styles.disabledButton,
               ]}
             >
-              <Text style={styles.primaryButtonText}>Verify</Text>
+              {isVerifying ? (
+                <View style={styles.loadingRow}>
+                  <ActivityIndicator color={COLORS.background} />
+                  <Text style={styles.primaryButtonText}>Verifying...</Text>
+                </View>
+              ) : (
+                <Text style={styles.primaryButtonText}>Verify</Text>
+              )}
             </Pressable>
+            {!!errorMessage && (
+              <Text style={styles.errorMessage}>{errorMessage}</Text>
+            )}
           </View>
         </ScrollView>
       </SafeAreaView>
@@ -122,14 +171,24 @@ export default function Page() {
             onChangeText={setEmail}
           />
           <Text style={styles.label}>Password</Text>
-          <TextInput
-            placeholder="Create a password"
-            placeholderTextColor={COLORS.secondary}
-            secureTextEntry={true}
-            style={styles.input}
-            value={password}
-            onChangeText={setPassword}
-          />
+          <View style={styles.passwordRow}>
+            <TextInput
+              placeholder="Create a password"
+              placeholderTextColor={COLORS.secondary}
+              secureTextEntry={!showPassword}
+              style={[styles.input, styles.passwordInput]}
+              value={password}
+              onChangeText={setPassword}
+            />
+            <Pressable
+              onPress={() => setShowPassword((prev) => !prev)}
+              style={styles.toggleButton}
+            >
+              <Text style={styles.toggleButtonText}>
+                {showPassword ? "Hide" : "Show"}
+              </Text>
+            </Pressable>
+          </View>
           <Pressable
             disabled={signUpDisabled}
             onPress={onSignUpPress}
@@ -138,8 +197,18 @@ export default function Page() {
               signUpDisabled && styles.disabledButton,
             ]}
           >
-            <Text style={styles.primaryButtonText}>Continue</Text>
+            {isSubmitting ? (
+              <View style={styles.loadingRow}>
+                <ActivityIndicator color={COLORS.background} />
+                <Text style={styles.primaryButtonText}>Creating...</Text>
+              </View>
+            ) : (
+              <Text style={styles.primaryButtonText}>Continue</Text>
+            )}
           </Pressable>
+          {!!errorMessage && (
+            <Text style={styles.errorMessage}>{errorMessage}</Text>
+          )}
         </View>
 
         <View style={styles.linkRow}>
@@ -199,6 +268,29 @@ const styles = StyleSheet.create({
     minHeight: 46,
     fontSize: 15,
   },
+  passwordRow: {
+    flexDirection: "row",
+    gap: 8,
+    alignItems: "center",
+  },
+  passwordInput: {
+    flex: 1,
+  },
+  toggleButton: {
+    minHeight: 46,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: COLORS.secondary,
+    backgroundColor: COLORS.background,
+    paddingHorizontal: 12,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  toggleButtonText: {
+    color: COLORS.secondary,
+    fontSize: 14,
+    fontFamily: "Boogaloo_400Regular",
+  },
   primaryButton: {
     backgroundColor: COLORS.primary,
     borderRadius: 12,
@@ -210,6 +302,16 @@ const styles = StyleSheet.create({
   primaryButtonText: {
     color: COLORS.background,
     fontSize: 16,
+    fontFamily: "Boogaloo_400Regular",
+  },
+  loadingRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  errorMessage: {
+    color: COLORS.secondary,
+    fontSize: 14,
     fontFamily: "Boogaloo_400Regular",
   },
   disabledButton: {

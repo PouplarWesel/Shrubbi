@@ -1,5 +1,7 @@
 import { useState } from "react";
 import {
+  ActivityIndicator,
+  Alert,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -21,26 +23,71 @@ const COLORS = {
   accent: "#072900",
 };
 
+const getErrorMessage = (err: unknown, fallback: string) => {
+  if (
+    err &&
+    typeof err === "object" &&
+    "message" in err &&
+    typeof err.message === "string"
+  ) {
+    return err.message;
+  }
+  return fallback;
+};
+
+const isValidEmail = (value: string) => /\S+@\S+\.\S+/.test(value.trim());
+
 export default function Page() {
-  const { signInWithPassword, isLoaded } = useSignIn();
+  const { signInWithPassword, resetPasswordForEmail, isLoaded } = useSignIn();
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [resetMessage, setResetMessage] = useState("");
+  const [errorMessage, setErrorMessage] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const onSignInPress = async () => {
-    if (!isLoaded) return;
+    if (!isLoaded || isSubmitting) return;
+    if (!isValidEmail(email)) {
+      setErrorMessage("Enter a valid email address.");
+      return;
+    }
 
     try {
+      setErrorMessage("");
+      setIsSubmitting(true);
       await signInWithPassword({
         email,
         password,
       });
     } catch (err) {
-      console.error(JSON.stringify(err, null, 2));
+      setErrorMessage(getErrorMessage(err, "Could not sign in. Try again."));
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
-  const isDisabled = !email || !password || !isLoaded;
+  const onForgotPasswordPress = async () => {
+    if (!isLoaded) return;
+    if (!isValidEmail(email)) {
+      Alert.alert("Email required", "Enter a valid email to reset password.");
+      return;
+    }
+
+    try {
+      setErrorMessage("");
+      await resetPasswordForEmail(email);
+      setResetMessage("Password reset link sent. Check your email.");
+    } catch (err) {
+      setErrorMessage(
+        getErrorMessage(err, "Could not send reset link. Please try again."),
+      );
+      setResetMessage("Could not send reset link. Please try again.");
+    }
+  };
+
+  const isDisabled = !email || !password || !isLoaded || isSubmitting;
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -68,21 +115,52 @@ export default function Page() {
           />
 
           <Text style={styles.label}>Password</Text>
-          <TextInput
-            placeholder="Enter password"
-            placeholderTextColor={COLORS.secondary}
-            secureTextEntry={true}
-            style={styles.input}
-            value={password}
-            onChangeText={setPassword}
-          />
+          <View style={styles.passwordRow}>
+            <TextInput
+              placeholder="Enter password"
+              placeholderTextColor={COLORS.secondary}
+              secureTextEntry={!showPassword}
+              style={[styles.input, styles.passwordInput]}
+              value={password}
+              onChangeText={setPassword}
+            />
+            <Pressable
+              onPress={() => setShowPassword((prev) => !prev)}
+              style={styles.toggleButton}
+            >
+              <Text style={styles.toggleButtonText}>
+                {showPassword ? "Hide" : "Show"}
+              </Text>
+            </Pressable>
+          </View>
+
+          <Pressable
+            onPress={onForgotPasswordPress}
+            style={styles.forgotPassword}
+          >
+            <Text style={styles.forgotPasswordText}>Forgot password?</Text>
+          </Pressable>
+
+          {!!resetMessage && (
+            <Text style={styles.resetMessage}>{resetMessage}</Text>
+          )}
+          {!!errorMessage && (
+            <Text style={styles.errorMessage}>{errorMessage}</Text>
+          )}
 
           <Pressable
             disabled={isDisabled}
             onPress={onSignInPress}
             style={[styles.primaryButton, isDisabled && styles.disabledButton]}
           >
-            <Text style={styles.primaryButtonText}>Continue</Text>
+            {isSubmitting ? (
+              <View style={styles.loadingRow}>
+                <ActivityIndicator color={COLORS.background} />
+                <Text style={styles.primaryButtonText}>Signing In...</Text>
+              </View>
+            ) : (
+              <Text style={styles.primaryButtonText}>Continue</Text>
+            )}
           </Pressable>
         </View>
 
@@ -142,6 +220,53 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     minHeight: 46,
     fontSize: 15,
+  },
+  passwordRow: {
+    flexDirection: "row",
+    gap: 8,
+    alignItems: "center",
+  },
+  passwordInput: {
+    flex: 1,
+  },
+  toggleButton: {
+    minHeight: 46,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: COLORS.secondary,
+    backgroundColor: COLORS.background,
+    paddingHorizontal: 12,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  toggleButtonText: {
+    color: COLORS.secondary,
+    fontSize: 14,
+    fontFamily: "Boogaloo_400Regular",
+  },
+  forgotPassword: {
+    alignSelf: "flex-end",
+  },
+  forgotPasswordText: {
+    color: COLORS.primary,
+    fontSize: 14,
+    fontFamily: "Boogaloo_400Regular",
+    textDecorationLine: "underline",
+  },
+  resetMessage: {
+    color: COLORS.text,
+    fontSize: 14,
+    fontFamily: "Boogaloo_400Regular",
+  },
+  errorMessage: {
+    color: COLORS.secondary,
+    fontSize: 14,
+    fontFamily: "Boogaloo_400Regular",
+  },
+  loadingRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
   },
   primaryButton: {
     backgroundColor: COLORS.primary,

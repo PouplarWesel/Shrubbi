@@ -10,9 +10,12 @@ export const useSignUp = () => {
     email: string;
     password: string;
   }) => {
+    const normalizedEmail = email.trim().toLowerCase();
+    const normalizedPassword = password.trim();
+
     const { error } = await supabase.auth.signUp({
-      email,
-      password,
+      email: normalizedEmail,
+      password: normalizedPassword,
     });
     if (error) throw error;
   };
@@ -24,9 +27,12 @@ export const useSignUp = () => {
     email: string;
     token: string;
   }) => {
+    const normalizedEmail = email.trim().toLowerCase();
+    const normalizedToken = token.trim();
+
     const { error } = await supabase.auth.verifyOtp({
-      email,
-      token,
+      email: normalizedEmail,
+      token: normalizedToken,
       type: "email",
     });
     if (error) throw error;

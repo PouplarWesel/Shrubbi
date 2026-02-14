@@ -1,4 +1,4 @@
-import { useContext, useEffect, useState } from "react";
+import { useContext } from "react";
 
 import { SupabaseClient, Session } from "@supabase/supabase-js";
 
@@ -12,34 +12,11 @@ interface UseSupabaseProps {
 }
 
 export const useSupabase = (): UseSupabaseProps => {
-  const supabase = useContext(SupabaseContext);
-  const [isLoaded, setIsLoaded] = useState(false);
-  const [session, setSession] = useState<Session | null>(null);
+  const context = useContext(SupabaseContext);
 
-  useEffect(() => {
-    if (!supabase) return;
-
-    const { data: listener } = supabase.auth.onAuthStateChange(
-      (_event, newSession) => {
-        setSession(newSession);
-        setIsLoaded(true);
-      },
-    );
-
-    return () => {
-      listener.subscription.unsubscribe();
-    };
-  }, [supabase]);
-
-  const signOut = async () => {
-    if (!supabase) return;
-    await supabase.auth.signOut();
-    setSession(null);
-  };
-
-  if (!supabase) {
+  if (!context) {
     throw new Error("useSupabase must be used within a SupabaseProvider");
   }
 
-  return { isLoaded, session, supabase, signOut };
+  return context;
 };
