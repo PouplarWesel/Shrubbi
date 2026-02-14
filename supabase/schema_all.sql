@@ -364,6 +364,9 @@ CREATE TABLE IF NOT EXISTS "public"."plants" (
     "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
     "common_name" "text" NOT NULL,
     "scientific_name" "text",
+    "native" boolean DEFAULT false NOT NULL,
+    "endangered" boolean DEFAULT false NOT NULL,
+    "invasive" boolean DEFAULT false NOT NULL,
     "default_co2_kg_per_year" numeric(12,4) DEFAULT 0 NOT NULL,
     "created_at" timestamp with time zone DEFAULT "timezone"('utc'::"text", "now"()) NOT NULL,
     "updated_at" timestamp with time zone DEFAULT "timezone"('utc'::"text", "now"()) NOT NULL,
@@ -1168,8 +1171,6 @@ ALTER DEFAULT PRIVILEGES FOR ROLE "postgres" IN SCHEMA "public" GRANT ALL ON TAB
 ALTER DEFAULT PRIVILEGES FOR ROLE "postgres" IN SCHEMA "public" GRANT ALL ON TABLES TO "anon";
 ALTER DEFAULT PRIVILEGES FOR ROLE "postgres" IN SCHEMA "public" GRANT ALL ON TABLES TO "authenticated";
 ALTER DEFAULT PRIVILEGES FOR ROLE "postgres" IN SCHEMA "public" GRANT ALL ON TABLES TO "service_role";
-
-
 
 
 

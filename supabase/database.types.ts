@@ -1009,7 +1009,10 @@ export type Database = {
           common_name: string
           created_at: string
           default_co2_kg_per_year: number
+          endangered: boolean
           id: string
+          invasive: boolean
+          native: boolean
           scientific_name: string | null
           updated_at: string
         }
@@ -1017,7 +1020,10 @@ export type Database = {
           common_name: string
           created_at?: string
           default_co2_kg_per_year?: number
+          endangered?: boolean
           id?: string
+          invasive?: boolean
+          native?: boolean
           scientific_name?: string | null
           updated_at?: string
         }
@@ -1025,7 +1031,10 @@ export type Database = {
           common_name?: string
           created_at?: string
           default_co2_kg_per_year?: number
+          endangered?: boolean
           id?: string
+          invasive?: boolean
+          native?: boolean
           scientific_name?: string | null
           updated_at?: string
         }
