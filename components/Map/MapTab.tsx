@@ -191,7 +191,7 @@ export default function MapTab() {
         return;
       }
 
-      setRows((data ?? []) as CityMapStatsRow[]);
+      setRows((data ?? []) as unknown as CityMapStatsRow[]);
       setIsLoading(false);
     };
 
@@ -420,6 +420,7 @@ export default function MapTab() {
             sourceLayerID="building"
             filter={["==", "extrude", "true"]}
             minZoomLevel={14}
+            maxZoomLevel={24}
             style={{
               fillExtrusionColor: "#2a2f33",
               fillExtrusionOpacity: 0.45,
@@ -430,7 +431,7 @@ export default function MapTab() {
 
           <ShapeSource
             id="shrubbi-city-stats"
-            shape={featureCollection}
+            shape={featureCollection as any}
             onPress={handleSourcePress}
             hitbox={{ width: 12, height: 12 }}
           >
@@ -438,24 +439,25 @@ export default function MapTab() {
               id="shrubbi-city-fill"
               existing={false}
               style={{
-                fillColor: fillColorExpression,
+                fillColor: fillColorExpression as any,
                 fillOpacity: 0.55,
                 fillAntialias: true,
               }}
             />
 
-            {is3d ? (
-              <FillExtrusionLayer
-                id="shrubbi-city-extrusion"
-                existing={false}
-                minZoomLevel={6}
-                style={{
-                  fillExtrusionColor: fillColorExpression,
-                  fillExtrusionHeight: extrusionHeightExpression,
-                  fillExtrusionOpacity: 0.72,
-                }}
-              />
-            ) : null}
+            <FillExtrusionLayer
+              id="shrubbi-city-extrusion"
+              existing={false}
+              minZoomLevel={6}
+              maxZoomLevel={24}
+              style={{
+                fillExtrusionColor: fillColorExpression as any,
+                fillExtrusionHeight: is3d
+                  ? (extrusionHeightExpression as any)
+                  : 0,
+                fillExtrusionOpacity: is3d ? 0.72 : 0,
+              }}
+            />
 
             <LineLayer
               id="shrubbi-city-outline"
