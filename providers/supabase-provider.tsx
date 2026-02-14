@@ -1,33 +1,14 @@
-import { ReactNode, useMemo, useEffect } from "react";
+import { ReactNode, useEffect } from "react";
 import { AppState } from "react-native";
 
-import { createClient, processLock } from "@supabase/supabase-js";
-import AsyncStorage from "@react-native-async-storage/async-storage";
-
 import { SupabaseContext } from "@/context/supabase-context";
+import { supabase } from "@/lib/supabase";
 
 interface SupabaseProviderProps {
   children: ReactNode;
 }
 
 export const SupabaseProvider = ({ children }: SupabaseProviderProps) => {
-  const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL!;
-  const supabaseKey = process.env.EXPO_PUBLIC_SUPABASE_KEY!;
-
-  const supabase = useMemo(
-    () =>
-      createClient(supabaseUrl, supabaseKey, {
-        auth: {
-          storage: AsyncStorage,
-          autoRefreshToken: true,
-          persistSession: true,
-          detectSessionInUrl: false,
-          lock: processLock,
-        },
-      }),
-    [supabaseUrl, supabaseKey],
-  );
-
   useEffect(() => {
     const subscription = AppState.addEventListener("change", (state) => {
       if (state === "active") {
@@ -39,7 +20,7 @@ export const SupabaseProvider = ({ children }: SupabaseProviderProps) => {
     return () => {
       subscription?.remove();
     };
-  }, [supabase]);
+  }, []);
 
   return (
     <SupabaseContext.Provider value={supabase}>
