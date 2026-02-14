@@ -7,8 +7,7 @@ export default function PublicLayout() {
       <Stack.Screen
         name="welcome"
         options={{
-          title: "Welcome",
-          headerTransparent: Platform.OS === "ios",
+          headerShown: false,
         }}
       />
       <Stack.Screen
