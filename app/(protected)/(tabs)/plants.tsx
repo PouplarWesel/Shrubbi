@@ -6,14 +6,19 @@ import {
   StyleSheet,
   Text,
   View,
+  Dimensions,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { router, useFocusEffect } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { LinearGradient } from "expo-linear-gradient";
 
 import { COLORS } from "@/constants/colors";
 import { useSupabase } from "@/hooks/useSupabase";
 import { computePlantPoints, formatPlantPoints } from "@/lib/plantPoints";
+
+const { width } = Dimensions.get("window");
+const COLUMN_WIDTH = (width - 40 - 12) / 2;
 
 function takeOne<T>(value: T | T[] | null | undefined): T | null {
   if (!value) return null;
@@ -23,7 +28,6 @@ function takeOne<T>(value: T | T[] | null | undefined): T | null {
 type PlantCatalogRow = {
   common_name: string;
   scientific_name: string | null;
-  // DB column naming has drifted in this project; accept both.
   type?: string | null;
   types?: string | null;
   plant_type?: { display_name: string } | null;
@@ -85,6 +89,14 @@ export default function PlantsPage() {
     [plants],
   );
 
+  const getPlantIcon = (type?: string | null) => {
+    const t = type?.toLowerCase() || "";
+    if (t.includes("tree")) return "sunny";
+    if (t.includes("flower") || t.includes("shrub")) return "flower";
+    if (t.includes("grass")) return "leaf";
+    return "leaf";
+  };
+
   return (
     <View style={styles.container}>
       <ScrollView
@@ -92,47 +104,61 @@ export default function PlantsPage() {
           styles.content,
           {
             paddingTop: insets.top + 24,
-            paddingBottom: insets.bottom + 100,
+            paddingBottom: insets.bottom + 120,
           },
         ]}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
-        <Text style={styles.title}>My Plants</Text>
-        <Text style={styles.subtitle}>Total plants tracked: {plantCount}</Text>
+        <View style={styles.header}>
+          <View>
+            <Text style={styles.title}>My Garden</Text>
+            <Text style={styles.subtitle}>
+              Blooming with {plantCount} {plantCount === 1 ? "plant" : "plants"}
+            </Text>
+          </View>
+          <View style={styles.statBadge}>
+            <Ionicons name="trophy" size={16} color={COLORS.primary} />
+            <Text style={styles.statText}>Lvl 1</Text>
+          </View>
+        </View>
 
-        <View style={styles.card}>
-          <Pressable
-            style={styles.addButton}
-            onPress={() => router.push("/(protected)/add-plant")}
-          >
-            <Ionicons
-              name="add-circle-outline"
-              size={18}
-              color={COLORS.background}
-            />
-            <Text style={styles.addButtonText}>Add Plant</Text>
+        {!!errorMessage && (
+          <View style={styles.errorContainer}>
+            <Ionicons name="alert-circle" size={20} color={COLORS.warning} />
+            <Text style={styles.errorText}>{errorMessage}</Text>
+          </View>
+        )}
+
+        <View style={styles.sectionHeader}>
+          <Text style={styles.sectionTitle}>Your Collection</Text>
+          <Pressable onPress={() => void loadPlants()}>
+            <Ionicons name="refresh" size={20} color={COLORS.primary} />
           </Pressable>
         </View>
 
-        {!!errorMessage && <Text style={styles.errorText}>{errorMessage}</Text>}
-
-        <View style={styles.card}>
-          <Text style={styles.sectionTitle}>Current Plants</Text>
-          {isLoading ? (
-            <View style={styles.loadingRow}>
-              <ActivityIndicator color={COLORS.primary} />
-            </View>
-          ) : plants.length === 0 ? (
-            <Text style={styles.emptyText}>
-              No plants yet. Add your first one above.
-            </Text>
-          ) : (
-            plants.map((item) => {
+        {isLoading ? (
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color={COLORS.primary} />
+            <Text style={styles.loadingText}>Tending to your garden...</Text>
+          </View>
+        ) : plants.length === 0 ? (
+          <View style={styles.emptyContainer}>
+            <Ionicons name="leaf-outline" size={64} color={COLORS.secondary + "40"} />
+            <Text style={styles.emptyText}>Your garden is waiting for its first seeds.</Text>
+            <Pressable
+              style={styles.emptyAddButton}
+              onPress={() => router.push("/(protected)/add-plant")}
+            >
+              <Text style={styles.emptyAddButtonText}>Plant Something</Text>
+            </Pressable>
+          </View>
+        ) : (
+          <View style={styles.plantGrid}>
+            {plants.map((item) => {
               const plant = takeOne(item.plant);
               const displayName =
                 item.custom_name || plant?.common_name || "Unnamed plant";
-              const scientificName = plant?.scientific_name ?? null;
               const typeLabel = plant
                 ? (plant.plant_type?.display_name ??
                   plant.types ??
@@ -140,6 +166,7 @@ export default function PlantsPage() {
                   "Unknown")
                 : "Custom";
               const points = computePlantPoints(plant ?? {}, item.quantity);
+              
               return (
                 <Pressable
                   key={item.id}
@@ -149,31 +176,58 @@ export default function PlantsPage() {
                       params: { id: item.id },
                     })
                   }
-                  style={styles.plantRow}
+                  style={styles.plantCard}
                 >
-                  <View style={styles.plantNameBlock}>
-                    <Text style={styles.plantName}>{displayName}</Text>
-                    {!!scientificName && (
-                      <Text style={styles.plantScientific}>
-                        {scientificName}
+                  <LinearGradient
+                    colors={[COLORS.accent + "90", COLORS.accent + "40"]}
+                    style={styles.cardGradient}
+                  >
+                    <View style={styles.iconContainer}>
+                      <Ionicons
+                        name={getPlantIcon(typeLabel)}
+                        size={32}
+                        color={COLORS.primary}
+                      />
+                    </View>
+                    
+                    <View style={styles.cardInfo}>
+                      <Text style={styles.plantName} numberOfLines={1}>
+                        {displayName}
                       </Text>
-                    )}
-                    <Text style={styles.plantType}>Type: {typeLabel}</Text>
-                    <Text style={styles.plantMeta}>
-                      Qty: {item.quantity} | Points: {formatPlantPoints(points)}
-                    </Text>
-                  </View>
-                  <Ionicons
-                    name="chevron-forward"
-                    size={18}
-                    color={COLORS.primary}
-                  />
+                      <Text style={styles.plantType} numberOfLines={1}>
+                        {typeLabel}
+                      </Text>
+                      
+                      <View style={styles.cardFooter}>
+                        <View style={styles.qtyBadge}>
+                          <Text style={styles.qtyText}>x{item.quantity}</Text>
+                        </View>
+                        <Text style={styles.pointsText}>
+                          {formatPlantPoints(points)} pts
+                        </Text>
+                      </View>
+                    </View>
+                  </LinearGradient>
                 </Pressable>
               );
-            })
-          )}
-        </View>
+            })}
+          </View>
+        )}
       </ScrollView>
+
+      <Pressable
+        style={[styles.fab, { bottom: insets.bottom + 100 }]}
+        onPress={() => router.push("/(protected)/add-plant")}
+      >
+        <LinearGradient
+          colors={[COLORS.primary, COLORS.secondary]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={styles.fabGradient}
+        >
+          <Ionicons name="add" size={32} color={COLORS.background} />
+        </LinearGradient>
+      </Pressable>
     </View>
   );
 }
@@ -185,93 +239,181 @@ const styles = StyleSheet.create({
   },
   content: {
     paddingHorizontal: 20,
-    gap: 12,
+    gap: 20,
+  },
+  header: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
   },
   title: {
     color: COLORS.primary,
-    fontSize: 34,
+    fontSize: 40,
     fontFamily: "Boogaloo_400Regular",
+    lineHeight: 44,
   },
   subtitle: {
+    color: COLORS.text,
+    fontSize: 18,
+    fontFamily: "Boogaloo_400Regular",
+    opacity: 0.8,
+  },
+  statBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: COLORS.accent,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
+    gap: 6,
+    borderWidth: 1,
+    borderColor: COLORS.primary + "30",
+  },
+  statText: {
+    color: COLORS.primary,
+    fontSize: 14,
+    fontFamily: "Boogaloo_400Regular",
+  },
+  sectionHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  sectionTitle: {
+    color: COLORS.secondary,
+    fontSize: 24,
+    fontFamily: "Boogaloo_400Regular",
+  },
+  loadingContainer: {
+    paddingVertical: 60,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 12,
+  },
+  loadingText: {
     color: COLORS.text,
     fontSize: 16,
     fontFamily: "Boogaloo_400Regular",
   },
-  card: {
-    backgroundColor: COLORS.accent + "70",
-    borderWidth: 1,
-    borderColor: COLORS.secondary + "35",
-    borderRadius: 14,
-    padding: 12,
-    gap: 8,
-  },
-  sectionTitle: {
-    color: COLORS.primary,
-    fontSize: 20,
-    fontFamily: "Boogaloo_400Regular",
-  },
-  addButton: {
-    minHeight: 40,
-    borderRadius: 10,
-    backgroundColor: COLORS.primary,
+  errorContainer: {
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "center",
-    gap: 6,
-  },
-  addButtonText: {
-    color: COLORS.background,
-    fontSize: 15,
-    fontFamily: "Boogaloo_400Regular",
+    backgroundColor: COLORS.warning + "20",
+    padding: 12,
+    borderRadius: 12,
+    gap: 10,
+    borderWidth: 1,
+    borderColor: COLORS.warning + "40",
   },
   errorText: {
     color: COLORS.warning,
     fontSize: 14,
     fontFamily: "Boogaloo_400Regular",
+    flex: 1,
   },
-  loadingRow: {
-    minHeight: 80,
+  emptyContainer: {
+    paddingVertical: 60,
     alignItems: "center",
     justifyContent: "center",
+    gap: 16,
   },
   emptyText: {
     color: COLORS.text,
-    fontSize: 15,
+    fontSize: 18,
+    fontFamily: "Boogaloo_400Regular",
+    textAlign: "center",
+    opacity: 0.6,
+  },
+  emptyAddButton: {
+    backgroundColor: COLORS.primary,
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 25,
+  },
+  emptyAddButtonText: {
+    color: COLORS.background,
+    fontSize: 18,
     fontFamily: "Boogaloo_400Regular",
   },
-  plantRow: {
+  plantGrid: {
     flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    borderWidth: 1,
-    borderColor: COLORS.secondary + "30",
-    borderRadius: 10,
-    padding: 10,
-    backgroundColor: COLORS.background,
+    flexWrap: "wrap",
+    gap: 12,
   },
-  plantNameBlock: {
+  plantCard: {
+    width: COLUMN_WIDTH,
+    height: 180,
+    borderRadius: 24,
+    overflow: "hidden",
+    borderWidth: 1,
+    borderColor: COLORS.secondary + "20",
+  },
+  cardGradient: {
     flex: 1,
+    padding: 16,
+    justifyContent: "space-between",
+  },
+  iconContainer: {
+    width: 56,
+    height: 56,
+    backgroundColor: COLORS.background + "80",
+    borderRadius: 18,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  cardInfo: {
     gap: 2,
   },
   plantName: {
     color: COLORS.primary,
-    fontSize: 18,
+    fontSize: 20,
     fontFamily: "Boogaloo_400Regular",
-  },
-  plantScientific: {
-    color: COLORS.text,
-    fontSize: 13,
-    fontFamily: "Boogaloo_400Regular",
-    fontStyle: "italic",
   },
   plantType: {
     color: COLORS.text,
-    fontSize: 13,
+    fontSize: 14,
+    fontFamily: "Boogaloo_400Regular",
+    opacity: 0.7,
+  },
+  cardFooter: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginTop: 4,
+  },
+  qtyBadge: {
+    backgroundColor: COLORS.primary + "20",
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 8,
+  },
+  qtyText: {
+    color: COLORS.primary,
+    fontSize: 12,
     fontFamily: "Boogaloo_400Regular",
   },
-  plantMeta: {
-    color: COLORS.text,
-    fontSize: 13,
+  pointsText: {
+    color: COLORS.secondary,
+    fontSize: 14,
     fontFamily: "Boogaloo_400Regular",
+  },
+  fab: {
+    position: "absolute",
+    right: 20,
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    elevation: 8,
+    shadowColor: COLORS.primary,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.4,
+    shadowRadius: 10,
+  },
+  fabGradient: {
+    width: "100%",
+    height: "100%",
+    borderRadius: 32,
+    alignItems: "center",
+    justifyContent: "center",
   },
 });

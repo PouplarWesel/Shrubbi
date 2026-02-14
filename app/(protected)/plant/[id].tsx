@@ -14,9 +14,16 @@ import { Ionicons } from "@expo/vector-icons";
 import { router, useLocalSearchParams } from "expo-router";
 import * as ImagePicker from "expo-image-picker";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { LinearGradient } from "expo-linear-gradient";
 
+import { CameraCapture } from "@/components/CameraCapture";
 import { COLORS } from "@/constants/colors";
 import { useSupabase } from "@/hooks/useSupabase";
+import {
+  decodeBase64ToBytes,
+  getFileExtension,
+  readImageUriAsBlob,
+} from "@/lib/imageUpload";
 import { computePlantPoints, formatPlantPoints } from "@/lib/plantPoints";
 
 function takeOne<T>(value: T | T[] | null | undefined): T | null {
@@ -46,15 +53,6 @@ type PlantDetailRow = {
   plant: PlantCatalogRow | PlantCatalogRow[] | null;
 };
 
-const getExtensionFromUri = (uri: string) => {
-  const clean = uri.split("?")[0];
-  const lastDot = clean.lastIndexOf(".");
-  if (lastDot === -1) return "jpg";
-  const ext = clean.slice(lastDot + 1).toLowerCase();
-  if (!ext || ext.length > 6) return "jpg";
-  return ext;
-};
-
 export default function PlantDetailPage() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const insets = useSafeAreaInsets();
@@ -65,6 +63,7 @@ export default function PlantDetailPage() {
   const [isDeleting, setIsDeleting] = useState(false);
   const [isEditingName, setIsEditingName] = useState(false);
   const [isSavingName, setIsSavingName] = useState(false);
+  const [isCameraOpen, setIsCameraOpen] = useState(false);
   const [nameDraft, setNameDraft] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
   const [plant, setPlant] = useState<PlantDetailRow | null>(null);
@@ -136,7 +135,7 @@ export default function PlantDetailPage() {
 
   useEffect(() => {
     if (isEditingName) return;
-    const plantRow = plant?.plant?.[0] ?? null;
+    const plantRow = takeOne(plant?.plant);
     setNameDraft(plant?.custom_name || plantRow?.common_name || "");
   }, [isEditingName, plant]);
 
@@ -178,106 +177,100 @@ export default function PlantDetailPage() {
     setIsEditingName(false);
   };
 
-  const onPickAndUpload = async () => {
-    if (!userId || !userPlantId || isUploading) return;
-    setErrorMessage("");
-    setIsUploading(true);
+  const uploadPlantPhotoAsset = useCallback(
+    async (source: { uri: string; mimeType?: string | null; base64?: string | null }) => {
+      if (!userId || !userPlantId || isUploading) return;
+      setErrorMessage("");
+      setIsUploading(true);
 
-    try {
-      const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
-        allowsEditing: true,
-        quality: 0.9,
-      });
-
-      if (result.canceled || result.assets.length === 0) {
-        setIsUploading(false);
-        return;
-      }
-
-      const asset = result.assets[0];
-      const ext = getExtensionFromUri(asset.uri);
+      const { uri, mimeType, base64 } = source;
+      const ext = getFileExtension(uri, mimeType);
       const objectPath = `${userId}/${userPlantId}.${ext}`;
 
-      const res = await fetch(asset.uri);
-      const blob = await res.blob();
+      try {
+        const imageBody = base64
+          ? decodeBase64ToBytes(base64)
+          : await readImageUriAsBlob(uri);
 
-      const { error: uploadError } = await supabase.storage
-        .from("plant-photos")
-        .upload(objectPath, blob, {
-          upsert: true,
-          contentType: asset.mimeType ?? `image/${ext}`,
-        });
+        const { error: uploadError } = await supabase.storage
+          .from("plant-photos")
+          .upload(objectPath, imageBody, {
+            cacheControl: "3600",
+            upsert: true,
+            contentType: mimeType ?? `image/${ext}`,
+          });
 
-      if (uploadError) {
-        setErrorMessage(uploadError.message);
+        if (uploadError) {
+          setErrorMessage(uploadError.message);
+          return;
+        }
+
+        const { error: updateError } = await supabase
+          .from("user_plants")
+          .update({ photo_path: objectPath })
+          .eq("id", userPlantId)
+          .eq("user_id", userId);
+
+        if (updateError) {
+          setErrorMessage(updateError.message);
+          return;
+        }
+
+        setPlant((prev) => (prev ? { ...prev, photo_path: objectPath } : prev));
+        await loadPhotoUrl(objectPath);
+      } catch (error) {
+        setErrorMessage("Could not upload photo.");
+      } finally {
         setIsUploading(false);
-        return;
       }
+    },
+    [isUploading, loadPhotoUrl, supabase, userId, userPlantId],
+  );
 
-      const { error: updateError } = await supabase
-        .from("user_plants")
-        .update({ photo_path: objectPath })
-        .eq("id", userPlantId)
-        .eq("user_id", userId);
+  const onPickAndUploadFromLibrary = async () => {
+    if (!userId || !userPlantId || isUploading) return;
+    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!permission.granted) return;
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ["images"],
+      allowsEditing: true,
+      quality: 0.8,
+      base64: true,
+    });
+    if (result.canceled || !result.assets.length) return;
+    const [asset] = result.assets;
+    await uploadPlantPhotoAsset({ uri: asset.uri, mimeType: asset.mimeType, base64: asset.base64 });
+  };
 
-      if (updateError) {
-        setErrorMessage(updateError.message);
-        setIsUploading(false);
-        return;
-      }
-
-      setPlant((prev) => (prev ? { ...prev, photo_path: objectPath } : prev));
-      await loadPhotoUrl(objectPath);
-    } catch {
-      setErrorMessage("Could not upload photo.");
-    } finally {
-      setIsUploading(false);
-    }
+  const onOpenCamera = () => setIsCameraOpen(true);
+  const onCameraClose = () => setIsCameraOpen(false);
+  const onCameraCapture = (uri: string, mimeType: string, base64?: string | null) => {
+    void uploadPlantPhotoAsset({ uri, mimeType, base64 });
+    setIsCameraOpen(false);
   };
 
   const onRemovePlant = () => {
     if (!userId || !userPlantId || isDeleting) return;
-
-    Alert.alert(
-      "Remove Plant",
-      "This removes the plant from your garden. This cannot be undone.",
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Remove",
-          style: "destructive",
-          onPress: async () => {
-            setErrorMessage("");
-            setIsDeleting(true);
-
-            try {
-              const photoPath = plant?.photo_path ?? null;
-              if (photoPath) {
-                await supabase.storage.from("plant-photos").remove([photoPath]);
-              }
-
-              const { error } = await supabase
-                .from("user_plants")
-                .delete()
-                .eq("id", userPlantId)
-                .eq("user_id", userId);
-
-              if (error) {
-                setErrorMessage(error.message);
-                setIsDeleting(false);
-                return;
-              }
-
-              router.back();
-            } catch {
-              setErrorMessage("Could not remove plant. Please try again.");
-              setIsDeleting(false);
-            }
-          },
+    Alert.alert("Remove Plant", "Are you sure? This cannot be undone.", [
+      { text: "Cancel", style: "cancel" },
+      {
+        text: "Remove",
+        style: "destructive",
+        onPress: async () => {
+          setIsDeleting(true);
+          const { error } = await supabase
+            .from("user_plants")
+            .delete()
+            .eq("id", userPlantId);
+          if (error) {
+            setErrorMessage(error.message);
+            setIsDeleting(false);
+          } else {
+            router.back();
+          }
         },
-      ],
-    );
+      },
+    ]);
   };
 
   if (isLoading) {
@@ -304,136 +297,109 @@ export default function PlantDetailPage() {
         contentContainerStyle={[
           styles.content,
           {
-            paddingTop: insets.top + 16,
-            paddingBottom: insets.bottom + 28,
+            paddingTop: insets.top + 10,
+            paddingBottom: insets.bottom + 40,
           },
         ]}
         showsVerticalScrollIndicator={false}
       >
-        <Pressable onPress={() => router.back()} style={styles.backRow}>
-          <Ionicons name="chevron-back" size={20} color={COLORS.primary} />
-          <Text style={styles.backText}>Back</Text>
+        <Pressable onPress={() => router.back()} style={styles.backButton}>
+          <Ionicons name="arrow-back" size={24} color={COLORS.primary} />
+          <Text style={styles.backButtonText}>Garden</Text>
         </Pressable>
 
-        {isEditingName ? (
-          <View style={styles.nameEditRow}>
-            <TextInput
-              value={nameDraft}
-              onChangeText={setNameDraft}
-              autoFocus
-              placeholder="Plant name"
-              placeholderTextColor={COLORS.secondary + "88"}
-              style={styles.nameInput}
-              returnKeyType="done"
-              onSubmitEditing={onSaveName}
-            />
-            <Pressable
-              onPress={onCancelEditName}
-              disabled={isSavingName}
-              style={styles.nameIconButton}
-            >
-              <Ionicons name="close" size={20} color={COLORS.secondary} />
+        <View style={styles.header}>
+          {isEditingName ? (
+            <View style={styles.nameEditRow}>
+              <TextInput
+                value={nameDraft}
+                onChangeText={setNameDraft}
+                autoFocus
+                style={styles.nameInput}
+                onSubmitEditing={onSaveName}
+              />
+              <Pressable onPress={onSaveName} style={styles.iconButton}>
+                <Ionicons name="checkmark" size={24} color={COLORS.primary} />
+              </Pressable>
+            </View>
+          ) : (
+            <Pressable onPress={onStartEditName} style={styles.nameDisplayRow}>
+              <Text style={styles.title}>{displayName}</Text>
+              <Ionicons name="pencil" size={18} color={COLORS.secondary} />
             </Pressable>
-            <Pressable
-              onPress={onSaveName}
-              disabled={isSavingName}
-              style={[styles.nameIconButton, styles.nameSaveButton]}
-            >
-              {isSavingName ? (
-                <ActivityIndicator color={COLORS.background} />
-              ) : (
-                <Ionicons
-                  name="checkmark"
-                  size={20}
-                  color={COLORS.background}
-                />
-              )}
-            </Pressable>
+          )}
+          {scientificName && <Text style={styles.scientificName}>{scientificName}</Text>}
+          <View style={styles.typeBadge}>
+            <Text style={styles.typeText}>{typeLabel}</Text>
           </View>
-        ) : (
-          <Pressable onPress={onStartEditName} style={styles.namePressable}>
-            <Text style={styles.title}>{displayName}</Text>
-            <Ionicons
-              name="pencil-outline"
-              size={18}
-              color={COLORS.secondary}
-              style={styles.namePencil}
-            />
-          </Pressable>
-        )}
-        {!!scientificName && (
-          <Text style={[styles.subtitle, styles.subtitleScientific]}>
-            {scientificName}
-          </Text>
-        )}
-        <Text style={styles.subtitle}>Type: {typeLabel}</Text>
-
-        <View style={styles.card}>
-          <Text style={styles.cardTitle}>Points</Text>
-          <Text style={styles.pointsValue}>{formatPlantPoints(points)}</Text>
         </View>
 
-        {!!errorMessage && <Text style={styles.errorText}>{errorMessage}</Text>}
-
-        <View style={styles.card}>
-          <Text style={styles.cardTitle}>Photo</Text>
+        <View style={styles.photoContainer}>
           {photoUrl ? (
-            <Image source={{ uri: photoUrl }} style={styles.photo} />
+            <Image source={{ uri: photoUrl }} style={styles.mainPhoto} />
           ) : (
             <View style={styles.photoPlaceholder}>
-              <Ionicons
-                name="image-outline"
-                size={28}
-                color={COLORS.secondary}
-              />
-              <Text style={styles.placeholderText}>No photo yet</Text>
+              <Ionicons name="leaf" size={64} color={COLORS.accent} />
+              <Text style={styles.photoPlaceholderText}>Add a photo of your {displayName}</Text>
             </View>
           )}
-
-          <Pressable
-            onPress={onPickAndUpload}
-            disabled={isUploading}
-            style={[styles.primaryButton, isUploading && styles.disabledButton]}
-          >
-            {isUploading ? (
-              <ActivityIndicator color={COLORS.background} />
-            ) : (
-              <>
-                <Ionicons
-                  name="cloud-upload-outline"
-                  size={18}
-                  color={COLORS.background}
-                />
-                <Text style={styles.primaryButtonText}>
-                  {photoUrl ? "Replace Photo" : "Upload Photo"}
-                </Text>
-              </>
-            )}
-          </Pressable>
+          <View style={styles.photoActions}>
+            <Pressable style={styles.photoActionButton} onPress={onOpenCamera}>
+              <LinearGradient colors={[COLORS.primary, COLORS.secondary]} style={styles.actionGradient}>
+                <Ionicons name="camera" size={24} color={COLORS.background} />
+              </LinearGradient>
+            </Pressable>
+            <Pressable style={styles.photoActionButton} onPress={onPickAndUploadFromLibrary}>
+              <LinearGradient colors={[COLORS.primary, COLORS.secondary]} style={styles.actionGradient}>
+                <Ionicons name="images" size={24} color={COLORS.background} />
+              </LinearGradient>
+            </Pressable>
+          </View>
         </View>
 
-        <View style={styles.dangerCard}>
-          <Text style={styles.cardTitle}>Danger Zone</Text>
-          <Pressable
-            onPress={onRemovePlant}
-            disabled={isDeleting}
-            style={[styles.deleteButton, isDeleting && styles.disabledButton]}
-          >
-            {isDeleting ? (
-              <ActivityIndicator color={COLORS.background} />
-            ) : (
-              <>
-                <Ionicons
-                  name="trash-outline"
-                  size={18}
-                  color={COLORS.background}
-                />
-                <Text style={styles.deleteButtonText}>Remove Plant</Text>
-              </>
-            )}
-          </Pressable>
+        <View style={styles.statsRow}>
+          <View style={styles.statCard}>
+            <Text style={styles.statLabel}>Points</Text>
+            <Text style={styles.statValue}>{formatPlantPoints(points)}</Text>
+          </View>
+          <View style={styles.statCard}>
+            <Text style={styles.statLabel}>Quantity</Text>
+            <Text style={styles.statValue}>x{plant?.quantity || 1}</Text>
+          </View>
         </View>
+
+        <View style={styles.card}>
+          <View style={styles.cardHeader}>
+            <Ionicons name="calendar" size={20} color={COLORS.primary} />
+            <Text style={styles.cardTitle}>Planted On</Text>
+          </View>
+          <Text style={styles.cardContent}>{plant?.planted_on}</Text>
+        </View>
+
+        {!!errorMessage && (
+          <View style={styles.errorBox}>
+            <Ionicons name="alert-circle" size={20} color={COLORS.warning} />
+            <Text style={styles.errorText}>{errorMessage}</Text>
+          </View>
+        )}
+
+        <Pressable onPress={onRemovePlant} style={styles.removeButton}>
+          <Ionicons name="trash-outline" size={20} color={COLORS.warning} />
+          <Text style={styles.removeButtonText}>Remove from Garden</Text>
+        </Pressable>
       </ScrollView>
+
+      {isCameraOpen && (
+        <View style={styles.cameraOverlay}>
+          <CameraCapture
+            onCapture={onCameraCapture}
+            onClose={onCameraClose}
+            defaultFacing="back"
+            titleText="Plant Photo"
+            hintText="Snap a picture of your plant"
+          />
+        </View>
+      )}
     </View>
   );
 }
@@ -451,163 +417,201 @@ const styles = StyleSheet.create({
   },
   content: {
     paddingHorizontal: 20,
-    gap: 12,
+    gap: 20,
   },
-  backRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    alignSelf: "flex-start",
-    paddingVertical: 6,
-    paddingHorizontal: 8,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: COLORS.secondary + "25",
-    backgroundColor: COLORS.accent + "55",
-  },
-  backText: {
-    color: COLORS.primary,
-    fontSize: 14,
-    fontFamily: "Boogaloo_400Regular",
-  },
-  title: {
-    color: COLORS.primary,
-    fontSize: 34,
-    fontFamily: "Boogaloo_400Regular",
-  },
-  namePressable: {
+  backButton: {
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
-    alignSelf: "flex-start",
+    marginBottom: 8,
   },
-  namePencil: {
-    marginTop: 8,
+  backButtonText: {
+    color: COLORS.primary,
+    fontSize: 18,
+    fontFamily: "Boogaloo_400Regular",
+  },
+  header: {
+    gap: 4,
+  },
+  title: {
+    color: COLORS.primary,
+    fontSize: 38,
+    fontFamily: "Boogaloo_400Regular",
+  },
+  nameDisplayRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
   },
   nameEditRow: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 8,
+    gap: 12,
   },
   nameInput: {
     flex: 1,
-    borderWidth: 1,
-    borderColor: COLORS.secondary + "35",
-    borderRadius: 12,
-    color: COLORS.primary,
-    paddingHorizontal: 10,
-    minHeight: 44,
-    fontSize: 20,
+    fontSize: 32,
     fontFamily: "Boogaloo_400Regular",
-    backgroundColor: COLORS.background,
+    color: COLORS.primary,
+    borderBottomWidth: 2,
+    borderBottomColor: COLORS.primary,
+    paddingVertical: 0,
   },
-  nameIconButton: {
-    width: 44,
-    height: 44,
+  iconButton: {
+    padding: 8,
+  },
+  scientificName: {
+    color: COLORS.text,
+    fontSize: 18,
+    fontStyle: "italic",
+    fontFamily: "Boogaloo_400Regular",
+    opacity: 0.8,
+  },
+  typeBadge: {
+    backgroundColor: COLORS.accent + "50",
+    paddingHorizontal: 12,
+    paddingVertical: 4,
     borderRadius: 12,
+    alignSelf: "flex-start",
+    marginTop: 4,
     borderWidth: 1,
-    borderColor: COLORS.secondary + "25",
-    backgroundColor: COLORS.accent + "55",
+    borderColor: COLORS.secondary + "30",
+  },
+  typeText: {
+    color: COLORS.secondary,
+    fontSize: 14,
+    fontFamily: "Boogaloo_400Regular",
+  },
+  photoContainer: {
+    width: "100%",
+    height: 300,
+    borderRadius: 32,
+    overflow: "hidden",
+    backgroundColor: COLORS.accent + "30",
+    borderWidth: 1,
+    borderColor: COLORS.secondary + "20",
+  },
+  mainPhoto: {
+    width: "100%",
+    height: "100%",
+  },
+  photoPlaceholder: {
+    flex: 1,
     alignItems: "center",
     justifyContent: "center",
+    gap: 12,
+    padding: 40,
   },
-  nameSaveButton: {
-    backgroundColor: COLORS.primary,
-    borderColor: COLORS.primary + "40",
-  },
-  subtitle: {
+  photoPlaceholderText: {
     color: COLORS.text,
     fontSize: 16,
     fontFamily: "Boogaloo_400Regular",
+    textAlign: "center",
+    opacity: 0.6,
   },
-  subtitleScientific: {
-    fontStyle: "italic",
+  photoActions: {
+    position: "absolute",
+    bottom: 20,
+    right: 20,
+    flexDirection: "row",
+    gap: 12,
+  },
+  photoActionButton: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    elevation: 8,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+  },
+  actionGradient: {
+    width: "100%",
+    height: "100%",
+    borderRadius: 28,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  statsRow: {
+    flexDirection: "row",
+    gap: 12,
+  },
+  statCard: {
+    flex: 1,
+    backgroundColor: COLORS.accent + "40",
+    padding: 16,
+    borderRadius: 24,
+    borderWidth: 1,
+    borderColor: COLORS.secondary + "20",
+    gap: 4,
+  },
+  statLabel: {
+    color: COLORS.text,
+    fontSize: 14,
+    fontFamily: "Boogaloo_400Regular",
+    opacity: 0.7,
+  },
+  statValue: {
+    color: COLORS.primary,
+    fontSize: 28,
+    fontFamily: "Boogaloo_400Regular",
   },
   card: {
-    backgroundColor: COLORS.accent + "70",
+    backgroundColor: COLORS.accent + "30",
+    padding: 16,
+    borderRadius: 24,
     borderWidth: 1,
-    borderColor: COLORS.secondary + "35",
-    borderRadius: 14,
-    padding: 12,
+    borderColor: COLORS.secondary + "15",
+    gap: 8,
+  },
+  cardHeader: {
+    flexDirection: "row",
+    alignItems: "center",
     gap: 8,
   },
   cardTitle: {
+    color: COLORS.secondary,
+    fontSize: 18,
+    fontFamily: "Boogaloo_400Regular",
+  },
+  cardContent: {
     color: COLORS.primary,
     fontSize: 20,
     fontFamily: "Boogaloo_400Regular",
   },
-  pointsValue: {
-    color: COLORS.primary,
-    fontSize: 44,
-    fontFamily: "Boogaloo_400Regular",
-    lineHeight: 48,
+  errorBox: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: COLORS.warning + "15",
+    padding: 12,
+    borderRadius: 12,
+    gap: 10,
+    borderWidth: 1,
+    borderColor: COLORS.warning + "30",
   },
   errorText: {
     color: COLORS.warning,
     fontSize: 14,
     fontFamily: "Boogaloo_400Regular",
+    flex: 1,
   },
-  photo: {
-    width: "100%",
-    height: 220,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: COLORS.secondary + "25",
-    backgroundColor: COLORS.background,
-  },
-  photoPlaceholder: {
-    width: "100%",
-    height: 220,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: COLORS.secondary + "25",
-    backgroundColor: COLORS.background,
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 6,
-  },
-  placeholderText: {
-    color: COLORS.text,
-    fontSize: 14,
-    fontFamily: "Boogaloo_400Regular",
-  },
-  primaryButton: {
-    minHeight: 44,
-    borderRadius: 12,
-    backgroundColor: COLORS.primary,
+  removeButton: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
     gap: 8,
+    paddingVertical: 12,
+    marginTop: 10,
   },
-  primaryButtonText: {
-    color: COLORS.background,
+  removeButtonText: {
+    color: COLORS.warning,
     fontSize: 16,
     fontFamily: "Boogaloo_400Regular",
+    opacity: 0.8,
   },
-  disabledButton: {
-    opacity: 0.6,
-  },
-  dangerCard: {
-    backgroundColor: COLORS.warning + "22",
-    borderWidth: 1,
-    borderColor: COLORS.warning + "55",
-    borderRadius: 14,
-    padding: 12,
-    gap: 8,
-  },
-  deleteButton: {
-    minHeight: 44,
-    borderRadius: 12,
-    backgroundColor: COLORS.warning,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 8,
-  },
-  deleteButtonText: {
-    color: COLORS.background,
-    fontSize: 16,
-    fontFamily: "Boogaloo_400Regular",
+  cameraOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "#000",
   },
 });

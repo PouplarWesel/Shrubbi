@@ -17,13 +17,22 @@ import { COLORS } from "@/constants/colors";
 type CameraCaptureProps = {
   onCapture: (uri: string, mimeType: string, base64?: string | null) => void;
   onClose: () => void;
+  titleText?: string;
+  hintText?: string;
+  defaultFacing?: CameraType;
 };
 
-export const CameraCapture = ({ onCapture, onClose }: CameraCaptureProps) => {
+export const CameraCapture = ({
+  onCapture,
+  onClose,
+  titleText,
+  hintText,
+  defaultFacing,
+}: CameraCaptureProps) => {
   const insets = useSafeAreaInsets();
   const { width, height } = useWindowDimensions();
   const cameraRef = useRef<CameraView>(null);
-  const [facing, setFacing] = useState<CameraType>("front");
+  const [facing, setFacing] = useState<CameraType>(defaultFacing ?? "front");
   const [isTaking, setIsTaking] = useState(false);
   const [permission, requestPermission] = useCameraPermissions();
   const viewfinderSize = useMemo(
@@ -119,7 +128,7 @@ export const CameraCapture = ({ onCapture, onClose }: CameraCaptureProps) => {
           <Ionicons name="close" size={26} color="#fff" />
         </Pressable>
         <View style={styles.headerTitleContainer}>
-          <Text style={styles.headerTitle}>Capture Photo</Text>
+          <Text style={styles.headerTitle}>{titleText ?? "Capture Photo"}</Text>
         </View>
         <Pressable
           style={({ pressed }) => [styles.iconBtn, pressed && styles.pressed]}
@@ -167,7 +176,9 @@ export const CameraCapture = ({ onCapture, onClose }: CameraCaptureProps) => {
             />
           </View>
         </View>
-        <Text style={styles.captureHint}>CENTER YOUR FACE IN THE CIRCLE</Text>
+        <Text style={styles.captureHint}>
+          {hintText ?? "CENTER YOUR FACE IN THE CIRCLE"}
+        </Text>
       </View>
 
       <View style={[styles.bottomBar, { bottom: insets.bottom + 18 }]}>
