@@ -1,5 +1,6 @@
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
+  ActivityIndicator,
   Alert,
   Dimensions,
   Pressable,
@@ -25,14 +26,48 @@ import { COLORS } from "@/constants/colors";
 import { useSupabase } from "@/hooks/useSupabase";
 
 const { width } = Dimensions.get("window");
+const FALLBACK_DAILY_TIP =
+  "Succulents love bright, indirect sunlight. Make sure yours are getting enough light today!";
+
+const formatLocalDate = (date: Date) => {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+
+  return `${year}-${month}-${day}`;
+};
+
+type TipHistoryRow = {
+  id: number;
+  tip_date: string;
+  tip_text: string;
+};
+
+const formatTipDate = (tipDate: string) => {
+  const localDate = new Date(`${tipDate}T00:00:00`);
+
+  return localDate.toLocaleDateString(undefined, {
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
+};
 
 export default function Page() {
-  const { signOut, session, supabase } = useSupabase();
+  const { signOut, session, supabase, isLoaded } = useSupabase();
   const insets = useSafeAreaInsets();
   const [isDeleting, setIsDeleting] = useState(false);
   const [isCameraOpen, setIsCameraOpen] = useState(false);
-  const bottomSheetModalRef = useRef<BottomSheetModal>(null);
-  const snapPoints = useMemo(() => ["72%", "95%"], []);
+  const [dailyTipText, setDailyTipText] = useState(FALLBACK_DAILY_TIP);
+  const [isDailyTipLoading, setIsDailyTipLoading] = useState(true);
+  const [tipHistoryRows, setTipHistoryRows] = useState<TipHistoryRow[]>([]);
+  const [isTipHistoryLoading, setIsTipHistoryLoading] = useState(false);
+  const [tipHistoryError, setTipHistoryError] = useState("");
+  const settingsBottomSheetModalRef = useRef<BottomSheetModal>(null);
+  const tipsHistoryBottomSheetModalRef = useRef<BottomSheetModal>(null);
+  const settingsSnapPoints = useMemo(() => ["72%", "95%"], []);
+  const tipHistorySnapPoints = useMemo(() => ["92%", "100%"], []);
 
   const settingsRef = useRef<SettingsSectionHandle>(null);
 
@@ -81,7 +116,7 @@ export default function Page() {
   };
 
   const handleOpenSettings = () => {
-    bottomSheetModalRef.current?.present();
+    settingsBottomSheetModalRef.current?.present();
   };
 
   const handleRequestCamera = () => {
@@ -101,6 +136,107 @@ export default function Page() {
     setIsCameraOpen(false);
   };
 
+  const userId = session?.user?.id ?? null;
+
+  const loadTipHistory = async () => {
+    if (!isLoaded || !userId) {
+      setTipHistoryRows([]);
+      setTipHistoryError("");
+      setIsTipHistoryLoading(false);
+      return;
+    }
+
+    setIsTipHistoryLoading(true);
+    setTipHistoryError("");
+
+    const today = formatLocalDate(new Date());
+    const { data, error } = await supabase
+      .from("daily_tips")
+      .select("id, tip_date, tip_text")
+      .lte("tip_date", today)
+      .order("tip_date", { ascending: false })
+      .limit(100);
+
+    if (error) {
+      setTipHistoryRows([]);
+      setTipHistoryError("Could not load tip history.");
+      setIsTipHistoryLoading(false);
+      return;
+    }
+
+    setTipHistoryRows((data ?? []) as TipHistoryRow[]);
+    setIsTipHistoryLoading(false);
+  };
+
+  const handleOpenTipsHistory = () => {
+    tipsHistoryBottomSheetModalRef.current?.present();
+    void loadTipHistory();
+  };
+
+  useEffect(() => {
+    if (!isLoaded) return;
+
+    if (!userId) {
+      setIsDailyTipLoading(false);
+      return;
+    }
+
+    let isCancelled = false;
+
+    const loadDailyTip = async () => {
+      const today = formatLocalDate(new Date());
+
+      const { data: todayTip, error: todayTipError } = await supabase
+        .from("daily_tips")
+        .select("tip_text")
+        .eq("tip_date", today)
+        .maybeSingle();
+
+      if (isCancelled) return;
+
+      if (todayTipError) {
+        console.error("Failed to fetch today's tip", todayTipError);
+        setIsDailyTipLoading(false);
+        return;
+      }
+
+      if (todayTip?.tip_text) {
+        setDailyTipText(todayTip.tip_text);
+        setIsDailyTipLoading(false);
+        return;
+      }
+
+      const { data: nearestTip, error: nearestTipError } = await supabase
+        .from("daily_tips")
+        .select("tip_text")
+        .lte("tip_date", today)
+        .order("tip_date", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (isCancelled) return;
+
+      if (nearestTipError) {
+        console.error("Failed to fetch fallback daily tip", nearestTipError);
+        setIsDailyTipLoading(false);
+        return;
+      }
+
+      if (nearestTip?.tip_text) {
+        setDailyTipText(nearestTip.tip_text);
+      }
+
+      setIsDailyTipLoading(false);
+    };
+
+    void loadDailyTip();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [isLoaded, userId, supabase]);
+
+  const todayKey = formatLocalDate(new Date());
   const userEmail = session?.user?.email || "Gardener";
   const userName = userEmail.split("@")[0];
 
@@ -155,10 +291,12 @@ export default function Page() {
           <View style={styles.mainCard}>
             <Text style={styles.cardTitle}>Daily Tip</Text>
             <Text style={styles.cardText}>
-              Succulents love bright, indirect sunlight. Make sure yours are
-              getting enough light today!
+              {isDailyTipLoading ? "Loading today's tip..." : dailyTipText}
             </Text>
-            <Pressable style={styles.cardButton}>
+            <Pressable
+              style={styles.cardButton}
+              onPress={handleOpenTipsHistory}
+            >
               <Text style={styles.cardButtonText}>Learn More</Text>
             </Pressable>
           </View>
@@ -210,9 +348,9 @@ export default function Page() {
         </ScrollView>
 
         <BottomSheetModal
-          ref={bottomSheetModalRef}
+          ref={settingsBottomSheetModalRef}
           index={0}
-          snapPoints={snapPoints}
+          snapPoints={settingsSnapPoints}
           enableDismissOnClose={false}
           enablePanDownToClose
           backgroundStyle={styles.bottomSheetBackground}
@@ -228,6 +366,94 @@ export default function Page() {
               ref={settingsRef}
               onRequestCamera={handleRequestCamera}
             />
+          </BottomSheetScrollView>
+        </BottomSheetModal>
+
+        <BottomSheetModal
+          ref={tipsHistoryBottomSheetModalRef}
+          index={1}
+          snapPoints={tipHistorySnapPoints}
+          enablePanDownToClose
+          backgroundStyle={styles.bottomSheetBackground}
+          handleIndicatorStyle={styles.bottomSheetHandle}
+        >
+          <BottomSheetScrollView
+            contentContainerStyle={[
+              styles.bottomSheetContent,
+              styles.tipHistoryContent,
+              { paddingBottom: Math.max(insets.bottom, 24) },
+            ]}
+          >
+            <Text style={styles.tipHistoryTitle}>Tip History</Text>
+            <Text style={styles.tipHistorySubtitle}>
+              Browse the latest plant tips from previous days.
+            </Text>
+
+            {isTipHistoryLoading ? (
+              <View style={styles.tipHistoryStateContainer}>
+                <ActivityIndicator size="large" color={COLORS.primary} />
+                <Text style={styles.tipHistoryStateText}>Loading tips...</Text>
+              </View>
+            ) : null}
+
+            {!isTipHistoryLoading && !!tipHistoryError ? (
+              <View style={styles.tipHistoryStateCard}>
+                <Text style={styles.tipHistoryStateTitle}>
+                  Could not load tips
+                </Text>
+                <Text style={styles.tipHistoryStateText}>
+                  {tipHistoryError}
+                </Text>
+                <Pressable
+                  style={({ pressed }) => [
+                    styles.tipHistoryRetryButton,
+                    pressed && styles.pressed,
+                  ]}
+                  onPress={() => {
+                    void loadTipHistory();
+                  }}
+                >
+                  <Text style={styles.tipHistoryRetryText}>Try Again</Text>
+                </Pressable>
+              </View>
+            ) : null}
+
+            {!isTipHistoryLoading &&
+            !tipHistoryError &&
+            tipHistoryRows.length === 0 ? (
+              <View style={styles.tipHistoryStateCard}>
+                <Text style={styles.tipHistoryStateTitle}>No tips yet</Text>
+                <Text style={styles.tipHistoryStateText}>
+                  Daily tips will appear here as they unlock.
+                </Text>
+              </View>
+            ) : null}
+
+            {!isTipHistoryLoading && !tipHistoryError
+              ? tipHistoryRows.map((tip) => {
+                  const isToday = tip.tip_date === todayKey;
+
+                  return (
+                    <View key={tip.id} style={styles.tipHistoryCard}>
+                      <View style={styles.tipHistoryCardHeader}>
+                        <Text style={styles.tipHistoryCardDate}>
+                          {formatTipDate(tip.tip_date)}
+                        </Text>
+                        {isToday ? (
+                          <View style={styles.tipHistoryTodayBadge}>
+                            <Text style={styles.tipHistoryTodayBadgeText}>
+                              Today
+                            </Text>
+                          </View>
+                        ) : null}
+                      </View>
+                      <Text style={styles.tipHistoryCardText}>
+                        {tip.tip_text}
+                      </Text>
+                    </View>
+                  );
+                })
+              : null}
           </BottomSheetScrollView>
         </BottomSheetModal>
 
@@ -433,6 +659,98 @@ const styles = StyleSheet.create({
   bottomSheetContent: {
     paddingHorizontal: 18,
     paddingBottom: 28,
+  },
+  tipHistoryContent: {
+    gap: 12,
+  },
+  tipHistoryTitle: {
+    color: COLORS.primary,
+    fontSize: 28,
+    fontFamily: "Boogaloo_400Regular",
+  },
+  tipHistorySubtitle: {
+    color: COLORS.text,
+    fontSize: 15,
+    fontFamily: "Boogaloo_400Regular",
+    opacity: 0.75,
+    marginBottom: 6,
+  },
+  tipHistoryStateContainer: {
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 28,
+    gap: 10,
+  },
+  tipHistoryStateCard: {
+    borderRadius: 16,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: COLORS.secondary + "25",
+    backgroundColor: COLORS.accent + "4A",
+    gap: 8,
+  },
+  tipHistoryStateTitle: {
+    color: COLORS.primary,
+    fontSize: 20,
+    fontFamily: "Boogaloo_400Regular",
+  },
+  tipHistoryStateText: {
+    color: COLORS.text,
+    fontSize: 15,
+    lineHeight: 20,
+    fontFamily: "Boogaloo_400Regular",
+    opacity: 0.9,
+  },
+  tipHistoryRetryButton: {
+    alignSelf: "flex-start",
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    backgroundColor: COLORS.primary,
+  },
+  tipHistoryRetryText: {
+    color: COLORS.background,
+    fontSize: 14,
+    fontFamily: "Boogaloo_400Regular",
+  },
+  tipHistoryCard: {
+    borderRadius: 16,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: COLORS.primary + "22",
+    backgroundColor: COLORS.accent + "60",
+    gap: 8,
+  },
+  tipHistoryCardHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 8,
+  },
+  tipHistoryCardDate: {
+    color: COLORS.primary,
+    fontSize: 16,
+    fontFamily: "Boogaloo_400Regular",
+  },
+  tipHistoryTodayBadge: {
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: COLORS.primary + "44",
+    backgroundColor: COLORS.primary + "16",
+    paddingHorizontal: 10,
+    paddingVertical: 2,
+  },
+  tipHistoryTodayBadgeText: {
+    color: COLORS.primary,
+    fontSize: 12,
+    fontFamily: "Boogaloo_400Regular",
+  },
+  tipHistoryCardText: {
+    color: COLORS.text,
+    fontSize: 16,
+    lineHeight: 22,
+    fontFamily: "Boogaloo_400Regular",
+    opacity: 0.94,
   },
   cameraOverlay: {
     ...StyleSheet.absoluteFillObject,

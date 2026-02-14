@@ -11,25 +11,25 @@ export default function TabsLayout() {
         tabBarActiveTintColor: COLORS.primary,
         tabBarInactiveTintColor: COLORS.secondary + "80",
         tabBarShowLabel: false,
-        tabBarStyle: {
-          position: "absolute",
-          bottom: 24,
-          left: 20,
-          right: 20,
-          backgroundColor:
-            Platform.OS === "ios" ? "transparent" : COLORS.background + "E6",
-          borderRadius: 24,
-          height: 64,
-          borderTopWidth: 0,
-          paddingBottom: 0,
-          elevation: 8,
-          shadowColor: "#000",
-          shadowOffset: { width: 0, height: 4 },
-          shadowOpacity: 0.3,
-          shadowRadius: 8,
-          overflow: "hidden",
-        },
-        tabBarBackground: () =>
+                tabBarStyle: {
+                  position: "absolute",
+                  bottom: 24,
+                  left: 20,
+                  right: 20,
+                  backgroundColor: Platform.OS === "ios" ? "transparent" : COLORS.background + "E6",
+                  borderRadius: 24,
+                  height: 64,
+                  borderTopWidth: 0,
+                  paddingBottom: 0,
+                  elevation: 8,
+                  shadowColor: "#000",
+                  shadowOffset: { width: 0, height: 4 },
+                  shadowOpacity: 0.3,
+                  shadowRadius: 8,
+                  overflow: "hidden",
+                },
+                tabBarHideOnKeyboard: true,
+                tabBarBackground: () =>
           Platform.OS === "ios" ? (
             <BlurView
               tint="dark"

@@ -14,6 +14,277 @@ export type Database = {
   }
   public: {
     Tables: {
+      chat_channels: {
+        Row: {
+          city_id: string
+          created_at: string
+          display_name: string
+          id: string
+          scope: Database["public"]["Enums"]["chat_channel_scope"]
+          team_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          city_id: string
+          created_at?: string
+          display_name: string
+          id?: string
+          scope: Database["public"]["Enums"]["chat_channel_scope"]
+          team_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          city_id?: string
+          created_at?: string
+          display_name?: string
+          id?: string
+          scope?: Database["public"]["Enums"]["chat_channel_scope"]
+          team_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "chat_channels_city_id_fkey"
+            columns: ["city_id"]
+            isOneToOne: false
+            referencedRelation: "cities"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "chat_channels_city_id_fkey"
+            columns: ["city_id"]
+            isOneToOne: false
+            referencedRelation: "city_leaderboard"
+            referencedColumns: ["city_id"]
+          },
+          {
+            foreignKeyName: "chat_channels_team_id_fkey"
+            columns: ["team_id"]
+            isOneToOne: false
+            referencedRelation: "team_leaderboard"
+            referencedColumns: ["team_id"]
+          },
+          {
+            foreignKeyName: "chat_channels_team_id_fkey"
+            columns: ["team_id"]
+            isOneToOne: false
+            referencedRelation: "teams"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      chat_message_attachments: {
+        Row: {
+          created_at: string
+          file_size_bytes: number
+          height: number | null
+          id: string
+          kind: Database["public"]["Enums"]["chat_attachment_kind"]
+          message_id: string
+          mime_type: string
+          storage_bucket: string
+          storage_path: string
+          uploaded_by: string
+          width: number | null
+        }
+        Insert: {
+          created_at?: string
+          file_size_bytes: number
+          height?: number | null
+          id?: string
+          kind: Database["public"]["Enums"]["chat_attachment_kind"]
+          message_id: string
+          mime_type: string
+          storage_bucket?: string
+          storage_path: string
+          uploaded_by: string
+          width?: number | null
+        }
+        Update: {
+          created_at?: string
+          file_size_bytes?: number
+          height?: number | null
+          id?: string
+          kind?: Database["public"]["Enums"]["chat_attachment_kind"]
+          message_id?: string
+          mime_type?: string
+          storage_bucket?: string
+          storage_path?: string
+          uploaded_by?: string
+          width?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "chat_message_attachments_message_id_fkey"
+            columns: ["message_id"]
+            isOneToOne: false
+            referencedRelation: "chat_messages"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "chat_message_attachments_uploaded_by_fkey"
+            columns: ["uploaded_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      chat_message_reactions: {
+        Row: {
+          created_at: string
+          emoji: string
+          message_id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          emoji: string
+          message_id: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          emoji?: string
+          message_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "chat_message_reactions_message_id_fkey"
+            columns: ["message_id"]
+            isOneToOne: false
+            referencedRelation: "chat_messages"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "chat_message_reactions_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      chat_messages: {
+        Row: {
+          body: string | null
+          channel_id: string
+          created_at: string
+          deleted_at: string | null
+          edited_at: string | null
+          id: string
+          kind: Database["public"]["Enums"]["chat_message_kind"]
+          metadata: Json
+          reply_to_message_id: string | null
+          sender_id: string
+          thread_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          body?: string | null
+          channel_id: string
+          created_at?: string
+          deleted_at?: string | null
+          edited_at?: string | null
+          id?: string
+          kind?: Database["public"]["Enums"]["chat_message_kind"]
+          metadata?: Json
+          reply_to_message_id?: string | null
+          sender_id: string
+          thread_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          body?: string | null
+          channel_id?: string
+          created_at?: string
+          deleted_at?: string | null
+          edited_at?: string | null
+          id?: string
+          kind?: Database["public"]["Enums"]["chat_message_kind"]
+          metadata?: Json
+          reply_to_message_id?: string | null
+          sender_id?: string
+          thread_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "chat_messages_channel_id_fkey"
+            columns: ["channel_id"]
+            isOneToOne: false
+            referencedRelation: "chat_channels"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "chat_messages_reply_to_message_id_fkey"
+            columns: ["reply_to_message_id"]
+            isOneToOne: false
+            referencedRelation: "chat_messages"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "chat_messages_sender_id_fkey"
+            columns: ["sender_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "chat_messages_thread_id_fkey"
+            columns: ["thread_id"]
+            isOneToOne: false
+            referencedRelation: "chat_threads"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      chat_threads: {
+        Row: {
+          archived_at: string | null
+          channel_id: string
+          created_at: string
+          created_by: string
+          id: string
+          title: string | null
+          updated_at: string
+        }
+        Insert: {
+          archived_at?: string | null
+          channel_id: string
+          created_at?: string
+          created_by: string
+          id?: string
+          title?: string | null
+          updated_at?: string
+        }
+        Update: {
+          archived_at?: string | null
+          channel_id?: string
+          created_at?: string
+          created_by?: string
+          id?: string
+          title?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "chat_threads_channel_id_fkey"
+            columns: ["channel_id"]
+            isOneToOne: false
+            referencedRelation: "chat_channels"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "chat_threads_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       cities: {
         Row: {
           country: string
@@ -46,6 +317,166 @@ export type Database = {
           updated_at?: string
         }
         Relationships: []
+      }
+      daily_tips: {
+        Row: {
+          created_at: string
+          id: number
+          tip_date: string
+          tip_text: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: number
+          tip_date: string
+          tip_text: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: number
+          tip_date?: string
+          tip_text?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      event_attendees: {
+        Row: {
+          created_at: string
+          event_id: string
+          note: string | null
+          signed_up_at: string
+          status: Database["public"]["Enums"]["event_attendance_status"]
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          event_id: string
+          note?: string | null
+          signed_up_at?: string
+          status?: Database["public"]["Enums"]["event_attendance_status"]
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          event_id?: string
+          note?: string | null
+          signed_up_at?: string
+          status?: Database["public"]["Enums"]["event_attendance_status"]
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "event_attendees_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
+            referencedRelation: "events"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "event_attendees_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      events: {
+        Row: {
+          activity_type: string
+          cancelled_at: string | null
+          city_id: string
+          created_at: string
+          created_by: string
+          description: string | null
+          ends_at: string
+          id: string
+          is_cancelled: boolean
+          latitude: number | null
+          location_address: string | null
+          location_name: string
+          location_notes: string | null
+          longitude: number | null
+          max_attendees: number | null
+          metadata: Json
+          sign_up_deadline: string | null
+          starts_at: string
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          activity_type?: string
+          cancelled_at?: string | null
+          city_id: string
+          created_at?: string
+          created_by: string
+          description?: string | null
+          ends_at: string
+          id?: string
+          is_cancelled?: boolean
+          latitude?: number | null
+          location_address?: string | null
+          location_name: string
+          location_notes?: string | null
+          longitude?: number | null
+          max_attendees?: number | null
+          metadata?: Json
+          sign_up_deadline?: string | null
+          starts_at: string
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          activity_type?: string
+          cancelled_at?: string | null
+          city_id?: string
+          created_at?: string
+          created_by?: string
+          description?: string | null
+          ends_at?: string
+          id?: string
+          is_cancelled?: boolean
+          latitude?: number | null
+          location_address?: string | null
+          location_name?: string
+          location_notes?: string | null
+          longitude?: number | null
+          max_attendees?: number | null
+          metadata?: Json
+          sign_up_deadline?: string | null
+          starts_at?: string
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "events_city_id_fkey"
+            columns: ["city_id"]
+            isOneToOne: false
+            referencedRelation: "cities"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "events_city_id_fkey"
+            columns: ["city_id"]
+            isOneToOne: false
+            referencedRelation: "city_leaderboard"
+            referencedColumns: ["city_id"]
+          },
+          {
+            foreignKeyName: "events_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       plant_aliases: {
         Row: {
@@ -100,6 +531,7 @@ export type Database = {
           is_endangered: boolean
           is_invasive: boolean
           is_native: boolean
+          is_tree: boolean
           scientific_name: string | null
           type: string
           updated_at: string
@@ -112,6 +544,7 @@ export type Database = {
           is_endangered?: boolean
           is_invasive?: boolean
           is_native?: boolean
+          is_tree?: boolean
           scientific_name?: string | null
           type: string
           updated_at?: string
@@ -124,6 +557,7 @@ export type Database = {
           is_endangered?: boolean
           is_invasive?: boolean
           is_native?: boolean
+          is_tree?: boolean
           scientific_name?: string | null
           type?: string
           updated_at?: string
@@ -338,6 +772,7 @@ export type Database = {
           custom_name: string | null
           id: string
           notes: string | null
+          photo_path: string | null
           plant_id: string | null
           planted_on: string
           quantity: number
@@ -350,6 +785,7 @@ export type Database = {
           custom_name?: string | null
           id?: string
           notes?: string | null
+          photo_path?: string | null
           plant_id?: string | null
           planted_on: string
           quantity?: number
@@ -362,6 +798,7 @@ export type Database = {
           custom_name?: string | null
           id?: string
           notes?: string | null
+          photo_path?: string | null
           plant_id?: string | null
           planted_on?: string
           quantity?: number
@@ -432,7 +869,51 @@ export type Database = {
       }
     }
     Functions: {
+      chat_channel_id_from_storage_path: {
+        Args: { p_path: string }
+        Returns: string
+      }
+      chat_create_thread: {
+        Args: {
+          p_body: string
+          p_channel_id: string
+          p_kind?: Database["public"]["Enums"]["chat_message_kind"]
+          p_metadata?: Json
+          p_title?: string
+        }
+        Returns: {
+          root_message_id: string
+          thread_id: string
+        }[]
+      }
+      chat_send_message: {
+        Args: {
+          p_body?: string
+          p_channel_id: string
+          p_kind?: Database["public"]["Enums"]["chat_message_kind"]
+          p_metadata?: Json
+          p_reply_to_message_id?: string
+          p_thread_id?: string
+        }
+        Returns: string
+      }
+      chat_user_can_access_channel: {
+        Args: { p_channel_id: string; p_user_id?: string }
+        Returns: boolean
+      }
+      chat_user_can_access_message: {
+        Args: { p_message_id: string; p_user_id?: string }
+        Returns: boolean
+      }
       delete_my_account: { Args: never; Returns: undefined }
+      event_user_can_access: {
+        Args: { p_event_id: string; p_user_id?: string }
+        Returns: boolean
+      }
+      event_user_in_same_city: {
+        Args: { p_city_id: string; p_user_id?: string }
+        Returns: boolean
+      }
       search_plants: {
         Args: { max_results?: number; search_text: string }
         Returns: {
@@ -445,7 +926,10 @@ export type Database = {
       }
     }
     Enums: {
-      [_ in never]: never
+      chat_attachment_kind: "image" | "gif" | "file"
+      chat_channel_scope: "city" | "team"
+      chat_message_kind: "text" | "image" | "gif" | "system"
+      event_attendance_status: "going" | "waitlist" | "cancelled"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -572,6 +1056,11 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {},
+    Enums: {
+      chat_attachment_kind: ["image", "gif", "file"],
+      chat_channel_scope: ["city", "team"],
+      chat_message_kind: ["text", "image", "gif", "system"],
+      event_attendance_status: ["going", "waitlist", "cancelled"],
+    },
   },
 } as const

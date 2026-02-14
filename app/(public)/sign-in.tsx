@@ -112,7 +112,7 @@ export default function Page() {
           <View style={styles.header}>
             <View style={styles.logoContainer}>
               <Image
-                source={require("@/assets/icon.png")}
+                source={require("@/assets/icon_nobg.png")}
                 style={styles.logo}
                 resizeMode="contain"
               />
