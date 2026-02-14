@@ -8,10 +8,14 @@
     "start": "expo start",
     "android": "expo run:android",
     "ios": "expo run:ios",
-    "lint": "expo lint . --fix"
+    "lint": "expo lint . --fix",
+    "supabase:start": "supabase start",
+    "supabase:status": "supabase status -o env",
+    "supabase:stop": "supabase stop"
   },
   "dependencies": {
     "@expo-google-fonts/boogaloo": "^0.4.1",
+    "@expo/vector-icons": "^15.0.3",
     "@react-native-async-storage/async-storage": "2.2.0",
     "@rnmapbox/maps": "^10.2.10",
     "@supabase/supabase-js": "^2.55.0",
@@ -49,6 +53,7 @@
     "eslint-config-prettier": "^10.1.8",
     "eslint-plugin-prettier": "^5.5.4",
     "prettier": "^3.6.2",
+    "supabase": "^2.76.8",
     "typescript": "~5.9.2"
   },
   "private": true

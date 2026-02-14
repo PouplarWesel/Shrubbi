@@ -5,4 +5,5 @@ export const COLORS = {
   primary: "#bff4fd",
   secondary: "#a9d0c6",
   accent: "#072900",
+  warning: "#ff4d4d",
 } as const;

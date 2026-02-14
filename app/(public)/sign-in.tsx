@@ -2,7 +2,9 @@ import { useState } from "react";
 import {
   ActivityIndicator,
   Alert,
+  KeyboardAvoidingView,
   Pressable,
+  Platform,
   ScrollView,
   StyleSheet,
   Text,
@@ -94,139 +96,147 @@ export default function Page() {
         <View style={[styles.blob, styles.blob2]} />
       </View>
 
-      <ScrollView
-        automaticallyAdjustsScrollIndicatorInsets
-        contentInsetAdjustmentBehavior="automatic"
-        contentContainerStyle={styles.scrollContent}
-        showsVerticalScrollIndicator={false}
+      <KeyboardAvoidingView
+        style={styles.keyboardContainer}
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
+        keyboardVerticalOffset={Platform.OS === "ios" ? 12 : 0}
       >
-        <View style={styles.header}>
-          <View style={styles.logoContainer}>
-            <Image
-              source={require("@/assets/icon.png")}
-              style={styles.logo}
-              resizeMode="contain"
-            />
-          </View>
-          <Text style={styles.title}>Welcome Back</Text>
-          <Text style={styles.subtitle}>
-            Sign in to continue growing with Shrubbi
-          </Text>
-        </View>
-
-        <View style={styles.formContainer}>
-          <View style={styles.inputGroup}>
-            <Text style={styles.label}>Email Address</Text>
-            <View style={styles.inputWrapper}>
-              <Ionicons
-                name="mail-outline"
-                size={20}
-                color={COLORS.secondary}
-                style={styles.inputIcon}
-              />
-              <TextInput
-                autoCapitalize="none"
-                autoCorrect={false}
-                keyboardType="email-address"
-                placeholder="you@example.com"
-                placeholderTextColor={COLORS.secondary + "80"}
-                style={styles.input}
-                value={email}
-                onChangeText={setEmail}
+        <ScrollView
+          automaticallyAdjustsScrollIndicatorInsets
+          contentInsetAdjustmentBehavior="automatic"
+          contentContainerStyle={styles.scrollContent}
+          keyboardDismissMode="on-drag"
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+        >
+          <View style={styles.header}>
+            <View style={styles.logoContainer}>
+              <Image
+                source={require("@/assets/icon.png")}
+                style={styles.logo}
+                resizeMode="contain"
               />
             </View>
+            <Text style={styles.title}>Welcome Back</Text>
+            <Text style={styles.subtitle}>
+              Sign in to continue growing with Shrubbi
+            </Text>
           </View>
 
-          <View style={styles.inputGroup}>
-            <Text style={styles.label}>Password</Text>
-            <View style={styles.inputWrapper}>
-              <Ionicons
-                name="lock-closed-outline"
-                size={20}
-                color={COLORS.secondary}
-                style={styles.inputIcon}
-              />
-              <TextInput
-                placeholder="Enter password"
-                placeholderTextColor={COLORS.secondary + "80"}
-                secureTextEntry={!showPassword}
-                style={[styles.input, styles.passwordInput]}
-                value={password}
-                onChangeText={setPassword}
-              />
-              <Pressable
-                onPress={() => setShowPassword((prev) => !prev)}
-                style={styles.toggleButton}
-              >
+          <View style={styles.formContainer}>
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>Email Address</Text>
+              <View style={styles.inputWrapper}>
                 <Ionicons
-                  name={showPassword ? "eye-off-outline" : "eye-outline"}
-                  size={22}
+                  name="mail-outline"
+                  size={20}
+                  color={COLORS.secondary}
+                  style={styles.inputIcon}
+                />
+                <TextInput
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  keyboardType="email-address"
+                  placeholder="you@example.com"
+                  placeholderTextColor={COLORS.secondary + "80"}
+                  style={styles.input}
+                  value={email}
+                  onChangeText={setEmail}
+                />
+              </View>
+            </View>
+
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>Password</Text>
+              <View style={styles.inputWrapper}>
+                <Ionicons
+                  name="lock-closed-outline"
+                  size={20}
+                  color={COLORS.secondary}
+                  style={styles.inputIcon}
+                />
+                <TextInput
+                  placeholder="Enter password"
+                  placeholderTextColor={COLORS.secondary + "80"}
+                  secureTextEntry={!showPassword}
+                  style={[styles.input, styles.passwordInput]}
+                  value={password}
+                  onChangeText={setPassword}
+                />
+                <Pressable
+                  onPress={() => setShowPassword((prev) => !prev)}
+                  style={styles.toggleButton}
+                >
+                  <Ionicons
+                    name={showPassword ? "eye-off-outline" : "eye-outline"}
+                    size={22}
+                    color={COLORS.secondary}
+                  />
+                </Pressable>
+              </View>
+            </View>
+
+            <Pressable
+              onPress={onForgotPasswordPress}
+              style={styles.forgotPassword}
+            >
+              <Text style={styles.forgotPasswordText}>Forgot password?</Text>
+            </Pressable>
+
+            {!!resetMessage && (
+              <View style={styles.messageContainer}>
+                <Ionicons
+                  name="information-circle-outline"
+                  size={18}
+                  color={COLORS.text}
+                />
+                <Text style={styles.resetMessage}>{resetMessage}</Text>
+              </View>
+            )}
+
+            {!!errorMessage && (
+              <View style={styles.messageContainer}>
+                <Ionicons
+                  name="alert-circle-outline"
+                  size={18}
                   color={COLORS.secondary}
                 />
-              </Pressable>
-            </View>
+                <Text style={styles.errorMessage}>{errorMessage}</Text>
+              </View>
+            )}
+
+            <Pressable
+              disabled={isDisabled}
+              onPress={onSignInPress}
+              style={({ pressed }) => [
+                styles.primaryButton,
+                isDisabled && styles.disabledButton,
+                pressed && !isDisabled && styles.pressedButton,
+              ]}
+            >
+              {isSubmitting ? (
+                <ActivityIndicator color={COLORS.background} />
+              ) : (
+                <>
+                  <Text style={styles.primaryButtonText}>Continue</Text>
+                  <Ionicons
+                    name="arrow-forward"
+                    size={20}
+                    color={COLORS.background}
+                  />
+                </>
+              )}
+            </Pressable>
           </View>
 
-          <Pressable
-            onPress={onForgotPasswordPress}
-            style={styles.forgotPassword}
-          >
-            <Text style={styles.forgotPasswordText}>Forgot password?</Text>
-          </Pressable>
-
-          {!!resetMessage && (
-            <View style={styles.messageContainer}>
-              <Ionicons
-                name="information-circle-outline"
-                size={18}
-                color={COLORS.text}
-              />
-              <Text style={styles.resetMessage}>{resetMessage}</Text>
-            </View>
-          )}
-
-          {!!errorMessage && (
-            <View style={styles.messageContainer}>
-              <Ionicons
-                name="alert-circle-outline"
-                size={18}
-                color={COLORS.secondary}
-              />
-              <Text style={styles.errorMessage}>{errorMessage}</Text>
-            </View>
-          )}
-
-          <Pressable
-            disabled={isDisabled}
-            onPress={onSignInPress}
-            style={({ pressed }) => [
-              styles.primaryButton,
-              isDisabled && styles.disabledButton,
-              pressed && !isDisabled && styles.pressedButton,
-            ]}
-          >
-            {isSubmitting ? (
-              <ActivityIndicator color={COLORS.background} />
-            ) : (
-              <>
-                <Text style={styles.primaryButtonText}>Continue</Text>
-                <Ionicons
-                  name="arrow-forward"
-                  size={20}
-                  color={COLORS.background}
-                />
-              </>
-            )}
-          </Pressable>
-        </View>
-
-        <View style={styles.footer}>
-          <Text style={styles.linkHint}>Don&apos;t have an account? </Text>
-          <Pressable onPress={() => router.replace("/sign-up")}>
-            <Text style={styles.linkText}>Sign up</Text>
-          </Pressable>
-        </View>
-      </ScrollView>
+          <View style={styles.footer}>
+            <Text style={styles.linkHint}>Don&apos;t have an account? </Text>
+            <Pressable onPress={() => router.replace("/sign-up")}>
+              <Text style={styles.linkText}>Sign up</Text>
+            </Pressable>
+          </View>
+        </ScrollView>
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }
@@ -235,6 +245,9 @@ const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
     backgroundColor: COLORS.background,
+  },
+  keyboardContainer: {
+    flex: 1,
   },
   backgroundDecoration: {
     ...StyleSheet.absoluteFillObject,
@@ -261,6 +274,7 @@ const styles = StyleSheet.create({
   scrollContent: {
     padding: 24,
     paddingTop: 60,
+    paddingBottom: 28,
     flexGrow: 1,
   },
   header: {

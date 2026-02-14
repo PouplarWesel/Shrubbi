@@ -37,6 +37,9 @@ npm-cache/
 # local env files
 .env
 
+# supabase migrations
+supabase/migrations/
+
 # typescript
 *.tsbuildinfo
 

@@ -1,5 +1,13 @@
 import { useState } from "react";
-import { Alert, Pressable, StyleSheet, Text, View, Dimensions, Image } from "react-native";
+import {
+  Alert,
+  Pressable,
+  StyleSheet,
+  Text,
+  View,
+  Dimensions,
+  Image,
+} from "react-native";
 
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
@@ -100,7 +108,8 @@ export default function Page() {
         <View style={styles.mainCard}>
           <Text style={styles.cardTitle}>Daily Tip</Text>
           <Text style={styles.cardText}>
-            Succulents love bright, indirect sunlight. Make sure yours are getting enough light today!
+            Succulents love bright, indirect sunlight. Make sure yours are
+            getting enough light today!
           </Text>
           <Pressable style={styles.cardButton}>
             <Text style={styles.cardButtonText}>Learn More</Text>
@@ -125,7 +134,11 @@ export default function Page() {
             ]}
             onPress={handleSignOut}
           >
-            <Ionicons name="log-out-outline" size={20} color={COLORS.secondary} />
+            <Ionicons
+              name="log-out-outline"
+              size={20}
+              color={COLORS.secondary}
+            />
             <Text style={styles.signOutText}>Logout</Text>
           </Pressable>
           <Pressable

@@ -1,4 +1,11 @@
-import { Pressable, StyleSheet, Text, View, Dimensions, Image } from "react-native";
+import {
+  Pressable,
+  StyleSheet,
+  Text,
+  View,
+  Dimensions,
+  Image,
+} from "react-native";
 
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
@@ -54,7 +61,9 @@ export default function Page() {
           ]}
           onPress={() => router.push("/sign-in")}
         >
-          <Text style={styles.secondaryButtonText}>I already have an account</Text>
+          <Text style={styles.secondaryButtonText}>
+            I already have an account
+          </Text>
         </Pressable>
       </View>
     </SafeAreaView>

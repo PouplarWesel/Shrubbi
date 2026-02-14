@@ -119,9 +119,7 @@ export default function Page() {
               />
             </View>
             <Text style={styles.title}>Verify Account</Text>
-            <Text style={styles.subtitle}>
-              Enter the code sent to {email}
-            </Text>
+            <Text style={styles.subtitle}>Enter the code sent to {email}</Text>
           </View>
 
           <View style={styles.formContainer}>

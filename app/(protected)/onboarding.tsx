@@ -29,9 +29,14 @@ type CityOption = {
   id: string;
   name: string;
   region: string | null;
-  state: string | null;
-  country: string | null;
   country_code: string;
+};
+
+type TeamOption = {
+  id: string;
+  name: string;
+  description: string | null;
+  city_id: string;
 };
 
 type PermissionState = "undetermined" | "granted" | "denied" | "unavailable";
@@ -70,12 +75,15 @@ const requestCameraPermissionState = async (): Promise<PermissionState> => {
 
 export default function OnboardingPage() {
   const { session, supabase } = useSupabase();
-  const [step, setStep] = useState(0); // 0: Profile, 1: Permissions, 2: City
+  const [step, setStep] = useState(0); // 0: Profile, 1: Permissions, 2: City, 3: Group
   const [fullName, setFullName] = useState("");
   const [displayName, setDisplayName] = useState("");
   const [selectedCityId, setSelectedCityId] = useState<string | null>(null);
   const [cities, setCities] = useState<CityOption[]>([]);
   const [citySearch, setCitySearch] = useState("");
+  const [teams, setTeams] = useState<TeamOption[]>([]);
+  const [selectedTeamId, setSelectedTeamId] = useState<string | null>(null);
+  const [joinedTeamIds, setJoinedTeamIds] = useState<string[]>([]);
   const [locationPermission, setLocationPermission] =
     useState<PermissionState>("undetermined");
   const [cameraPermission, setCameraPermission] =
@@ -94,6 +102,7 @@ export default function OnboardingPage() {
   const [hasTriedAutoCity, setHasTriedAutoCity] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
+  const [isJoiningGroup, setIsJoiningGroup] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
   const [isKeyboardVisible, setKeyboardVisible] = useState(false);
 
@@ -154,7 +163,7 @@ export default function OnboardingPage() {
           .maybeSingle(),
         supabase
           .from("cities")
-          .select("id, name, region, state, country, country_code")
+          .select("id, name, region, country_code")
           .order("name", { ascending: true }),
       ]);
 
@@ -186,10 +195,9 @@ export default function OnboardingPage() {
         score += 5;
       }
 
-      const cityState = city.state ?? city.region;
       if (
         detectedStateName &&
-        normalizeValue(cityState) === normalizeValue(detectedStateName)
+        normalizeValue(city.region) === normalizeValue(detectedStateName)
       ) {
         score += 2;
       }
@@ -310,8 +318,7 @@ export default function OnboardingPage() {
         cities.find(
           (city) =>
             normalizeValue(city.name) === normalizeValue(detectedCity) &&
-            (normalizeValue(city.state) === normalizeValue(detectedState) ||
-              normalizeValue(city.region) === normalizeValue(detectedState)),
+            normalizeValue(city.region) === normalizeValue(detectedState),
         ) ??
         cities.find(
           (city) => normalizeValue(city.name) === normalizeValue(detectedCity),
@@ -320,7 +327,7 @@ export default function OnboardingPage() {
       if (matchingCity) {
         setSelectedCityId(matchingCity.id);
         setLocationHintMessage(
-          `Detected ${matchingCity.name}${matchingCity.state ? `, ${matchingCity.state}` : ""}.`,
+          `Detected ${matchingCity.name}${matchingCity.region ? `, ${matchingCity.region}` : ""}.`,
         );
         return;
       }
@@ -374,35 +381,75 @@ export default function OnboardingPage() {
         return;
       }
 
-      router.replace("/(protected)/(tabs)");
+      const [{ data: teamsData }, { data: membershipsData }] =
+        await Promise.all([
+          supabase
+            .from("teams")
+            .select("id, name, description, city_id")
+            .eq("city_id", selectedCityId)
+            .order("name", { ascending: true }),
+          supabase
+            .from("team_memberships")
+            .select("team_id")
+            .eq("user_id", userId),
+        ]);
+
+      const normalizedTeams = (teamsData ?? []) as TeamOption[];
+      setTeams(normalizedTeams);
+      setJoinedTeamIds((membershipsData ?? []).map((m) => m.team_id));
+      setSelectedTeamId((current) => {
+        if (current) return current;
+        if (normalizedTeams.length === 0) return null;
+        return normalizedTeams[0].id;
+      });
+      setStep(3);
     } finally {
       setIsSaving(false);
     }
   };
 
-  const headerIconName =
-    step === 0
-      ? "person-circle-outline"
-      : step === 1
-        ? "shield-checkmark-outline"
-        : "location-outline";
+  const onFinishOnboarding = async () => {
+    const userId = session?.user?.id;
+    if (!userId || isJoiningGroup) return;
+
+    try {
+      setErrorMessage("");
+      setIsJoiningGroup(true);
+
+      if (selectedTeamId && !joinedTeamIds.includes(selectedTeamId)) {
+        const { error } = await supabase.from("team_memberships").insert({
+          user_id: userId,
+          team_id: selectedTeamId,
+        });
+        if (error) {
+          setErrorMessage("Could not join team. You can join later in Social.");
+          return;
+        }
+      }
+
+      router.replace("/(protected)/(tabs)");
+    } finally {
+      setIsJoiningGroup(false);
+    }
+  };
 
   const headerTitle =
-    step === 0 ? "About You" : step === 1 ? "Permissions" : "Your Location";
+    step === 0
+      ? "About You"
+      : step === 1
+        ? "Permissions"
+        : step === 2
+          ? "Your Location"
+          : "Join a Group";
 
   const headerSubtitle =
     step === 0
       ? "Help us personalize your experience"
       : step === 1
         ? "Allow what you want. Everything here is optional."
-        : "We'll suggest nearby cities, then you can adjust.";
-
-  const permissionStateLabel = (state: PermissionState) => {
-    if (state === "granted") return "Allowed";
-    if (state === "denied") return "Denied";
-    if (state === "unavailable") return "Unavailable";
-    return "Not requested";
-  };
+        : step === 2
+          ? "We'll suggest nearby cities, then you can adjust."
+          : "Join a local group now, or skip and do it later in Social.";
 
   if (isLoading) {
     return (
@@ -521,7 +568,11 @@ export default function OnboardingPage() {
                     <Ionicons
                       name="locate-outline"
                       size={24}
-                      color={locationPermission === "granted" ? COLORS.primary : COLORS.secondary}
+                      color={
+                        locationPermission === "granted"
+                          ? COLORS.primary
+                          : COLORS.secondary
+                      }
                     />
                   </View>
                   <View style={styles.permissionTextContent}>
@@ -535,11 +586,16 @@ export default function OnboardingPage() {
                     disabled={locationPermission === "granted"}
                     style={[
                       styles.permissionAction,
-                      locationPermission === "granted" && styles.permissionActionGranted,
+                      locationPermission === "granted" &&
+                        styles.permissionActionGranted,
                     ]}
                   >
                     {locationPermission === "granted" ? (
-                      <Ionicons name="checkmark-circle" size={24} color={COLORS.primary} />
+                      <Ionicons
+                        name="checkmark-circle"
+                        size={24}
+                        color={COLORS.primary}
+                      />
                     ) : (
                       <Text style={styles.permissionActionText}>Allow</Text>
                     )}
@@ -551,7 +607,11 @@ export default function OnboardingPage() {
                     <Ionicons
                       name="camera-outline"
                       size={24}
-                      color={cameraPermission === "granted" ? COLORS.primary : COLORS.secondary}
+                      color={
+                        cameraPermission === "granted"
+                          ? COLORS.primary
+                          : COLORS.secondary
+                      }
                     />
                   </View>
                   <View style={styles.permissionTextContent}>
@@ -565,11 +625,16 @@ export default function OnboardingPage() {
                     disabled={cameraPermission === "granted"}
                     style={[
                       styles.permissionAction,
-                      cameraPermission === "granted" && styles.permissionActionGranted,
+                      cameraPermission === "granted" &&
+                        styles.permissionActionGranted,
                     ]}
                   >
                     {cameraPermission === "granted" ? (
-                      <Ionicons name="checkmark-circle" size={24} color={COLORS.primary} />
+                      <Ionicons
+                        name="checkmark-circle"
+                        size={24}
+                        color={COLORS.primary}
+                      />
                     ) : (
                       <Text style={styles.permissionActionText}>Allow</Text>
                     )}
@@ -581,11 +646,17 @@ export default function OnboardingPage() {
                     <Ionicons
                       name="notifications-outline"
                       size={24}
-                      color={notificationPermission === "granted" ? COLORS.primary : COLORS.secondary}
+                      color={
+                        notificationPermission === "granted"
+                          ? COLORS.primary
+                          : COLORS.secondary
+                      }
                     />
                   </View>
                   <View style={styles.permissionTextContent}>
-                    <Text style={styles.permissionItemTitle}>Notifications</Text>
+                    <Text style={styles.permissionItemTitle}>
+                      Notifications
+                    </Text>
                     <Text style={styles.permissionItemDescription}>
                       Stay updated with your garden.
                     </Text>
@@ -595,11 +666,16 @@ export default function OnboardingPage() {
                     disabled={notificationPermission === "granted"}
                     style={[
                       styles.permissionAction,
-                      notificationPermission === "granted" && styles.permissionActionGranted,
+                      notificationPermission === "granted" &&
+                        styles.permissionActionGranted,
                     ]}
                   >
                     {notificationPermission === "granted" ? (
-                      <Ionicons name="checkmark-circle" size={24} color={COLORS.primary} />
+                      <Ionicons
+                        name="checkmark-circle"
+                        size={24}
+                        color={COLORS.primary}
+                      />
                     ) : (
                       <Text style={styles.permissionActionText}>Allow</Text>
                     )}
@@ -627,7 +703,7 @@ export default function OnboardingPage() {
                 </Pressable>
               </View>
             </View>
-          ) : (
+          ) : step === 2 ? (
             <View style={styles.formContainer}>
               <View style={styles.inputGroup}>
                 <View style={styles.inputWrapper}>
@@ -677,11 +753,7 @@ export default function OnboardingPage() {
                       <View style={styles.cityInfo}>
                         <Text style={styles.cityName}>
                           {item.name}
-                          {item.state
-                            ? `, ${item.state}`
-                            : item.region
-                              ? `, ${item.region}`
-                              : ""}
+                          {item.region ? `, ${item.region}` : ""}
                         </Text>
                         <Text style={styles.cityCountry}>
                           {item.country_code}
@@ -736,9 +808,9 @@ export default function OnboardingPage() {
                       <ActivityIndicator color={COLORS.background} />
                     ) : (
                       <>
-                        <Text style={styles.primaryButtonText}>Finish</Text>
+                        <Text style={styles.primaryButtonText}>Next</Text>
                         <Ionicons
-                          name="checkmark-done"
+                          name="arrow-forward"
                           size={20}
                           color={COLORS.background}
                         />
@@ -747,6 +819,97 @@ export default function OnboardingPage() {
                   </Pressable>
                 </View>
               )}
+            </View>
+          ) : (
+            <View style={styles.formContainer}>
+              <View style={styles.permissionsList}>
+                <Text style={styles.permissionItemTitle}>Join a Group</Text>
+                <Text style={styles.permissionItemDescription}>
+                  Pick a local team to connect with people in your city.
+                </Text>
+
+                {teams.length === 0 ? (
+                  <Text style={styles.permissionItemDescription}>
+                    No teams found in your city yet. You can create or join
+                    later in Social.
+                  </Text>
+                ) : (
+                  teams.map((team) => {
+                    const isSelected = selectedTeamId === team.id;
+                    const isJoined = joinedTeamIds.includes(team.id);
+                    return (
+                      <Pressable
+                        key={team.id}
+                        onPress={() => setSelectedTeamId(team.id)}
+                        style={[
+                          styles.cityItem,
+                          isSelected && styles.cityItemSelected,
+                        ]}
+                      >
+                        <View style={styles.cityInfo}>
+                          <Text style={styles.cityName}>{team.name}</Text>
+                          {!!team.description && (
+                            <Text style={styles.cityCountry}>
+                              {team.description}
+                            </Text>
+                          )}
+                        </View>
+                        {isJoined ? (
+                          <Text style={styles.cityCountry}>Joined</Text>
+                        ) : isSelected ? (
+                          <Ionicons
+                            name="checkmark-circle"
+                            size={24}
+                            color={COLORS.primary}
+                          />
+                        ) : null}
+                      </Pressable>
+                    );
+                  })
+                )}
+              </View>
+
+              {!!errorMessage && (
+                <View style={styles.messageContainer}>
+                  <Ionicons
+                    name="alert-circle-outline"
+                    size={18}
+                    color={COLORS.secondary}
+                  />
+                  <Text style={styles.errorMessage}>{errorMessage}</Text>
+                </View>
+              )}
+
+              <View style={styles.footerButtons}>
+                <Pressable
+                  onPress={() => setStep(2)}
+                  style={[styles.primaryButton, styles.secondaryButton]}
+                >
+                  <Text style={styles.secondaryButtonText}>Back</Text>
+                </Pressable>
+                <Pressable
+                  disabled={isJoiningGroup}
+                  onPress={onFinishOnboarding}
+                  style={[
+                    styles.primaryButton,
+                    styles.flex,
+                    isJoiningGroup && styles.disabledButton,
+                  ]}
+                >
+                  {isJoiningGroup ? (
+                    <ActivityIndicator color={COLORS.background} />
+                  ) : (
+                    <>
+                      <Text style={styles.primaryButtonText}>Finish</Text>
+                      <Ionicons
+                        name="checkmark-done"
+                        size={20}
+                        color={COLORS.background}
+                      />
+                    </>
+                  )}
+                </Pressable>
+              </View>
             </View>
           )}
         </View>

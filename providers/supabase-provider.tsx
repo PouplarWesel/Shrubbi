@@ -22,11 +22,13 @@ export const SupabaseProvider = ({ children }: SupabaseProviderProps) => {
       setIsLoaded(true);
     });
 
-    const { data: listener } = supabase.auth.onAuthStateChange((_event, newSession) => {
-      if (!isMounted) return;
-      setSession(newSession);
-      setIsLoaded(true);
-    });
+    const { data: listener } = supabase.auth.onAuthStateChange(
+      (_event, newSession) => {
+        if (!isMounted) return;
+        setSession(newSession);
+        setIsLoaded(true);
+      },
+    );
 
     return () => {
       isMounted = false;
