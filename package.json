@@ -26,6 +26,7 @@
     "@rnmapbox/maps": "^10.2.10",
     "@supabase/supabase-js": "^2.55.0",
     "expo": "^54.0.0",
+    "expo-blur": "~15.0.8",
     "expo-camera": "~17.0.10",
     "expo-checkbox": "~5.0.8",
     "expo-constants": "~18.0.7",
