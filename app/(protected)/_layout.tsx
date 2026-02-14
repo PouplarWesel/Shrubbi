@@ -21,6 +21,21 @@ export default function ProtectedLayout() {
           headerShown: false,
         }}
       />
+      <Stack.Screen
+        name="add-plant"
+        options={{
+          headerShown: true,
+          title: "Add Plant",
+          headerStyle: { backgroundColor: "#000f0d" },
+          headerTintColor: "#bff4fd",
+        }}
+      />
+      <Stack.Screen
+        name="plant/[id]"
+        options={{
+          headerShown: false,
+        }}
+      />
     </Stack>
   );
 }

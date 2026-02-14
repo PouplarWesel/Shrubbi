@@ -6,7 +6,14 @@ module.exports = defineConfig([
   expoConfig,
   eslintPluginPrettierRecommended,
   {
-    ignores: ["dist/*", "**/supabase/database.types.ts"],
+    // Windows path separators sometimes prevent the ignore glob from matching.
+    ignores: [
+      "dist/*",
+      "supabase/database.types.ts",
+      "supabase\\database.types.ts",
+      "**/supabase/database.types.ts",
+      "**\\supabase\\database.types.ts",
+    ],
     rules: {
       "prettier/prettier": [
         "error",

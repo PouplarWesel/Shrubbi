@@ -16,7 +16,8 @@ export default function TabsLayout() {
           bottom: 24,
           left: 20,
           right: 20,
-          backgroundColor: Platform.OS === "ios" ? "transparent" : COLORS.background + "E6",
+          backgroundColor:
+            Platform.OS === "ios" ? "transparent" : COLORS.background + "E6",
           borderRadius: 24,
           height: 64,
           borderTopWidth: 0,
@@ -44,7 +45,9 @@ export default function TabsLayout() {
         options={{
           title: "Home",
           tabBarIcon: ({ color, focused }) => (
-            <View style={[styles.iconWrapper, focused && styles.activeIconWrapper]}>
+            <View
+              style={[styles.iconWrapper, focused && styles.activeIconWrapper]}
+            >
               <Ionicons
                 name={focused ? "home" : "home-outline"}
                 size={24}
@@ -59,9 +62,28 @@ export default function TabsLayout() {
         options={{
           title: "Social",
           tabBarIcon: ({ color, focused }) => (
-            <View style={[styles.iconWrapper, focused && styles.activeIconWrapper]}>
+            <View
+              style={[styles.iconWrapper, focused && styles.activeIconWrapper]}
+            >
               <Ionicons
                 name={focused ? "people" : "people-outline"}
+                size={24}
+                color={color}
+              />
+            </View>
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="plants"
+        options={{
+          title: "Plants",
+          tabBarIcon: ({ color, focused }) => (
+            <View
+              style={[styles.iconWrapper, focused && styles.activeIconWrapper]}
+            >
+              <Ionicons
+                name={focused ? "leaf" : "leaf-outline"}
                 size={24}
                 color={color}
               />
