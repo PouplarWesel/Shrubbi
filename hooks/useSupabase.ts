@@ -18,15 +18,14 @@ export const useSupabase = (): UseSupabaseProps => {
 
   useEffect(() => {
     if (!supabase) return;
-    supabase.auth.getSession().then(({ data }) => {
-      setSession(data.session);
-      setIsLoaded(true);
-    });
+
     const { data: listener } = supabase.auth.onAuthStateChange(
       (_event, newSession) => {
         setSession(newSession);
+        setIsLoaded(true);
       },
     );
+
     return () => {
       listener.subscription.unsubscribe();
     };
