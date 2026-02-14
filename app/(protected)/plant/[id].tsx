@@ -24,7 +24,20 @@ import {
   getFileExtension,
   readImageUriAsBlob,
 } from "@/lib/imageUpload";
-import { computePlantPoints, formatPlantPoints } from "@/lib/plantPoints";
+import {
+  computePlantPoints,
+  formatPlantPoints,
+  WATERING_POINTS_PER_PLANT,
+} from "@/lib/plantPoints";
+import {
+  formatWaterDays,
+  formatWaterTime,
+  getLatestScheduledAt,
+  isValidWaterTimeInput,
+  normalizeWaterDays,
+  normalizeWaterTimeForInput,
+  WEEKDAY_OPTIONS,
+} from "@/lib/wateringSchedule";
 
 function takeOne<T>(value: T | T[] | null | undefined): T | null {
   if (!value) return null;
@@ -50,6 +63,10 @@ type PlantDetailRow = {
   planted_on: string;
   photo_path: string | null;
   custom_name: string | null;
+  water_days: number[] | null;
+  water_time: string | null;
+  last_watered_at: string | null;
+  watering_points: number | null;
   plant: PlantCatalogRow | PlantCatalogRow[] | null;
 };
 
@@ -68,6 +85,9 @@ export default function PlantDetailPage() {
   const [errorMessage, setErrorMessage] = useState("");
   const [plant, setPlant] = useState<PlantDetailRow | null>(null);
   const [photoUrl, setPhotoUrl] = useState<string | null>(null);
+  const [waterDaysDraft, setWaterDaysDraft] = useState<number[]>([]);
+  const [waterTimeDraft, setWaterTimeDraft] = useState("");
+  const [isSavingSchedule, setIsSavingSchedule] = useState(false);
 
   const userId = session?.user?.id ?? null;
   const userPlantId = typeof id === "string" ? id : null;
@@ -75,7 +95,8 @@ export default function PlantDetailPage() {
   const points = useMemo(() => {
     const quantity = plant?.quantity ?? 1;
     const flags = takeOne(plant?.plant) ?? {};
-    return computePlantPoints(flags, quantity);
+    const basePoints = computePlantPoints(flags, quantity);
+    return basePoints + (plant?.watering_points ?? 0);
   }, [plant]);
 
   const load = useCallback(async () => {
@@ -86,7 +107,7 @@ export default function PlantDetailPage() {
     const { data, error } = await supabase
       .from("user_plants")
       .select(
-        "id, user_id, plant_id, quantity, planted_on, photo_path, custom_name, plant:plants(common_name, scientific_name, type, plant_type:plant_types(display_name), is_native, is_endangered, is_invasive)",
+        "id, user_id, plant_id, quantity, planted_on, photo_path, custom_name, water_days, water_time, last_watered_at, watering_points, plant:plants(common_name, scientific_name, type, plant_type:plant_types(display_name), is_native, is_endangered, is_invasive)",
       )
       .eq("id", userPlantId)
       .eq("user_id", userId)
@@ -139,14 +160,154 @@ export default function PlantDetailPage() {
     setNameDraft(plant?.custom_name || plantRow?.common_name || "");
   }, [isEditingName, plant]);
 
+  useEffect(() => {
+    setWaterDaysDraft(normalizeWaterDays(plant?.water_days));
+    setWaterTimeDraft(normalizeWaterTimeForInput(plant?.water_time));
+  }, [plant?.water_days, plant?.water_time]);
+
+  const onToggleWaterDay = (dayValue: number) => {
+    setWaterDaysDraft((prev) => {
+      if (prev.includes(dayValue)) {
+        return prev.filter((day) => day !== dayValue);
+      }
+
+      return [...prev, dayValue].sort((a, b) => a - b);
+    });
+    setErrorMessage("");
+  };
+
+  const onSaveWaterSchedule = async () => {
+    if (!userId || !userPlantId || !plant || isSavingSchedule) return;
+
+    const normalizedDays = normalizeWaterDays(waterDaysDraft);
+    const normalizedTime = waterTimeDraft.trim();
+
+    if (!normalizedDays.length) {
+      setErrorMessage("Select at least one day to water this plant.");
+      return;
+    }
+
+    if (!isValidWaterTimeInput(normalizedTime)) {
+      setErrorMessage("Enter a valid time in 24-hour format (HH:MM).");
+      return;
+    }
+
+    setErrorMessage("");
+    setIsSavingSchedule(true);
+
+    const nextWaterTime = `${normalizedTime}:00`;
+    const { error } = await supabase
+      .from("user_plants")
+      .update({ water_days: normalizedDays, water_time: nextWaterTime })
+      .eq("id", userPlantId)
+      .eq("user_id", userId);
+
+    if (error) {
+      setErrorMessage(error.message);
+      setIsSavingSchedule(false);
+      return;
+    }
+
+    setPlant((prev) =>
+      prev
+        ? {
+            ...prev,
+            water_days: normalizedDays,
+            water_time: nextWaterTime,
+          }
+        : prev,
+    );
+    setIsSavingSchedule(false);
+  };
+
+  const onClearWaterSchedule = async () => {
+    if (!userId || !userPlantId || !plant || isSavingSchedule) return;
+
+    setErrorMessage("");
+    setIsSavingSchedule(true);
+
+    const { error } = await supabase
+      .from("user_plants")
+      .update({ water_days: null, water_time: null })
+      .eq("id", userPlantId)
+      .eq("user_id", userId);
+
+    if (error) {
+      setErrorMessage(error.message);
+      setIsSavingSchedule(false);
+      return;
+    }
+
+    setPlant((prev) =>
+      prev
+        ? {
+            ...prev,
+            water_days: null,
+            water_time: null,
+          }
+        : prev,
+    );
+    setWaterDaysDraft([]);
+    setWaterTimeDraft("");
+    setIsSavingSchedule(false);
+  };
+
+  const onMarkWatered = async () => {
+    if (!userId || !userPlantId || !plant || isSavingSchedule) return;
+    const latestScheduleForMark = getLatestScheduledAt(
+      plant.water_days,
+      plant.water_time,
+    );
+    const canMarkNow =
+      !!latestScheduleForMark &&
+      (!plant.last_watered_at ||
+        new Date(plant.last_watered_at).getTime() <
+          latestScheduleForMark.getTime());
+    if (!canMarkNow) {
+      setErrorMessage(
+        "This plant is not due for watering yet. Set a schedule and wait until it is due.",
+      );
+      return;
+    }
+
+    const nowIso = new Date().toISOString();
+    const nextWateringPoints =
+      (plant.watering_points ?? 0) +
+      (plant.quantity ?? 1) * WATERING_POINTS_PER_PLANT;
+
+    setErrorMessage("");
+    setIsSavingSchedule(true);
+
+    const { error } = await supabase
+      .from("user_plants")
+      .update({
+        last_watered_at: nowIso,
+        watering_points: nextWateringPoints,
+      })
+      .eq("id", userPlantId)
+      .eq("user_id", userId);
+
+    if (error) {
+      setErrorMessage(error.message);
+      setIsSavingSchedule(false);
+      return;
+    }
+
+    setPlant((prev) =>
+      prev
+        ? {
+            ...prev,
+            last_watered_at: nowIso,
+            watering_points: nextWateringPoints,
+          }
+        : prev,
+    );
+    setIsSavingSchedule(false);
+  };
+
   const onStartEditName = () => {
     setErrorMessage("");
     setIsEditingName(true);
-  };
-
-  const onCancelEditName = () => {
-    setErrorMessage("");
-    setIsEditingName(false);
   };
 
   const onSaveName = async () => {
@@ -178,7 +339,11 @@ export default function PlantDetailPage() {
   };
 
   const uploadPlantPhotoAsset = useCallback(
-    async (source: { uri: string; mimeType?: string | null; base64?: string | null }) => {
+    async (source: {
+      uri: string;
+      mimeType?: string | null;
+      base64?: string | null;
+    }) => {
       if (!userId || !userPlantId || isUploading) return;
       setErrorMessage("");
       setIsUploading(true);
@@ -218,7 +383,7 @@ export default function PlantDetailPage() {
 
         setPlant((prev) => (prev ? { ...prev, photo_path: objectPath } : prev));
         await loadPhotoUrl(objectPath);
-      } catch (error) {
+      } catch {
         setErrorMessage("Could not upload photo.");
       } finally {
         setIsUploading(false);
@@ -239,12 +404,20 @@ export default function PlantDetailPage() {
     });
     if (result.canceled || !result.assets.length) return;
     const [asset] = result.assets;
-    await uploadPlantPhotoAsset({ uri: asset.uri, mimeType: asset.mimeType, base64: asset.base64 });
+    await uploadPlantPhotoAsset({
+      uri: asset.uri,
+      mimeType: asset.mimeType,
+      base64: asset.base64,
+    });
   };
 
   const onOpenCamera = () => setIsCameraOpen(true);
   const onCameraClose = () => setIsCameraOpen(false);
-  const onCameraCapture = (uri: string, mimeType: string, base64?: string | null) => {
+  const onCameraCapture = (
+    uri: string,
+    mimeType: string,
+    base64?: string | null,
+  ) => {
     void uploadPlantPhotoAsset({ uri, mimeType, base64 });
     setIsCameraOpen(false);
   };
@@ -290,6 +463,22 @@ export default function PlantDetailPage() {
       plantRow.type ??
       "Unknown")
     : "Custom";
+  const savedScheduleText =
+    plant?.water_days?.length && plant?.water_time
+      ? `${formatWaterDays(plant.water_days)} at ${formatWaterTime(plant.water_time)}`
+      : "No watering schedule set yet.";
+  const latestScheduledAt = getLatestScheduledAt(
+    plant?.water_days,
+    plant?.water_time,
+  );
+  const isWateringDue =
+    !!latestScheduledAt &&
+    (!plant?.last_watered_at ||
+      new Date(plant.last_watered_at).getTime() < latestScheduledAt.getTime());
+  const canMarkWatered = isWateringDue && !isSavingSchedule;
+  const lastWateredLabel = plant?.last_watered_at
+    ? new Date(plant.last_watered_at).toLocaleString()
+    : "Never";
 
   return (
     <View style={styles.container}>
@@ -328,7 +517,9 @@ export default function PlantDetailPage() {
               <Ionicons name="pencil" size={18} color={COLORS.secondary} />
             </Pressable>
           )}
-          {scientificName && <Text style={styles.scientificName}>{scientificName}</Text>}
+          {scientificName && (
+            <Text style={styles.scientificName}>{scientificName}</Text>
+          )}
           <View style={styles.typeBadge}>
             <Text style={styles.typeText}>{typeLabel}</Text>
           </View>
@@ -340,17 +531,28 @@ export default function PlantDetailPage() {
           ) : (
             <View style={styles.photoPlaceholder}>
               <Ionicons name="leaf" size={64} color={COLORS.accent} />
-              <Text style={styles.photoPlaceholderText}>Add a photo of your {displayName}</Text>
+              <Text style={styles.photoPlaceholderText}>
+                Add a photo of your {displayName}
+              </Text>
             </View>
           )}
           <View style={styles.photoActions}>
             <Pressable style={styles.photoActionButton} onPress={onOpenCamera}>
-              <LinearGradient colors={[COLORS.primary, COLORS.secondary]} style={styles.actionGradient}>
+              <LinearGradient
+                colors={[COLORS.primary, COLORS.secondary]}
+                style={styles.actionGradient}
+              >
                 <Ionicons name="camera" size={24} color={COLORS.background} />
               </LinearGradient>
             </Pressable>
-            <Pressable style={styles.photoActionButton} onPress={onPickAndUploadFromLibrary}>
-              <LinearGradient colors={[COLORS.primary, COLORS.secondary]} style={styles.actionGradient}>
+            <Pressable
+              style={styles.photoActionButton}
+              onPress={onPickAndUploadFromLibrary}
+            >
+              <LinearGradient
+                colors={[COLORS.primary, COLORS.secondary]}
+                style={styles.actionGradient}
+              >
                 <Ionicons name="images" size={24} color={COLORS.background} />
               </LinearGradient>
             </Pressable>
@@ -374,6 +576,111 @@ export default function PlantDetailPage() {
             <Text style={styles.cardTitle}>Planted On</Text>
           </View>
           <Text style={styles.cardContent}>{plant?.planted_on}</Text>
+        </View>
+
+        <View style={styles.card}>
+          <View style={styles.cardHeader}>
+            <Ionicons name="water" size={20} color={COLORS.primary} />
+            <Text style={styles.cardTitle}>Watering Schedule</Text>
+          </View>
+          <Text style={styles.scheduleHint}>
+            Choose the days and time this plant should be watered each week.
+          </Text>
+          <View style={styles.weekdayRow}>
+            {WEEKDAY_OPTIONS.map((day) => {
+              const isSelected = waterDaysDraft.includes(day.value);
+              return (
+                <Pressable
+                  key={day.value}
+                  onPress={() => onToggleWaterDay(day.value)}
+                  style={[
+                    styles.weekdayChip,
+                    isSelected && styles.weekdayChipSelected,
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.weekdayChipText,
+                      isSelected && styles.weekdayChipTextSelected,
+                    ]}
+                  >
+                    {day.label}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
+
+          <View style={styles.timeInputRow}>
+            <Text style={styles.timeInputLabel}>Time (24-hour)</Text>
+            <TextInput
+              value={waterTimeDraft}
+              onChangeText={(value) => {
+                setWaterTimeDraft(value);
+                setErrorMessage("");
+              }}
+              placeholder="08:30"
+              placeholderTextColor={COLORS.secondary + "80"}
+              style={styles.timeInput}
+              keyboardType="numbers-and-punctuation"
+              autoCapitalize="none"
+              autoCorrect={false}
+              maxLength={5}
+            />
+          </View>
+
+          <Text style={styles.scheduleSavedText}>
+            Saved: {savedScheduleText}
+          </Text>
+          <Text style={styles.scheduleSavedText}>
+            Last watered: {lastWateredLabel}
+          </Text>
+          <Text style={styles.scheduleSavedText}>
+            Watering points: {plant?.watering_points ?? 0} pts
+          </Text>
+          <Text style={styles.scheduleSavedText}>
+            Status: {isWateringDue ? "Due now" : "Up to date"}
+          </Text>
+
+          <View style={styles.scheduleActions}>
+            <Pressable
+              onPress={onSaveWaterSchedule}
+              disabled={isSavingSchedule}
+              style={[
+                styles.scheduleActionButton,
+                isSavingSchedule && styles.scheduleActionButtonDisabled,
+              ]}
+            >
+              {isSavingSchedule ? (
+                <ActivityIndicator size="small" color={COLORS.background} />
+              ) : (
+                <Text style={styles.scheduleActionButtonText}>
+                  Save Schedule
+                </Text>
+              )}
+            </Pressable>
+            <Pressable
+              onPress={onMarkWatered}
+              disabled={!canMarkWatered}
+              style={[
+                styles.scheduleActionButton,
+                styles.markWateredButton,
+                !canMarkWatered && styles.scheduleActionButtonDisabled,
+              ]}
+            >
+              <Text style={styles.scheduleActionButtonText}>Mark Watered</Text>
+            </Pressable>
+            <Pressable
+              onPress={onClearWaterSchedule}
+              disabled={isSavingSchedule}
+              style={[
+                styles.scheduleSecondaryButton,
+                isSavingSchedule && styles.scheduleActionButtonDisabled,
+              ]}
+            >
+              <Text style={styles.scheduleSecondaryButtonText}>Clear</Text>
+            </Pressable>
+          </View>
         </View>
 
         {!!errorMessage && (
@@ -579,6 +886,103 @@ const styles = StyleSheet.create({
     color: COLORS.primary,
     fontSize: 20,
     fontFamily: "Boogaloo_400Regular",
+  },
+  scheduleHint: {
+    color: COLORS.text,
+    fontSize: 14,
+    fontFamily: "Boogaloo_400Regular",
+    opacity: 0.7,
+  },
+  weekdayRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+  },
+  weekdayChip: {
+    minWidth: 48,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: COLORS.secondary + "35",
+    backgroundColor: COLORS.accent + "30",
+    alignItems: "center",
+  },
+  weekdayChipSelected: {
+    backgroundColor: COLORS.primary,
+    borderColor: COLORS.primary,
+  },
+  weekdayChipText: {
+    color: COLORS.primary,
+    fontSize: 14,
+    fontFamily: "Boogaloo_400Regular",
+  },
+  weekdayChipTextSelected: {
+    color: COLORS.background,
+  },
+  timeInputRow: {
+    gap: 8,
+  },
+  timeInputLabel: {
+    color: COLORS.text,
+    fontSize: 14,
+    fontFamily: "Boogaloo_400Regular",
+    opacity: 0.75,
+  },
+  timeInput: {
+    minHeight: 50,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: COLORS.secondary + "35",
+    backgroundColor: COLORS.accent + "35",
+    paddingHorizontal: 14,
+    color: COLORS.primary,
+    fontSize: 18,
+    fontFamily: "Boogaloo_400Regular",
+  },
+  scheduleSavedText: {
+    color: COLORS.secondary,
+    fontSize: 14,
+    fontFamily: "Boogaloo_400Regular",
+  },
+  scheduleActions: {
+    flexDirection: "row",
+    gap: 10,
+  },
+  scheduleActionButton: {
+    flex: 1,
+    minHeight: 46,
+    borderRadius: 14,
+    backgroundColor: COLORS.primary,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 12,
+  },
+  scheduleActionButtonText: {
+    color: COLORS.background,
+    fontSize: 16,
+    fontFamily: "Boogaloo_400Regular",
+  },
+  scheduleSecondaryButton: {
+    minHeight: 46,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: COLORS.secondary + "45",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 16,
+    backgroundColor: COLORS.background,
+  },
+  scheduleSecondaryButtonText: {
+    color: COLORS.secondary,
+    fontSize: 16,
+    fontFamily: "Boogaloo_400Regular",
+  },
+  scheduleActionButtonDisabled: {
+    opacity: 0.6,
+  },
+  markWateredButton: {
+    backgroundColor: COLORS.secondary,
   },
   errorBox: {
     flexDirection: "row",

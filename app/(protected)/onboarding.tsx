@@ -29,6 +29,7 @@ type CityOption = {
   id: string;
   name: string;
   region: string | null;
+  state: string | null;
   country_code: string;
 };
 
@@ -82,6 +83,7 @@ export default function OnboardingPage() {
   const [cities, setCities] = useState<CityOption[]>([]);
   const [citySearch, setCitySearch] = useState("");
   const [teams, setTeams] = useState<TeamOption[]>([]);
+  const [teamSearch, setTeamSearch] = useState("");
   const [selectedTeamId, setSelectedTeamId] = useState<string | null>(null);
   const [joinedTeamIds, setJoinedTeamIds] = useState<string[]>([]);
   const [locationPermission, setLocationPermission] =
@@ -163,7 +165,7 @@ export default function OnboardingPage() {
           .maybeSingle(),
         supabase
           .from("cities")
-          .select("id, name, region, country_code")
+          .select("id, name, region, state, country_code")
           .order("name", { ascending: true }),
       ]);
 
@@ -238,6 +240,17 @@ export default function OnboardingPage() {
     detectedStateName,
     detectedCountryCode,
   ]);
+
+  const filteredTeams = useMemo(() => {
+    const query = teamSearch.trim().toLowerCase();
+    if (!query) return teams;
+
+    return teams.filter((team) => {
+      const name = team.name.toLowerCase();
+      const desc = (team.description ?? "").toLowerCase();
+      return name.includes(query) || desc.includes(query);
+    });
+  }, [teamSearch, teams]);
 
   const onNextStep = () => {
     if (!fullName.trim()) {
@@ -399,8 +412,11 @@ export default function OnboardingPage() {
       setJoinedTeamIds((membershipsData ?? []).map((m) => m.team_id));
       setSelectedTeamId((current) => {
         if (current) return current;
-        if (normalizedTeams.length === 0) return null;
-        return normalizedTeams[0].id;
+        const joined = (membershipsData ?? []).map((m) => m.team_id);
+        const joinedMatch = normalizedTeams.find((team) =>
+          joined.includes(team.id),
+        );
+        return joinedMatch?.id ?? null;
       });
       setStep(3);
     } finally {
@@ -822,7 +838,7 @@ export default function OnboardingPage() {
             </View>
           ) : (
             <View style={styles.formContainer}>
-              <View style={styles.permissionsList}>
+              <View style={[styles.permissionsList, styles.groupsContainer]}>
                 <Text style={styles.permissionItemTitle}>Join a Group</Text>
                 <Text style={styles.permissionItemDescription}>
                   Pick a local team to connect with people in your city.
@@ -834,38 +850,75 @@ export default function OnboardingPage() {
                     later in Social.
                   </Text>
                 ) : (
-                  teams.map((team) => {
-                    const isSelected = selectedTeamId === team.id;
-                    const isJoined = joinedTeamIds.includes(team.id);
-                    return (
-                      <Pressable
-                        key={team.id}
-                        onPress={() => setSelectedTeamId(team.id)}
-                        style={[
-                          styles.cityItem,
-                          isSelected && styles.cityItemSelected,
-                        ]}
-                      >
-                        <View style={styles.cityInfo}>
-                          <Text style={styles.cityName}>{team.name}</Text>
-                          {!!team.description && (
-                            <Text style={styles.cityCountry}>
-                              {team.description}
-                            </Text>
-                          )}
+                  <>
+                    <View style={styles.inputGroup}>
+                      <View style={styles.inputWrapper}>
+                        <Ionicons
+                          name="search-outline"
+                          size={20}
+                          color={COLORS.secondary}
+                          style={styles.inputIcon}
+                        />
+                        <TextInput
+                          placeholder="Search teams..."
+                          placeholderTextColor={COLORS.secondary + "80"}
+                          style={styles.input}
+                          value={teamSearch}
+                          onChangeText={setTeamSearch}
+                        />
+                      </View>
+                    </View>
+
+                    <FlatList
+                      data={filteredTeams}
+                      keyExtractor={(item) => item.id}
+                      style={styles.cityList}
+                      contentContainerStyle={styles.groupListContent}
+                      showsVerticalScrollIndicator={false}
+                      keyboardShouldPersistTaps="handled"
+                      keyboardDismissMode="on-drag"
+                      renderItem={({ item }) => {
+                        const isSelected = selectedTeamId === item.id;
+                        const isJoined = joinedTeamIds.includes(item.id);
+                        return (
+                          <Pressable
+                            onPress={() =>
+                              setSelectedTeamId((current) =>
+                                current === item.id ? null : item.id,
+                              )
+                            }
+                            style={[
+                              styles.cityItem,
+                              isSelected && styles.cityItemSelected,
+                            ]}
+                          >
+                            <View style={styles.cityInfo}>
+                              <Text style={styles.cityName}>{item.name}</Text>
+                              {!!item.description && (
+                                <Text style={styles.cityCountry}>
+                                  {item.description}
+                                </Text>
+                              )}
+                            </View>
+                            {isJoined ? (
+                              <Text style={styles.cityCountry}>Joined</Text>
+                            ) : isSelected ? (
+                              <Ionicons
+                                name="checkmark-circle"
+                                size={24}
+                                color={COLORS.primary}
+                              />
+                            ) : null}
+                          </Pressable>
+                        );
+                      }}
+                      ListEmptyComponent={
+                        <View style={styles.emptyContainer}>
+                          <Text style={styles.emptyText}>No teams found.</Text>
                         </View>
-                        {isJoined ? (
-                          <Text style={styles.cityCountry}>Joined</Text>
-                        ) : isSelected ? (
-                          <Ionicons
-                            name="checkmark-circle"
-                            size={24}
-                            color={COLORS.primary}
-                          />
-                        ) : null}
-                      </Pressable>
-                    );
-                  })
+                      }
+                    />
+                  </>
                 )}
               </View>
 
@@ -880,36 +933,40 @@ export default function OnboardingPage() {
                 </View>
               )}
 
-              <View style={styles.footerButtons}>
-                <Pressable
-                  onPress={() => setStep(2)}
-                  style={[styles.primaryButton, styles.secondaryButton]}
-                >
-                  <Text style={styles.secondaryButtonText}>Back</Text>
-                </Pressable>
-                <Pressable
-                  disabled={isJoiningGroup}
-                  onPress={onFinishOnboarding}
-                  style={[
-                    styles.primaryButton,
-                    styles.flex,
-                    isJoiningGroup && styles.disabledButton,
-                  ]}
-                >
-                  {isJoiningGroup ? (
-                    <ActivityIndicator color={COLORS.background} />
-                  ) : (
-                    <>
-                      <Text style={styles.primaryButtonText}>Finish</Text>
-                      <Ionicons
-                        name="checkmark-done"
-                        size={20}
-                        color={COLORS.background}
-                      />
-                    </>
-                  )}
-                </Pressable>
-              </View>
+              {!isKeyboardVisible && (
+                <View style={styles.footerButtons}>
+                  <Pressable
+                    onPress={() => setStep(2)}
+                    style={[styles.primaryButton, styles.secondaryButton]}
+                  >
+                    <Text style={styles.secondaryButtonText}>Back</Text>
+                  </Pressable>
+                  <Pressable
+                    disabled={isJoiningGroup}
+                    onPress={onFinishOnboarding}
+                    style={[
+                      styles.primaryButton,
+                      styles.flex,
+                      isJoiningGroup && styles.disabledButton,
+                    ]}
+                  >
+                    {isJoiningGroup ? (
+                      <ActivityIndicator color={COLORS.background} />
+                    ) : (
+                      <>
+                        <Text style={styles.primaryButtonText}>
+                          {selectedTeamId ? "Join & Finish" : "Finish"}
+                        </Text>
+                        <Ionicons
+                          name="checkmark-done"
+                          size={20}
+                          color={COLORS.background}
+                        />
+                      </>
+                    )}
+                  </Pressable>
+                </View>
+              )}
             </View>
           )}
         </View>
@@ -1012,6 +1069,9 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: COLORS.secondary + "10",
   },
+  groupsContainer: {
+    flex: 1,
+  },
   permissionItem: {
     flexDirection: "row",
     alignItems: "center",
@@ -1096,6 +1156,9 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     borderWidth: 1,
     borderColor: COLORS.secondary + "10",
+  },
+  groupListContent: {
+    paddingBottom: 8,
   },
   cityItem: {
     flexDirection: "row",

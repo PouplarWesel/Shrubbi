@@ -4,6 +4,8 @@ export type PlantPointFlags = {
   is_invasive?: boolean | null;
 };
 
+export const WATERING_POINTS_PER_PLANT = 10;
+
 // Points are derived from plant attributes stored in the DB.
 // Base: 15 points for adding a plant.
 // Native bonus: +5 (static).

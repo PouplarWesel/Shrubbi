@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -16,7 +16,7 @@ import {
   BottomSheetScrollView,
 } from "@gorhom/bottom-sheet";
 import { Ionicons } from "@expo/vector-icons";
-import { router } from "expo-router";
+import { router, useFocusEffect } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { CameraCapture } from "@/components/CameraCapture";
@@ -24,6 +24,7 @@ import { SettingsSection } from "@/components/Settings";
 import type { SettingsSectionHandle } from "@/components/Settings";
 import { COLORS } from "@/constants/colors";
 import { useSupabase } from "@/hooks/useSupabase";
+import { isDueToWaterNow } from "@/lib/wateringSchedule";
 
 const { width } = Dimensions.get("window");
 const FALLBACK_DAILY_TIP =
@@ -43,6 +44,13 @@ type TipHistoryRow = {
   tip_text: string;
 };
 
+type PlantScheduleRow = {
+  quantity: number;
+  water_days: number[] | null;
+  water_time: string | null;
+  last_watered_at: string | null;
+};
+
 const formatTipDate = (tipDate: string) => {
   const localDate = new Date(`${tipDate}T00:00:00`);
 
@@ -59,11 +67,14 @@ export default function Page() {
   const insets = useSafeAreaInsets();
   const [isDeleting, setIsDeleting] = useState(false);
   const [isCameraOpen, setIsCameraOpen] = useState(false);
+  const [profileName, setProfileName] = useState<string | null>(null);
   const [dailyTipText, setDailyTipText] = useState(FALLBACK_DAILY_TIP);
   const [isDailyTipLoading, setIsDailyTipLoading] = useState(true);
   const [tipHistoryRows, setTipHistoryRows] = useState<TipHistoryRow[]>([]);
   const [isTipHistoryLoading, setIsTipHistoryLoading] = useState(false);
   const [tipHistoryError, setTipHistoryError] = useState("");
+  const [plantTotal, setPlantTotal] = useState(0);
+  const [toWaterTotal, setToWaterTotal] = useState(0);
   const settingsBottomSheetModalRef = useRef<BottomSheetModal>(null);
   const tipsHistoryBottomSheetModalRef = useRef<BottomSheetModal>(null);
   const settingsSnapPoints = useMemo(() => ["72%", "95%"], []);
@@ -117,6 +128,7 @@ export default function Page() {
 
   const handleOpenSettings = () => {
     settingsBottomSheetModalRef.current?.present();
+    settingsBottomSheetModalRef.current?.snapToIndex(0);
   };
 
   const handleRequestCamera = () => {
@@ -137,6 +149,35 @@ export default function Page() {
   };
 
   const userId = session?.user?.id ?? null;
+
+  useEffect(() => {
+    if (!isLoaded || !userId) return;
+    let isCancelled = false;
+
+    const loadProfileName = async () => {
+      const { data, error } = await supabase
+        .from("profiles")
+        .select("full_name, display_name")
+        .eq("id", userId)
+        .maybeSingle();
+
+      if (isCancelled) return;
+      if (error) {
+        setProfileName(null);
+        return;
+      }
+
+      const nextName =
+        data?.full_name?.trim() || data?.display_name?.trim() || null;
+      setProfileName(nextName);
+    };
+
+    void loadProfileName();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [isLoaded, supabase, userId]);
 
   const loadTipHistory = async () => {
     if (!isLoaded || !userId) {
@@ -172,6 +213,70 @@ export default function Page() {
     tipsHistoryBottomSheetModalRef.current?.present();
     void loadTipHistory();
   };
+
+  const loadPlantStats = useCallback(async () => {
+    if (!isLoaded || !userId) {
+      setPlantTotal(0);
+      setToWaterTotal(0);
+      return;
+    }
+
+    const { data, error } = await supabase
+      .from("user_plants")
+      .select("quantity, water_days, water_time, last_watered_at")
+      .eq("user_id", userId);
+
+    if (error) {
+      setPlantTotal(0);
+      setToWaterTotal(0);
+      return;
+    }
+
+    const rows = (data ?? []) as PlantScheduleRow[];
+    const now = new Date();
+
+    let nextPlantTotal = 0;
+    let nextToWaterTotal = 0;
+
+    for (const row of rows) {
+      const quantity = row.quantity ?? 0;
+      nextPlantTotal += quantity;
+
+      if (
+        isDueToWaterNow(
+          row.water_days,
+          row.water_time,
+          row.last_watered_at,
+          now,
+        )
+      ) {
+        nextToWaterTotal += quantity;
+      }
+    }
+
+    setPlantTotal(nextPlantTotal);
+    setToWaterTotal(nextToWaterTotal);
+  }, [isLoaded, supabase, userId]);
+
+  useEffect(() => {
+    void loadPlantStats();
+  }, [loadPlantStats]);
+
+  useFocusEffect(
+    useCallback(() => {
+      void loadPlantStats();
+    }, [loadPlantStats]),
+  );
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      void loadPlantStats();
+    }, 60 * 1000);
+
+    return () => {
+      clearInterval(interval);
+    };
+  }, [loadPlantStats]);
 
   useEffect(() => {
     if (!isLoaded) return;
@@ -238,7 +343,8 @@ export default function Page() {
 
   const todayKey = formatLocalDate(new Date());
   const userEmail = session?.user?.email || "Gardener";
-  const userName = userEmail.split("@")[0];
+  const fallbackName = userEmail.split("@")[0];
+  const userName = profileName || fallbackName;
 
   return (
     <BottomSheetModalProvider>
@@ -278,12 +384,12 @@ export default function Page() {
           <View style={styles.statsContainer}>
             <View style={styles.statCard}>
               <Ionicons name="leaf-outline" size={24} color={COLORS.primary} />
-              <Text style={styles.statValue}>12</Text>
+              <Text style={styles.statValue}>{plantTotal}</Text>
               <Text style={styles.statLabel}>Plants</Text>
             </View>
             <View style={styles.statCard}>
               <Ionicons name="water-outline" size={24} color={COLORS.primary} />
-              <Text style={styles.statValue}>3</Text>
+              <Text style={styles.statValue}>{toWaterTotal}</Text>
               <Text style={styles.statLabel}>To Water</Text>
             </View>
           </View>
@@ -351,8 +457,11 @@ export default function Page() {
           ref={settingsBottomSheetModalRef}
           index={0}
           snapPoints={settingsSnapPoints}
-          enableDismissOnClose={false}
+          enableDismissOnClose
           enablePanDownToClose
+          keyboardBehavior="interactive"
+          keyboardBlurBehavior="restore"
+          android_keyboardInputMode="adjustResize"
           backgroundStyle={styles.bottomSheetBackground}
           handleIndicatorStyle={styles.bottomSheetHandle}
         >
@@ -361,10 +470,19 @@ export default function Page() {
               styles.bottomSheetContent,
               { paddingBottom: Math.max(insets.bottom, 24) },
             ]}
+            keyboardShouldPersistTaps="handled"
+            keyboardDismissMode="on-drag"
           >
             <SettingsSection
               ref={settingsRef}
               onRequestCamera={handleRequestCamera}
+              onProfileSaved={(profile) => {
+                const nextName =
+                  profile.full_name.trim() ||
+                  profile.display_name.trim() ||
+                  null;
+                setProfileName(nextName);
+              }}
             />
           </BottomSheetScrollView>
         </BottomSheetModal>

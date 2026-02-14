@@ -14,12 +14,12 @@ import {
   Pressable,
   StyleSheet,
   Text,
-  TextInput,
   View,
 } from "react-native";
 
 import { Ionicons } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
+import { BottomSheetTextInput } from "@gorhom/bottom-sheet";
 
 import { COLORS } from "@/constants/colors";
 import { useSupabase } from "@/hooks/useSupabase";
@@ -39,6 +39,11 @@ type SettingsStatus = {
 
 type SettingsSectionProps = {
   onRequestCamera?: () => void;
+  onProfileSaved?: (profile: {
+    full_name: string;
+    display_name: string;
+    city_id: string | null;
+  }) => void;
 };
 
 export type SettingsSectionHandle = {
@@ -133,7 +138,7 @@ const decodeBase64ToBytes = (value: string) => {
 };
 
 const SettingsSectionComponent = (
-  { onRequestCamera }: SettingsSectionProps,
+  { onRequestCamera, onProfileSaved }: SettingsSectionProps,
   ref: ForwardedRef<SettingsSectionHandle>,
 ) => {
   const { session, supabase } = useSupabase();
@@ -425,6 +430,12 @@ const SettingsSectionComponent = (
         return;
       }
 
+      onProfileSaved?.({
+        full_name: normalizedFullName,
+        display_name: normalizedDisplayName || normalizedFullName,
+        city_id: resolvedCityId,
+      });
+
       if (resolvedCityId) {
         const updatedCity = cities.find((city) => city.id === resolvedCityId);
         if (updatedCity) {
@@ -555,7 +566,7 @@ const SettingsSectionComponent = (
                 color={COLORS.secondary}
                 style={styles.inputIcon}
               />
-              <TextInput
+              <BottomSheetTextInput
                 value={fullName}
                 onChangeText={(value) => {
                   setFullName(value);
@@ -577,7 +588,7 @@ const SettingsSectionComponent = (
                 color={COLORS.secondary}
                 style={styles.inputIcon}
               />
-              <TextInput
+              <BottomSheetTextInput
                 value={displayName}
                 onChangeText={(value) => {
                   setDisplayName(value);
@@ -599,7 +610,7 @@ const SettingsSectionComponent = (
                 color={COLORS.secondary}
                 style={styles.inputIcon}
               />
-              <TextInput
+              <BottomSheetTextInput
                 value={locationQuery}
                 onChangeText={onLocationChange}
                 placeholder="Search city..."

@@ -19,6 +19,9 @@ import { computePlantPoints, formatPlantPoints } from "@/lib/plantPoints";
 
 const { width } = Dimensions.get("window");
 const COLUMN_WIDTH = (width - 40 - 12) / 2;
+const BRONZE = "#CD7F32";
+const SILVER = "#C0C0C0";
+const GOLD = "#D4AF37";
 
 function takeOne<T>(value: T | T[] | null | undefined): T | null {
   if (!value) return null;
@@ -43,6 +46,7 @@ type UserPlantRow = {
   quantity: number;
   planted_on: string;
   notes: string | null;
+  watering_points: number | null;
   plant: PlantCatalogRow | PlantCatalogRow[] | null;
 };
 
@@ -63,7 +67,7 @@ export default function PlantsPage() {
     const { data, error } = await supabase
       .from("user_plants")
       .select(
-        "id, plant_id, custom_name, quantity, planted_on, notes, plant:plants(common_name, scientific_name, type, plant_type:plant_types(display_name), is_native, is_endangered, is_invasive)",
+        "id, plant_id, custom_name, quantity, planted_on, notes, watering_points, plant:plants(common_name, scientific_name, type, plant_type:plant_types(display_name), is_native, is_endangered, is_invasive)",
       )
       .eq("user_id", userId)
       .order("planted_on", { ascending: false });
@@ -88,6 +92,21 @@ export default function PlantsPage() {
     () => plants.reduce((sum, plant) => sum + plant.quantity, 0),
     [plants],
   );
+  const totalPoints = useMemo(
+    () =>
+      plants.reduce((sum, item) => {
+        const plant = takeOne(item.plant);
+        const basePoints = computePlantPoints(plant ?? {}, item.quantity);
+        const wateringPoints = item.watering_points ?? 0;
+        return sum + basePoints + wateringPoints;
+      }, 0),
+    [plants],
+  );
+  const levelInfo = useMemo(() => {
+    if (totalPoints >= 500) return { level: 3, tier: "Gold", color: GOLD };
+    if (totalPoints >= 100) return { level: 2, tier: "Silver", color: SILVER };
+    return { level: 1, tier: "Bronze", color: BRONZE };
+  }, [totalPoints]);
 
   const getPlantIcon = (type?: string | null) => {
     const t = type?.toLowerCase() || "";
@@ -116,10 +135,17 @@ export default function PlantsPage() {
             <Text style={styles.subtitle}>
               Blooming with {plantCount} {plantCount === 1 ? "plant" : "plants"}
             </Text>
+            <Text style={styles.pointsSummary}>
+              Total points: {formatPlantPoints(totalPoints)} pts
+            </Text>
           </View>
-          <View style={styles.statBadge}>
+          <View
+            style={[styles.statBadge, { borderColor: levelInfo.color + "60" }]}
+          >
             <Ionicons name="trophy" size={16} color={COLORS.primary} />
-            <Text style={styles.statText}>Lvl 1</Text>
+            <Text style={styles.statText}>
+              Lvl {levelInfo.level} {levelInfo.tier}
+            </Text>
           </View>
         </View>
 
@@ -144,8 +170,14 @@ export default function PlantsPage() {
           </View>
         ) : plants.length === 0 ? (
           <View style={styles.emptyContainer}>
-            <Ionicons name="leaf-outline" size={64} color={COLORS.secondary + "40"} />
-            <Text style={styles.emptyText}>Your garden is waiting for its first seeds.</Text>
+            <Ionicons
+              name="leaf-outline"
+              size={64}
+              color={COLORS.secondary + "40"}
+            />
+            <Text style={styles.emptyText}>
+              Your garden is waiting for its first seeds.
+            </Text>
             <Pressable
               style={styles.emptyAddButton}
               onPress={() => router.push("/(protected)/add-plant")}
@@ -166,7 +198,8 @@ export default function PlantsPage() {
                   "Unknown")
                 : "Custom";
               const points = computePlantPoints(plant ?? {}, item.quantity);
-              
+              const totalPlantPoints = points + (item.watering_points ?? 0);
+
               return (
                 <Pressable
                   key={item.id}
@@ -189,7 +222,7 @@ export default function PlantsPage() {
                         color={COLORS.primary}
                       />
                     </View>
-                    
+
                     <View style={styles.cardInfo}>
                       <Text style={styles.plantName} numberOfLines={1}>
                         {displayName}
@@ -197,13 +230,13 @@ export default function PlantsPage() {
                       <Text style={styles.plantType} numberOfLines={1}>
                         {typeLabel}
                       </Text>
-                      
+
                       <View style={styles.cardFooter}>
                         <View style={styles.qtyBadge}>
                           <Text style={styles.qtyText}>x{item.quantity}</Text>
                         </View>
                         <Text style={styles.pointsText}>
-                          {formatPlantPoints(points)} pts
+                          {formatPlantPoints(totalPlantPoints)} pts
                         </Text>
                       </View>
                     </View>
@@ -257,6 +290,12 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontFamily: "Boogaloo_400Regular",
     opacity: 0.8,
+  },
+  pointsSummary: {
+    color: COLORS.secondary,
+    fontSize: 16,
+    fontFamily: "Boogaloo_400Regular",
+    opacity: 0.9,
   },
   statBadge: {
     flexDirection: "row",

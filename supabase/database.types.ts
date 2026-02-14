@@ -778,6 +778,10 @@ export type Database = {
           quantity: number
           updated_at: string
           user_id: string
+          last_watered_at: string | null
+          water_days: number[] | null
+          watering_points: number
+          water_time: string | null
         }
         Insert: {
           co2_kg_per_year_override?: number | null
@@ -791,6 +795,10 @@ export type Database = {
           quantity?: number
           updated_at?: string
           user_id: string
+          last_watered_at?: string | null
+          water_days?: number[] | null
+          watering_points?: number
+          water_time?: string | null
         }
         Update: {
           co2_kg_per_year_override?: number | null
@@ -804,6 +812,10 @@ export type Database = {
           quantity?: number
           updated_at?: string
           user_id?: string
+          last_watered_at?: string | null
+          water_days?: number[] | null
+          watering_points?: number
+          water_time?: string | null
         }
         Relationships: [
           {
