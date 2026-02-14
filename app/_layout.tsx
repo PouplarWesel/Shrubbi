@@ -1,5 +1,7 @@
 import { useEffect } from "react";
 
+import { Boogaloo_400Regular } from "@expo-google-fonts/boogaloo";
+import { useFonts } from "expo-font";
 import { Stack } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 
@@ -23,12 +25,17 @@ export default function RootLayout() {
 
 function RootNavigator() {
   const { isLoaded, session } = useSupabase();
+  const [fontsLoaded] = useFonts({
+    Boogaloo_400Regular,
+  });
 
   useEffect(() => {
-    if (isLoaded) {
+    if (isLoaded && fontsLoaded) {
       SplashScreen.hide();
     }
-  }, [isLoaded]);
+  }, [fontsLoaded, isLoaded]);
+
+  if (!isLoaded || !fontsLoaded) return null;
 
   return (
     <Stack
