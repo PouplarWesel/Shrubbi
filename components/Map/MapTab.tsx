@@ -42,6 +42,7 @@ type CityMapStatsRow = {
   bbox_sw_lon: number | null;
   bbox_ne_lat: number | null;
   bbox_ne_lon: number | null;
+  boundary_geojson?: unknown;
   member_count: number | null;
   total_plants: number | null;
   total_co2_removed_kg: number | null;
@@ -80,6 +81,28 @@ const sortBreakdown = (breakdown: Record<string, unknown>) => {
     .map(([key, val]) => ({ key, value: safeNumber(val) }))
     .filter((row) => row.value > 0)
     .sort((a, b) => b.value - a.value);
+};
+
+type GeoJSONPolygonGeometry =
+  | { type: "Polygon"; coordinates: unknown }
+  | { type: "MultiPolygon"; coordinates: unknown };
+
+const pickBoundaryGeometry = (
+  value: unknown,
+): GeoJSONPolygonGeometry | null => {
+  if (!value || typeof value !== "object") return null;
+  const maybeFeature = value as { type?: unknown; geometry?: unknown };
+  const geometry =
+    maybeFeature.type === "Feature" && maybeFeature.geometry
+      ? maybeFeature.geometry
+      : value;
+
+  if (!geometry || typeof geometry !== "object") return null;
+  const g = geometry as { type?: unknown; coordinates?: unknown };
+  if (g.type !== "Polygon" && g.type !== "MultiPolygon") return null;
+  if (!Array.isArray(g.coordinates)) return null;
+
+  return g as GeoJSONPolygonGeometry;
 };
 
 const buildStops = (max: number, colors: string[]) => {
@@ -133,6 +156,7 @@ export default function MapTab() {
             "bbox_sw_lon",
             "bbox_ne_lat",
             "bbox_ne_lon",
+            "boundary_geojson",
             "member_count",
             "total_plants",
             "total_co2_removed_kg",
@@ -186,6 +210,7 @@ export default function MapTab() {
   const featureCollection = useMemo(() => {
     const features = rows
       .filter((row) => {
+        const hasBoundary = Boolean(pickBoundaryGeometry(row.boundary_geojson));
         const hasCenter = row.center_lat != null && row.center_lon != null;
         const hasBox =
           row.bbox_sw_lat != null &&
@@ -193,7 +218,9 @@ export default function MapTab() {
           row.bbox_ne_lat != null &&
           row.bbox_ne_lon != null;
 
-        return Boolean(row.city_id && row.city_name && (hasCenter || hasBox));
+        return Boolean(
+          row.city_id && row.city_name && (hasBoundary || hasCenter || hasBox),
+        );
       })
       .map((row) => {
         const centerLon =
@@ -219,6 +246,8 @@ export default function MapTab() {
               ? safeNumber(row.total_plants)
               : safeNumber(row.member_count);
 
+        const boundaryGeometry = pickBoundaryGeometry(row.boundary_geojson);
+
         return {
           type: "Feature" as const,
           id: row.city_id,
@@ -234,7 +263,7 @@ export default function MapTab() {
             best_plant_type_count: safeNumber(row.best_plant_type_count),
             score,
           },
-          geometry: {
+          geometry: boundaryGeometry ?? {
             type: "Polygon" as const,
             coordinates: [
               [
@@ -386,6 +415,7 @@ export default function MapTab() {
           {/* Base 3D buildings from the style's composite source (nice backdrop for the city overlays). */}
           <FillExtrusionLayer
             id="shrubbi-3d-buildings"
+            existing={false}
             sourceID="composite"
             sourceLayerID="building"
             filter={["==", "extrude", "true"]}
@@ -406,6 +436,7 @@ export default function MapTab() {
           >
             <FillLayer
               id="shrubbi-city-fill"
+              existing={false}
               style={{
                 fillColor: fillColorExpression,
                 fillOpacity: 0.55,
@@ -416,6 +447,7 @@ export default function MapTab() {
             {is3d ? (
               <FillExtrusionLayer
                 id="shrubbi-city-extrusion"
+                existing={false}
                 minZoomLevel={6}
                 style={{
                   fillExtrusionColor: fillColorExpression,
@@ -427,6 +459,7 @@ export default function MapTab() {
 
             <LineLayer
               id="shrubbi-city-outline"
+              existing={false}
               style={{
                 lineColor: COLORS.primary + "B3",
                 lineWidth: [
@@ -444,6 +477,7 @@ export default function MapTab() {
 
             <LineLayer
               id="shrubbi-city-outline-selected"
+              existing={false}
               filter={[
                 "==",
                 ["get", "city_id"],
@@ -466,6 +500,7 @@ export default function MapTab() {
 
             <SymbolLayer
               id="shrubbi-city-label"
+              existing={false}
               minZoomLevel={7}
               style={{
                 textField: ["get", "city_name"],
@@ -533,7 +568,7 @@ export default function MapTab() {
             {isLoading ? (
               <View style={styles.loadingRow}>
                 <ActivityIndicator color={COLORS.primary} />
-                <Text style={styles.loadingText}>Loading city stats…</Text>
+                <Text style={styles.loadingText}>Loading city stats...</Text>
               </View>
             ) : errorMessage ? (
               <Text style={styles.errorText}>{errorMessage}</Text>
@@ -569,7 +604,7 @@ export default function MapTab() {
                   </Text>
                   <Text style={styles.sheetSubtitle}>
                     {selectedCity.city_state
-                      ? `${selectedCity.city_state} • `
+                      ? `${selectedCity.city_state} - `
                       : ""}
                     {selectedCity.country_code ?? "US"}
                   </Text>

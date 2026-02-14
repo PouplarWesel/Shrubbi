@@ -1,4 +1,4 @@
-﻿-- Adds light-weight geometry fields for cities so the app can render per-city overlays on Mapbox.
+-- Adds light-weight geometry fields for cities so the app can render per-city overlays on Mapbox.
 -- These are approximate envelopes for visualization, not legal/administrative boundaries.
 
 alter table public.cities
@@ -846,6 +846,7 @@ select
   c.bbox_sw_lon,
   c.bbox_ne_lat,
   c.bbox_ne_lon,
+  c.boundary_geojson,
   coalesce(cm.member_count, 0)::bigint as member_count,
   coalesce(cp.total_plants, 0)::bigint as total_plants,
   coalesce(cp.total_co2_removed_kg, 0::numeric)::numeric(14,4) as total_co2_removed_kg,

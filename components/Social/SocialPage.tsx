@@ -17,13 +17,14 @@ import {
 
 import { Ionicons } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
-import "react-native-image-keyboard";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { BlurView } from "expo-blur";
 
 import { COLORS } from "@/constants/colors";
 import { useSupabase } from "@/hooks/useSupabase";
 import type { Json } from "@/supabase/database.types";
+
+import "./imageKeyboard";
 
 type TeamRow = {
   id: string;
@@ -2306,6 +2307,187 @@ export default function SocialPage() {
     }
   };
 
+  const uploadWebFileMessage = async (file: File) => {
+    if (Platform.OS !== "web") return;
+    if (!activeChannelId || !userId || isUploadingImage || isSendingMessage) {
+      return;
+    }
+
+    const mimeType = (file.type || "application/octet-stream").toLowerCase();
+    const attachmentKind = mimeType.includes("gif")
+      ? ("gif" as const)
+      : mimeType.startsWith("image/")
+        ? ("image" as const)
+        : null;
+
+    if (!attachmentKind) {
+      setErrorMessage("Only images (including GIFs) are supported here.");
+      return;
+    }
+
+    setErrorMessage("");
+    setIsUploadingImage(true);
+
+    try {
+      const extension = getFileExtension(file.name || "upload", mimeType);
+      const storagePath = `${activeChannelId}/${userId}/${Date.now()}-${Math.random()
+        .toString(36)
+        .slice(2, 8)}.${extension}`;
+
+      const { error: uploadError } = await supabase.storage
+        .from("chat-media")
+        .upload(storagePath, file, {
+          cacheControl: "3600",
+          upsert: false,
+          contentType: mimeType,
+        });
+
+      if (uploadError) {
+        setErrorMessage(uploadError.message);
+        setIsUploadingImage(false);
+        return;
+      }
+
+      const { data: messageId, error: messageError } = await supabase.rpc(
+        "chat_send_message",
+        {
+          p_channel_id: activeChannelId,
+          p_body: composerText.trim() || null,
+          p_kind: attachmentKind,
+          p_thread_id: activeThreadId ?? null,
+          p_reply_to_message_id: replyToMessageId ?? null,
+          p_metadata: {},
+        },
+      );
+
+      if (messageError || !messageId) {
+        setErrorMessage(messageError?.message ?? "Could not create media message.");
+        setIsUploadingImage(false);
+        return;
+      }
+
+      const { data: insertedAttachment, error: attachmentError } = await supabase
+        .from("chat_message_attachments")
+        .insert({
+          message_id: messageId,
+          uploaded_by: userId,
+          kind: attachmentKind,
+          storage_bucket: "chat-media",
+          storage_path: storagePath,
+          mime_type: mimeType,
+          file_size_bytes: Math.max(1, file.size || 1),
+          width: null,
+          height: null,
+        })
+        .select(
+          "id, message_id, kind, storage_bucket, storage_path, mime_type, file_size_bytes, width, height, uploaded_by, created_at",
+        )
+        .single();
+
+      if (attachmentError) {
+        setErrorMessage(attachmentError.message);
+        setIsUploadingImage(false);
+        return;
+      }
+
+      upsertMessageInState({
+        id: messageId,
+        channel_id: activeChannelId,
+        thread_id: activeThreadId ?? null,
+        sender_id: userId,
+        reply_to_message_id: replyToMessageId ?? null,
+        kind: attachmentKind,
+        body: composerText.trim() || null,
+        metadata: {},
+        created_at: new Date().toISOString(),
+        deleted_at: null,
+      });
+
+      if (insertedAttachment) {
+        upsertAttachmentInState(insertedAttachment as ChatAttachmentRow);
+      } else {
+        upsertAttachmentInState({
+          id: `local-${messageId}`,
+          message_id: messageId,
+          uploaded_by: userId,
+          kind: attachmentKind,
+          storage_bucket: "chat-media",
+          storage_path: storagePath,
+          mime_type: mimeType,
+          file_size_bytes: Math.max(1, file.size || 1),
+          width: null,
+          height: null,
+          created_at: new Date().toISOString(),
+        });
+      }
+
+      setComposerText("");
+      setReplyToMessageId(null);
+      setThreadTitleDraft("");
+      setIsThreadMode(false);
+    } catch (error) {
+      setErrorMessage(
+        error instanceof Error ? error.message : "Could not upload image.",
+      );
+    } finally {
+      setIsUploadingImage(false);
+    }
+  };
+
+  const handleWebComposerPaste = useCallback(
+    (event: any) => {
+      if (Platform.OS !== "web") return;
+
+      const clipboardData =
+        event?.clipboardData ?? event?.nativeEvent?.clipboardData;
+
+      const files: FileList | undefined = clipboardData?.files;
+      const firstFile = files && files.length ? files[0] : null;
+      if (firstFile) {
+        event?.preventDefault?.();
+        void uploadWebFileMessage(firstFile);
+        return;
+      }
+
+      const items = clipboardData?.items;
+      if (!items || typeof items.length !== "number") return;
+
+      for (let index = 0; index < items.length; index += 1) {
+        const item = items[index];
+        if (!item) continue;
+        if (item.kind !== "file") continue;
+        if (typeof item.type !== "string") continue;
+        if (!item.type.startsWith("image/")) continue;
+
+        const file = item.getAsFile?.();
+        if (!file) continue;
+        event?.preventDefault?.();
+        void uploadWebFileMessage(file);
+        return;
+      }
+    },
+    [uploadWebFileMessage],
+  );
+
+  const handleWebComposerDrop = useCallback(
+    (event: any) => {
+      if (Platform.OS !== "web") return;
+      const dataTransfer =
+        event?.dataTransfer ?? event?.nativeEvent?.dataTransfer;
+      const file: File | undefined = dataTransfer?.files?.[0];
+      if (!file) return;
+      event?.preventDefault?.();
+      void uploadWebFileMessage(file);
+    },
+    [uploadWebFileMessage],
+  );
+
+  const handleWebComposerDragOver = useCallback((event: any) => {
+    if (Platform.OS !== "web") return;
+    // Required to allow dropping files without the browser navigating away.
+    event?.preventDefault?.();
+  }, []);
+
   const uploadImageMessage = async () => {
     if (!activeChannelId || !userId || isUploadingImage || isSendingMessage) {
       return;
@@ -3041,13 +3223,24 @@ export default function SocialPage() {
 
             <View style={styles.inputRow}>
               <TextInput
-                placeholder="Say something..."
+                placeholder={
+                  Platform.OS === "web"
+                    ? "Say something... (paste or drop an image)"
+                    : "Say something..."
+                }
                 placeholderTextColor={COLORS.text + "60"}
                 value={composerText}
                 onChangeText={setComposerText}
-                onImageChange={(event) =>
-                  void uploadKeyboardMediaMessage(event)
-                }
+                {...(Platform.OS === "web"
+                  ? ({
+                      onPaste: handleWebComposerPaste,
+                      onDrop: handleWebComposerDrop,
+                      onDragOver: handleWebComposerDragOver,
+                    } as any)
+                  : {
+                      onImageChange: (event: KeyboardImageChangeEvent) =>
+                        void uploadKeyboardMediaMessage(event),
+                    })}
                 style={styles.composerInput}
                 multiline
               />
