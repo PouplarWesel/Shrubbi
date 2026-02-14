@@ -12,15 +12,8 @@ import {
 import { router } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 
+import { COLORS } from "@/constants/colors";
 import { useSignUp } from "@/hooks/useSignUp";
-
-const COLORS = {
-  text: "#abd8bd",
-  background: "#000f0d",
-  primary: "#bff4fd",
-  secondary: "#a9d0c6",
-  accent: "#072900",
-};
 
 const getErrorMessage = (err: unknown, fallback: string) => {
   if (

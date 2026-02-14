@@ -3,13 +3,7 @@ import { Pressable, StyleSheet, Text, View } from "react-native";
 import { router } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 
-const COLORS = {
-  text: "#abd8bd",
-  background: "#000f0d",
-  primary: "#bff4fd",
-  secondary: "#a9d0c6",
-  accent: "#072900",
-};
+import { COLORS } from "@/constants/colors";
 
 export default function Page() {
   return (
