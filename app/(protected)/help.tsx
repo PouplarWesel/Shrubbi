@@ -363,9 +363,13 @@ export default function HelpPage() {
                 );
               })}
             </ScrollView>
-            <View style={styles.detailPane}>
+            <ScrollView
+              style={styles.detailPane}
+              contentContainerStyle={styles.detailPaneContent}
+              showsVerticalScrollIndicator={false}
+            >
               <HelpTopicPanel topic={activeTopic} />
-            </View>
+            </ScrollView>
           </View>
         ) : (
           <>
