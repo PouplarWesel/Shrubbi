@@ -32,7 +32,7 @@ export default function Page() {
             resizeMode="contain"
           />
         </View>
-        <Text style={styles.title}>Shrubbi</Text>
+        <Text style={styles.title}>SHRUBBI</Text>
         <Text style={styles.subtitle}>Grow your space with Shrubbi</Text>
         <Text style={styles.description}>
           Your personal companion for a greener, more sustainable lifestyle.

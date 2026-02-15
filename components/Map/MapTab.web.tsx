@@ -1100,26 +1100,30 @@ export default function MapTabWeb() {
         </View>
       </View>
 
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel="Zoom to my location"
-        disabled={isLocating}
-        onPress={handleLocatePress}
-        style={styles.locateButton}
-      >
-        {isLocating ? (
-          <ActivityIndicator color={COLORS.primary} />
-        ) : (
-          <Ionicons name="locate" size={20} color={COLORS.primary} />
-        )}
-      </Pressable>
+      {!selectedCity ? (
+        <>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Zoom to my location"
+            disabled={isLocating}
+            onPress={handleLocatePress}
+            style={styles.locateButton}
+          >
+            {isLocating ? (
+              <ActivityIndicator color={COLORS.primary} />
+            ) : (
+              <Ionicons name="locate" size={20} color={COLORS.primary} />
+            )}
+          </Pressable>
 
-      <View style={styles.globalCounter}>
-        <Text style={styles.globalCounterLabel}>Global CO2 absorbed</Text>
-        <Text style={styles.globalCounterValue}>
-          {formatKg(globalCo2RemovedKg)}
-        </Text>
-      </View>
+          <View style={styles.globalCounter}>
+            <Text style={styles.globalCounterLabel}>Global CO2 absorbed</Text>
+            <Text style={styles.globalCounterValue}>
+              {formatKg(globalCo2RemovedKg)}
+            </Text>
+          </View>
+        </>
+      ) : null}
 
       {selectedCity ? (
         <View style={styles.bottomOverlay}>

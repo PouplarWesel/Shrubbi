@@ -39,6 +39,7 @@ type SettingsStatus = {
 
 type SettingsSectionProps = {
   onRequestCamera?: () => void;
+  onInputFocus?: () => void;
   onProfileSaved?: (profile: {
     full_name: string;
     display_name: string;
@@ -138,7 +139,7 @@ const decodeBase64ToBytes = (value: string) => {
 };
 
 const SettingsSectionComponent = (
-  { onRequestCamera, onProfileSaved }: SettingsSectionProps,
+  { onRequestCamera, onInputFocus, onProfileSaved }: SettingsSectionProps,
   ref: ForwardedRef<SettingsSectionHandle>,
 ) => {
   const { session, supabase } = useSupabase();
@@ -572,6 +573,7 @@ const SettingsSectionComponent = (
                   setFullName(value);
                   setStatus(null);
                 }}
+                onFocus={onInputFocus}
                 placeholder="Jane Doe"
                 placeholderTextColor={COLORS.secondary + "80"}
                 style={styles.input}
@@ -594,6 +596,7 @@ const SettingsSectionComponent = (
                   setDisplayName(value);
                   setStatus(null);
                 }}
+                onFocus={onInputFocus}
                 placeholder="GardenerExtraordinaire"
                 placeholderTextColor={COLORS.secondary + "80"}
                 style={styles.input}
@@ -613,38 +616,43 @@ const SettingsSectionComponent = (
               <BottomSheetTextInput
                 value={locationQuery}
                 onChangeText={onLocationChange}
+                onFocus={onInputFocus}
                 placeholder="Search city..."
                 placeholderTextColor={COLORS.secondary + "80"}
                 style={styles.input}
               />
             </View>
 
-            {locationQuery.trim().length > 0 &&
-            filteredCities.length > 0 &&
-            !selectedCityId ? (
+            {locationQuery.trim().length > 0 && filteredCities.length > 0 ? (
               <View style={styles.locationSuggestions}>
-                {filteredCities.map((city) => (
-                  <Pressable
-                    key={city.id}
-                    onPress={() => onSelectCity(city)}
-                    style={({ pressed }) => [
-                      styles.locationOption,
-                      pressed && styles.pressed,
-                    ]}
-                  >
-                    <Ionicons
-                      name="map-outline"
-                      size={16}
-                      color={COLORS.secondary}
-                    />
-                    <Text style={styles.locationOptionText}>
-                      {formatCityLabel(city)}
-                    </Text>
-                    <Text style={styles.locationOptionCode}>
-                      {city.country_code}
-                    </Text>
-                  </Pressable>
-                ))}
+                {filteredCities.map((item, index) => {
+                  const isSelected = selectedCityId === item.id;
+                  return (
+                    <Pressable
+                      key={item.id}
+                      onPress={() => onSelectCity(item)}
+                      style={({ pressed }) => [
+                        styles.locationOption,
+                        index === filteredCities.length - 1 &&
+                          styles.locationOptionLast,
+                        isSelected && styles.locationOptionSelected,
+                        pressed && styles.pressed,
+                      ]}
+                    >
+                      <Ionicons
+                        name={isSelected ? "checkmark-circle" : "map-outline"}
+                        size={16}
+                        color={COLORS.secondary}
+                      />
+                      <Text style={styles.locationOptionText}>
+                        {formatCityLabel(item)}
+                      </Text>
+                      <Text style={styles.locationOptionCode}>
+                        {item.country_code}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
               </View>
             ) : null}
           </View>
@@ -874,6 +882,12 @@ const styles = StyleSheet.create({
     gap: 10,
     borderBottomWidth: 1,
     borderBottomColor: COLORS.secondary + "15",
+  },
+  locationOptionLast: {
+    borderBottomWidth: 0,
+  },
+  locationOptionSelected: {
+    backgroundColor: COLORS.primary + "12",
   },
   locationOptionText: {
     flex: 1,

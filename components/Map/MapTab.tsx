@@ -49,7 +49,7 @@ type CityMapStatsRow = {
 };
 
 type MapPressEvent = {
-  features: Array<GeoJSON.Feature> | null | undefined;
+  features: GeoJSON.Feature[] | null | undefined;
   coordinates: {
     latitude: number;
     longitude: number;
@@ -691,42 +691,75 @@ export default function MapTab() {
   }, []);
 
   const handleSourcePress = (event: MapPressEvent) => {
-    const hit = event.features?.[0];
-    const hitBoundaryGeometry = pickBoundaryGeometry(hit?.geometry);
-    const hitCenter = hitBoundaryGeometry
-      ? (centroidFromBoundary(hitBoundaryGeometry) ??
-        boundsCenterFromCoordinates(
-          primaryPolygonCoordinates(hitBoundaryGeometry),
-        ))
-      : null;
-    const hitBounds = hitBoundaryGeometry
-      ? boundsFromCoordinates(primaryPolygonCoordinates(hitBoundaryGeometry))
-      : null;
-    const hitGeometry = hit?.geometry;
-    const fallbackGeometryCoordinates =
-      hitGeometry && "coordinates" in hitGeometry
-        ? (hitGeometry as { coordinates: unknown }).coordinates
-        : null;
-    const pressCoordinate =
-      coordinatePairFromMapbox(event.coordinates) ??
-      (isCoordinatePair(fallbackGeometryCoordinates)
-        ? (fallbackGeometryCoordinates as [number, number])
-        : null);
-    const candidateCityId =
-      normalizeCityId(hit?.properties?.city_id) ?? normalizeCityId(hit?.id);
-    const cityName =
-      typeof hit?.properties?.city_name === "string"
-        ? hit.properties.city_name
-        : null;
-    const matchedRow =
-      rows.find((row) => cityIdsMatch(row.city_id, candidateCityId)) ??
-      (cityName ? rows.find((row) => row.city_name === cityName) : null);
-    const cityId = normalizeCityId(matchedRow?.city_id) ?? candidateCityId;
+    const pressCoordinate = coordinatePairFromMapbox(event.coordinates);
 
-    if (!cityId) return;
-    handleSelectCity(cityId, {
-      preferredCenter: hitCenter ?? pressCoordinate,
-      preferredBounds: hitBounds,
+    const hitCandidates = (event.features ?? [])
+      .map((feature) => {
+        const candidateCityId =
+          normalizeCityId(feature?.properties?.city_id) ??
+          normalizeCityId(feature?.id);
+        if (!candidateCityId) return null;
+
+        const matchedRow = rows.find((row) =>
+          cityIdsMatch(row.city_id, candidateCityId),
+        );
+        if (!matchedRow) return null;
+
+        const hitBoundaryGeometry = pickBoundaryGeometry(feature?.geometry);
+        const hitCenter = hitBoundaryGeometry
+          ? (centroidFromBoundary(hitBoundaryGeometry) ??
+            boundsCenterFromCoordinates(
+              primaryPolygonCoordinates(hitBoundaryGeometry),
+            ))
+          : null;
+        const hitBounds = hitBoundaryGeometry
+          ? boundsFromCoordinates(
+              primaryPolygonCoordinates(hitBoundaryGeometry),
+            )
+          : null;
+
+        const hitGeometry = feature?.geometry;
+        const fallbackGeometryCoordinates =
+          hitGeometry && "coordinates" in hitGeometry
+            ? (hitGeometry as { coordinates: unknown }).coordinates
+            : null;
+        const fallbackCenter = isCoordinatePair(fallbackGeometryCoordinates)
+          ? (fallbackGeometryCoordinates as [number, number])
+          : null;
+        const preferredCenter =
+          hitCenter ?? fallbackCenter ?? resolveCityCenter(matchedRow);
+
+        const distanceToTap =
+          pressCoordinate && preferredCenter
+            ? (preferredCenter[0] - pressCoordinate[0]) ** 2 +
+              (preferredCenter[1] - pressCoordinate[1]) ** 2
+            : Number.POSITIVE_INFINITY;
+
+        return {
+          cityId: candidateCityId,
+          preferredCenter,
+          preferredBounds: hitBounds,
+          distanceToTap,
+        };
+      })
+      .filter(
+        (
+          candidate,
+        ): candidate is {
+          cityId: string;
+          preferredCenter: [number, number];
+          preferredBounds: CityBounds | null;
+          distanceToTap: number;
+        } => Boolean(candidate),
+      )
+      .sort((a, b) => a.distanceToTap - b.distanceToTap);
+
+    const bestHit = hitCandidates[0];
+    if (!bestHit) return;
+
+    handleSelectCity(bestHit.cityId, {
+      preferredCenter: bestHit.preferredCenter ?? pressCoordinate,
+      preferredBounds: bestHit.preferredBounds ?? null,
     });
   };
 
@@ -907,26 +940,30 @@ export default function MapTab() {
         ) : null}
       </MapView>
 
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel="Zoom to my location"
-        disabled={isLocating}
-        onPress={handleLocatePress}
-        style={[styles.locateButton, { bottom: locateButtonBottom }]}
-      >
-        {isLocating ? (
-          <ActivityIndicator color={COLORS.primary} />
-        ) : (
-          <Ionicons name="locate" size={20} color={COLORS.primary} />
-        )}
-      </Pressable>
+      {!selectedCity ? (
+        <>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Zoom to my location"
+            disabled={isLocating}
+            onPress={handleLocatePress}
+            style={[styles.locateButton, { bottom: locateButtonBottom }]}
+          >
+            {isLocating ? (
+              <ActivityIndicator color={COLORS.primary} />
+            ) : (
+              <Ionicons name="locate" size={20} color={COLORS.primary} />
+            )}
+          </Pressable>
 
-      <View style={[styles.globalCounter, { bottom: globalCounterBottom }]}>
-        <Text style={styles.globalCounterLabel}>Global CO2 absorbed</Text>
-        <Text style={styles.globalCounterValue}>
-          {formatKg(globalCo2RemovedKg)}
-        </Text>
-      </View>
+          <View style={[styles.globalCounter, { bottom: globalCounterBottom }]}>
+            <Text style={styles.globalCounterLabel}>Global CO2 absorbed</Text>
+            <Text style={styles.globalCounterValue}>
+              {formatKg(globalCo2RemovedKg)}
+            </Text>
+          </View>
+        </>
+      ) : null}
 
       <View style={[styles.overlay, { paddingTop: insets.top + 10 }]}>
         <View style={styles.panel}>

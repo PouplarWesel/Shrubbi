@@ -12,6 +12,7 @@ import {
   View,
   LayoutAnimation,
   Keyboard,
+  Linking,
   Modal,
   useWindowDimensions,
 } from "react-native";
@@ -135,6 +136,14 @@ type EventAttendeeCounts = {
   waitlist: number;
 };
 
+type LocationSuggestion = {
+  id: string;
+  name: string;
+  address: string;
+  latitude: number | null;
+  longitude: number | null;
+};
+
 type KeyboardImageChangeEvent = {
   nativeEvent: {
     uri: string;
@@ -154,6 +163,9 @@ const QUICK_REACTIONS = [
 const EVENT_DATE_TIME_REGEX =
   /^(\d{4})-(\d{2})-(\d{2})(?:\s+|T)(\d{2}):(\d{2})$/;
 const CHAT_MEDIA_SIGNED_URL_TTL_SECONDS = 6 * 60 * 60;
+const LOCATION_AUTOCOMPLETE_DEBOUNCE_MS = 300;
+const LOCATION_AUTOCOMPLETE_LIMIT = 6;
+const MAPBOX_ACCESS_TOKEN = process.env.EXPO_PUBLIC_MAPBOX_ACCESS_TOKEN ?? "";
 
 const getFriendlyErrorMessage = (message: string) => {
   if (message.includes("teams_city_name_key")) {
@@ -186,6 +198,21 @@ const formatTime = (value: string) =>
     hour: "numeric",
     minute: "2-digit",
   });
+
+const buildGoogleMapsUrl = (event: EventRow) => {
+  if (typeof event.latitude === "number" && typeof event.longitude === "number") {
+    return `https://www.google.com/maps/search/?api=1&query=${event.latitude},${event.longitude}`;
+  }
+
+  const locationQuery = [event.location_name, event.location_address]
+    .filter((segment): segment is string => !!segment && segment.trim().length > 0)
+    .join(", ");
+  if (!locationQuery) return null;
+
+  return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
+    locationQuery,
+  )}`;
+};
 
 const getFileExtension = (uri: string, mimeType?: string | null) => {
   const mimeExtension = mimeType?.split("/")[1]?.toLowerCase();
@@ -432,7 +459,16 @@ export default function SocialPage() {
   const [newEventDescription, setNewEventDescription] = useState("");
   const [newEventLocationName, setNewEventLocationName] = useState("");
   const [newEventLocationAddress, setNewEventLocationAddress] = useState("");
+  const [newEventLatitude, setNewEventLatitude] = useState<number | null>(null);
+  const [newEventLongitude, setNewEventLongitude] = useState<number | null>(null);
   const [newEventLocationNotes, setNewEventLocationNotes] = useState("");
+  const [locationSuggestions, setLocationSuggestions] = useState<
+    LocationSuggestion[]
+  >([]);
+  const [isLoadingLocationSuggestions, setIsLoadingLocationSuggestions] =
+    useState(false);
+  const [isLocationSuggestionListOpen, setIsLocationSuggestionListOpen] =
+    useState(false);
   const [newEventStartsAt, setNewEventStartsAt] = useState(
     initialEventWindow.startsAtDraft,
   );
@@ -502,6 +538,9 @@ export default function SocialPage() {
   const messageHydrationTimersRef = useRef<
     Record<string, ReturnType<typeof setTimeout>>
   >({});
+  const locationSuggestionRequestIdRef = useRef(0);
+  const chatFeedScrollRef = useRef<ScrollView | null>(null);
+  const shouldAutoScrollChatRef = useRef(true);
   const maxWindowHeightRef = useRef(windowHeight);
 
   useEffect(() => {
@@ -579,6 +618,134 @@ export default function SocialPage() {
   const composerKeyboardLift = isKeyboardVisible
     ? Math.max(0, keyboardHeight - windowShrink)
     : 0;
+  const createLocationSearchQuery = useMemo(() => {
+    const addressQuery = newEventLocationAddress.trim();
+    if (addressQuery.length >= 3) return addressQuery;
+    return newEventLocationName.trim();
+  }, [newEventLocationAddress, newEventLocationName]);
+
+  const handleCreateEventLocationNameChange = useCallback((value: string) => {
+    setNewEventLocationName(value);
+    setNewEventLatitude(null);
+    setNewEventLongitude(null);
+    setIsLocationSuggestionListOpen(value.trim().length >= 2);
+  }, []);
+
+  const handleCreateEventLocationAddressChange = useCallback((value: string) => {
+    setNewEventLocationAddress(value);
+    setNewEventLatitude(null);
+    setNewEventLongitude(null);
+    setIsLocationSuggestionListOpen(value.trim().length >= 2);
+  }, []);
+
+  const applyLocationSuggestion = useCallback((suggestion: LocationSuggestion) => {
+    setNewEventLocationName(suggestion.name);
+    setNewEventLocationAddress(suggestion.address);
+    setNewEventLatitude(suggestion.latitude);
+    setNewEventLongitude(suggestion.longitude);
+    setLocationSuggestions([]);
+    setIsLocationSuggestionListOpen(false);
+  }, []);
+
+  useEffect(() => {
+    if (!isCreateEventOpen || !isLocationSuggestionListOpen) {
+      setIsLoadingLocationSuggestions(false);
+      setLocationSuggestions([]);
+      return;
+    }
+
+    if (!MAPBOX_ACCESS_TOKEN) {
+      setIsLoadingLocationSuggestions(false);
+      setLocationSuggestions([]);
+      return;
+    }
+
+    const query = createLocationSearchQuery;
+    if (query.length < 3) {
+      setIsLoadingLocationSuggestions(false);
+      setLocationSuggestions([]);
+      return;
+    }
+
+    const requestId = locationSuggestionRequestIdRef.current + 1;
+    locationSuggestionRequestIdRef.current = requestId;
+    const controller = new AbortController();
+    const timeoutId = setTimeout(async () => {
+      setIsLoadingLocationSuggestions(true);
+      try {
+        const queryWithContext = cityName ? `${query}, ${cityName}` : query;
+        const response = await fetch(
+          `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(
+            queryWithContext,
+          )}.json?autocomplete=true&types=address,poi,place,locality,neighborhood&limit=${LOCATION_AUTOCOMPLETE_LIMIT}&language=en&access_token=${MAPBOX_ACCESS_TOKEN}`,
+          { signal: controller.signal },
+        );
+
+        if (!response.ok) {
+          throw new Error("Location search failed");
+        }
+
+        const payload = await response.json();
+        const features = Array.isArray(payload?.features) ? payload.features : [];
+        const nextSuggestions = features
+          .map((feature: any, index: number): LocationSuggestion | null => {
+            const address =
+              typeof feature?.place_name === "string"
+                ? feature.place_name.trim()
+                : "";
+            if (!address) return null;
+
+            const baseName =
+              typeof feature?.text === "string" && feature.text.trim().length > 0
+                ? feature.text.trim()
+                : address.split(",")[0]?.trim() || address;
+            const center = Array.isArray(feature?.center) ? feature.center : [];
+            const longitude = typeof center[0] === "number" ? center[0] : null;
+            const latitude = typeof center[1] === "number" ? center[1] : null;
+
+            return {
+              id:
+                typeof feature?.id === "string" && feature.id.trim().length > 0
+                  ? feature.id
+                  : `location-suggestion-${requestId}-${index}`,
+              name: baseName,
+              address,
+              latitude,
+              longitude,
+            };
+          })
+          .filter(
+            (suggestion: LocationSuggestion | null): suggestion is LocationSuggestion =>
+              !!suggestion,
+          );
+
+        if (locationSuggestionRequestIdRef.current === requestId) {
+          setLocationSuggestions(nextSuggestions);
+        }
+      } catch (error) {
+        if (error instanceof Error && error.name === "AbortError") {
+          return;
+        }
+        if (locationSuggestionRequestIdRef.current === requestId) {
+          setLocationSuggestions([]);
+        }
+      } finally {
+        if (locationSuggestionRequestIdRef.current === requestId) {
+          setIsLoadingLocationSuggestions(false);
+        }
+      }
+    }, LOCATION_AUTOCOMPLETE_DEBOUNCE_MS);
+
+    return () => {
+      clearTimeout(timeoutId);
+      controller.abort();
+    };
+  }, [
+    cityName,
+    createLocationSearchQuery,
+    isCreateEventOpen,
+    isLocationSuggestionListOpen,
+  ]);
 
   const refreshChatChannels = useCallback(
     async (nextCityId: string | null) => {
@@ -1511,6 +1678,14 @@ export default function SocialPage() {
       ),
     [messages, activeThreadId],
   );
+  const scrollChatToBottom = useCallback((animated = false) => {
+    requestAnimationFrame(() => {
+      chatFeedScrollRef.current?.scrollToEnd({ animated });
+    });
+  }, []);
+  useEffect(() => {
+    shouldAutoScrollChatRef.current = activeTab === "chat";
+  }, [activeChannelId, activeThreadId, activeTab]);
   const threadMessageCount = useMemo(() => {
     const next: Record<string, number> = {};
     for (const message of messages) {
@@ -1715,11 +1890,15 @@ export default function SocialPage() {
     setNewEventDescription("");
     setNewEventLocationName("");
     setNewEventLocationAddress("");
+    setNewEventLatitude(null);
+    setNewEventLongitude(null);
     setNewEventLocationNotes("");
     setNewEventStartsAt(nextWindow.startsAtDraft);
     setNewEventEndsAt(nextWindow.endsAtDraft);
     setNewEventSignUpDeadline("");
     setNewEventMaxAttendees("");
+    setLocationSuggestions([]);
+    setIsLocationSuggestionListOpen(false);
   };
 
   const closeEventEditor = () => {
@@ -1881,6 +2060,8 @@ export default function SocialPage() {
     const description = newEventDescription.trim();
     const locationName = newEventLocationName.trim();
     const locationAddress = newEventLocationAddress.trim();
+    const locationLatitude = newEventLatitude;
+    const locationLongitude = newEventLongitude;
     const locationNotes = newEventLocationNotes.trim();
     const signUpDeadlineText = newEventSignUpDeadline.trim();
     const maxAttendeesText = newEventMaxAttendees.trim();
@@ -1943,6 +2124,8 @@ export default function SocialPage() {
       location_name: locationName,
       location_address: locationAddress || null,
       location_notes: locationNotes || null,
+      latitude: locationLatitude,
+      longitude: locationLongitude,
       starts_at: startsAt.toISOString(),
       ends_at: endsAt.toISOString(),
       sign_up_deadline: signUpDeadline?.toISOString() ?? null,
@@ -2715,6 +2898,25 @@ export default function SocialPage() {
     }
   };
 
+  const openEventLocationInMaps = useCallback(async (event: EventRow) => {
+    const url = buildGoogleMapsUrl(event);
+    if (!url) {
+      setErrorMessage("This event is missing a location link.");
+      return;
+    }
+
+    try {
+      const canOpen = await Linking.canOpenURL(url);
+      if (!canOpen) {
+        setErrorMessage("Could not open Google Maps for this location.");
+        return;
+      }
+      await Linking.openURL(url);
+    } catch {
+      setErrorMessage("Could not open Google Maps for this location.");
+    }
+  }, []);
+
   const renderEventCard = (event: EventRow) => {
     const attendeeSummary = eventAttendeeSummaryByEvent[event.id] || {
       going: 0,
@@ -2747,10 +2949,21 @@ export default function SocialPage() {
             {formatEventWindow(event.starts_at, event.ends_at)}
           </Text>
         </View>
-        <View style={styles.eventInfoRow}>
+        <Pressable
+          onPress={() => void openEventLocationInMaps(event)}
+          style={[styles.eventInfoRow, styles.eventLocationLink]}
+        >
           <Ionicons name="location-outline" size={14} color={COLORS.primary} />
-          <Text style={styles.eventInfoText}>{event.location_name}</Text>
-        </View>
+          <View style={styles.eventLocationTextWrap}>
+            <Text style={styles.eventInfoText}>{event.location_name}</Text>
+            {!!event.location_address && (
+              <Text style={styles.eventLocationAddressText} numberOfLines={1}>
+                {event.location_address}
+              </Text>
+            )}
+            <Text style={styles.eventLocationHintText}>Open in Google Maps</Text>
+          </View>
+        </Pressable>
 
         {event.description && (
           <Text style={styles.eventCardDesc} numberOfLines={2}>
@@ -3058,9 +3271,16 @@ export default function SocialPage() {
               </View>
             ) : (
               <ScrollView
+                ref={chatFeedScrollRef}
                 style={styles.chatFeedScroll}
                 contentContainerStyle={styles.chatFeedContent}
                 showsVerticalScrollIndicator={false}
+                onContentSizeChange={() => {
+                  if (activeTab !== "chat") return;
+                  const animated = !shouldAutoScrollChatRef.current;
+                  scrollChatToBottom(animated);
+                  shouldAutoScrollChatRef.current = false;
+                }}
               >
                 {visibleMessages.map((message) => {
                   const isMine = message.sender_id === userId;
@@ -3583,16 +3803,46 @@ export default function SocialPage() {
                 placeholder="Location Name"
                 placeholderTextColor={COLORS.text + "60"}
                 value={newEventLocationName}
-                onChangeText={setNewEventLocationName}
+                onChangeText={handleCreateEventLocationNameChange}
+                onFocus={() => setIsLocationSuggestionListOpen(true)}
                 style={styles.formInput}
               />
               <TextInput
                 placeholder="Address"
                 placeholderTextColor={COLORS.text + "60"}
                 value={newEventLocationAddress}
-                onChangeText={setNewEventLocationAddress}
+                onChangeText={handleCreateEventLocationAddressChange}
+                onFocus={() => setIsLocationSuggestionListOpen(true)}
                 style={styles.formInput}
               />
+              {isLocationSuggestionListOpen &&
+                (isLoadingLocationSuggestions || locationSuggestions.length > 0) && (
+                  <View style={styles.locationSuggestionsCard}>
+                    {isLoadingLocationSuggestions ? (
+                      <View style={styles.locationSuggestionsLoadingRow}>
+                        <ActivityIndicator size="small" color={COLORS.primary} />
+                        <Text style={styles.locationSuggestionsLoadingText}>
+                          Searching places...
+                        </Text>
+                      </View>
+                    ) : (
+                      locationSuggestions.map((suggestion) => (
+                        <Pressable
+                          key={suggestion.id}
+                          onPress={() => applyLocationSuggestion(suggestion)}
+                          style={styles.locationSuggestionItem}
+                        >
+                          <Text style={styles.locationSuggestionName}>
+                            {suggestion.name}
+                          </Text>
+                          <Text style={styles.locationSuggestionAddress}>
+                            {suggestion.address}
+                          </Text>
+                        </Pressable>
+                      ))
+                    )}
+                  </View>
+                )}
               <TextInput
                 placeholder="Starts (YYYY-MM-DD HH:mm)"
                 placeholderTextColor={COLORS.text + "60"}
@@ -4153,6 +4403,44 @@ const styles = StyleSheet.create({
     height: 80,
     textAlignVertical: "top",
   },
+  locationSuggestionsCard: {
+    marginTop: -6,
+    marginBottom: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: COLORS.secondary + "20",
+    backgroundColor: COLORS.background + "F0",
+    overflow: "hidden",
+  },
+  locationSuggestionsLoadingRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+  },
+  locationSuggestionsLoadingText: {
+    color: COLORS.secondary,
+    fontFamily: "Boogaloo_400Regular",
+    fontSize: 14,
+  },
+  locationSuggestionItem: {
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderTopWidth: 1,
+    borderTopColor: COLORS.secondary + "12",
+  },
+  locationSuggestionName: {
+    color: COLORS.primary,
+    fontFamily: "Boogaloo_400Regular",
+    fontSize: 15,
+  },
+  locationSuggestionAddress: {
+    color: COLORS.text + "AA",
+    fontFamily: "Boogaloo_400Regular",
+    fontSize: 12,
+    marginTop: 2,
+  },
   formActions: {
     flexDirection: "row",
     justifyContent: "flex-end",
@@ -4226,6 +4514,24 @@ const styles = StyleSheet.create({
     color: COLORS.text,
     fontSize: 13,
     fontFamily: "Boogaloo_400Regular",
+  },
+  eventLocationLink: {
+    alignItems: "flex-start",
+  },
+  eventLocationTextWrap: {
+    flex: 1,
+  },
+  eventLocationAddressText: {
+    color: COLORS.text + "AA",
+    fontSize: 12,
+    fontFamily: "Boogaloo_400Regular",
+    marginTop: 2,
+  },
+  eventLocationHintText: {
+    color: COLORS.primary,
+    fontSize: 11,
+    fontFamily: "Boogaloo_400Regular",
+    marginTop: 3,
   },
   eventCardDesc: {
     color: COLORS.text + "CC",

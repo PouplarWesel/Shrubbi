@@ -171,6 +171,7 @@ export const CameraCapture = ({
               ref={cameraRef}
               style={styles.camera}
               facing={facing}
+              animateShutter={facing === "front"}
               mode="picture"
               ratio="1:1"
             />

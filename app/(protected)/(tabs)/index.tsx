@@ -41,7 +41,7 @@ import {
   parseWaterTimeToMinutes,
 } from "@/lib/wateringSchedule";
 
-const { width } = Dimensions.get("window");
+const { width, height } = Dimensions.get("window");
 const FALLBACK_DAILY_TIP =
   "Succulents love bright, indirect sunlight. Make sure yours are getting enough light today!";
 const DAILY_QUEST_CODE = "water_plant_daily";
@@ -168,7 +168,7 @@ type ProgressSnapshot = {
   carbonPerYearKg: number;
 };
 
-type LeaderboardMode = "group" | "region";
+type LeaderboardMode = "group" | "region" | "people";
 
 type TeamIdentityRow = {
   id: string;
@@ -199,6 +199,16 @@ type CityLeaderboardEntry = {
   memberCount: number;
   co2KgPerYear: number;
   isCurrentUsersCity: boolean;
+};
+
+type PersonLeaderboardEntry = {
+  rank: number;
+  userId: string;
+  displayName: string;
+  cityLabel: string;
+  teamCount: number;
+  co2KgPerYear: number;
+  isCurrentUser: boolean;
 };
 
 type CityRegionAnchorRow = {
@@ -250,7 +260,7 @@ export default function Page() {
   const [dailyQuest, setDailyQuest] = useState<DailyQuestCard | null>(null);
   const [achievements, setAchievements] = useState<AchievementCard[]>([]);
   const [leaderboardMode, setLeaderboardMode] =
-    useState<LeaderboardMode>("group");
+    useState<LeaderboardMode>("region");
   const [isLeaderboardLoading, setIsLeaderboardLoading] = useState(false);
   const [leaderboardError, setLeaderboardError] = useState("");
   const [primaryTeamName, setPrimaryTeamName] = useState<string | null>(null);
@@ -260,13 +270,24 @@ export default function Page() {
   const [regionalLeaderboard, setRegionalLeaderboard] = useState<
     CityLeaderboardEntry[]
   >([]);
+  const [peopleLeaderboard, setPeopleLeaderboard] = useState<
+    PersonLeaderboardEntry[]
+  >([]);
   const settingsBottomSheetModalRef = useRef<BottomSheetModal>(null);
   const tipsHistoryBottomSheetModalRef = useRef<BottomSheetModal>(null);
   const achievementsBottomSheetModalRef = useRef<BottomSheetModal>(null);
-  const settingsSnapPoints = useMemo(() => ["72%", "92%"], []);
+  const settingsSnapPoints = useMemo(() => ["78%", "98%"], []);
   const tipHistorySnapPoints = useMemo(() => ["88%", "94%"], []);
   const achievementsSnapPoints = useMemo(() => ["72%", "90%"], []);
   const bottomSheetTopInset = insets.top + 12;
+  const settingsSheetBottomPadding = useMemo(
+    () => Math.max(insets.bottom + Math.round(height * 0.3), 220),
+    [insets.bottom],
+  );
+  const achievementsSheetBottomPadding = useMemo(
+    () => Math.max(insets.bottom + Math.round(height * 0.2), 160),
+    [insets.bottom],
+  );
 
   const settingsRef = useRef<SettingsSectionHandle>(null);
 
@@ -576,6 +597,7 @@ export default function Page() {
       setPrimaryTeamName(null);
       setGroupLeaderboard([]);
       setRegionalLeaderboard([]);
+      setPeopleLeaderboard([]);
       setLeaderboardError("");
       setIsLeaderboardLoading(false);
       return;
@@ -588,6 +610,7 @@ export default function Page() {
       { data: memberships },
       { data: createdTeams },
       { data: profileRow },
+      { data: peopleRows, error: peopleError },
     ] = await Promise.all([
       supabase
         .from("team_memberships")
@@ -602,11 +625,52 @@ export default function Page() {
         .select("city_id")
         .eq("id", userId)
         .maybeSingle(),
+      supabase
+        .from("public_profiles_with_co2")
+        .select(
+          "id, display_name, city, state, team_count, total_co2_removed_kg",
+        )
+        .order("total_co2_removed_kg", { ascending: false })
+        .limit(120),
     ]);
+
+    if (peopleError) {
+      setPeopleLeaderboard([]);
+    } else {
+      const rankedPeopleRows = (peopleRows ?? [])
+        .filter((row) => !!row.id)
+        .map((row) => {
+          const cityName = row.city?.trim() ?? "";
+          const stateName = row.state?.trim() ?? "";
+          const cityLabel = cityName
+            ? stateName && stateName.toLowerCase() !== cityName.toLowerCase()
+              ? `${cityName}, ${stateName}`
+              : cityName
+            : stateName || "Unknown city";
+
+          return {
+            userId: row.id as string,
+            displayName: row.display_name ?? "Anonymous Gardener",
+            cityLabel,
+            teamCount: row.team_count ?? 0,
+            co2KgPerYear: row.total_co2_removed_kg ?? 0,
+            isCurrentUser: row.id === userId,
+          };
+        })
+        .sort(
+          (a, b) =>
+            b.co2KgPerYear - a.co2KgPerYear ||
+            a.displayName.localeCompare(b.displayName),
+        )
+        .map((row, index) => ({ ...row, rank: index + 1 }));
+
+      setPeopleLeaderboard(rankedPeopleRows);
+    }
 
     const membershipRows = (memberships ?? []) as TeamMembershipRow[];
     const createdTeamRows = (createdTeams ?? []) as TeamIdentityRow[];
     const membershipTeamId = membershipRows[0]?.team_id ?? null;
+    let nextLeaderboardError = "";
 
     let primaryTeam: TeamIdentityRow | null = createdTeamRows[0] ?? null;
     if (membershipTeamId) {
@@ -631,6 +695,7 @@ export default function Page() {
       setPrimaryTeamName(null);
       setGroupLeaderboard([]);
       setRegionalLeaderboard([]);
+      setLeaderboardError("");
       setIsLeaderboardLoading(false);
       return;
     }
@@ -646,7 +711,7 @@ export default function Page() {
 
     if (allTeamsError) {
       setGroupLeaderboard([]);
-      setLeaderboardError("Could not load group rankings.");
+      nextLeaderboardError = "Could not load group rankings.";
     } else {
       const allGroupRows = (allTeamRows ?? [])
         .filter((row) => !!row.team_id)
@@ -676,6 +741,7 @@ export default function Page() {
     const anchorCityId = primaryTeam.city_id || profileRow?.city_id || null;
     if (!anchorCityId) {
       setRegionalLeaderboard([]);
+      setLeaderboardError(nextLeaderboardError);
       setIsLeaderboardLoading(false);
       return;
     }
@@ -689,6 +755,7 @@ export default function Page() {
     const anchorCity = (anchorCityData ?? null) as CityRegionAnchorRow | null;
     if (!anchorCity) {
       setRegionalLeaderboard([]);
+      setLeaderboardError(nextLeaderboardError);
       setIsLeaderboardLoading(false);
       return;
     }
@@ -710,6 +777,7 @@ export default function Page() {
 
     if (regionalCityIds.length === 0) {
       setRegionalLeaderboard([]);
+      setLeaderboardError(nextLeaderboardError);
       setIsLeaderboardLoading(false);
       return;
     }
@@ -725,7 +793,9 @@ export default function Page() {
 
     if (regionalCitiesError) {
       setRegionalLeaderboard([]);
-      setLeaderboardError("Could not load city rankings.");
+      setLeaderboardError(
+        nextLeaderboardError || "Could not load city rankings.",
+      );
       setIsLeaderboardLoading(false);
       return;
     }
@@ -753,6 +823,7 @@ export default function Page() {
       .map((row, index) => ({ ...row, rank: index + 1 }));
 
     setRegionalLeaderboard(regionalRows);
+    setLeaderboardError(nextLeaderboardError);
     setIsLeaderboardLoading(false);
   }, [isLoaded, supabase, userId]);
 
@@ -1132,14 +1203,20 @@ export default function Page() {
   const fallbackName = userEmail.split("@")[0];
   const userName = profileName || fallbackName;
   const co2CapturedDisplay = Math.round(co2CapturedKgPerYear).toLocaleString();
-  const leaderboardRows =
-    leaderboardMode === "group" ? groupLeaderboard : regionalLeaderboard;
+  const leaderboardRowCount =
+    leaderboardMode === "group"
+      ? groupLeaderboard.length
+      : leaderboardMode === "region"
+        ? regionalLeaderboard.length
+        : peopleLeaderboard.length;
   const leaderboardEmptyText =
     leaderboardMode === "group"
       ? primaryTeamName
         ? "No team rankings available yet."
         : "Join or create a group to see team rankings."
-      : "No cities found in your region yet.";
+      : leaderboardMode === "region"
+        ? "No cities found in your region yet."
+        : "No people rankings available yet.";
 
   return (
     <BottomSheetModalProvider>
@@ -1553,6 +1630,25 @@ export default function Page() {
             <Text style={styles.sectionTitle}>CO2 Leaderboard</Text>
             <View style={styles.leaderboardToggleRow}>
               <Pressable
+                onPress={() => setLeaderboardMode("region")}
+                style={({ pressed }) => [
+                  styles.leaderboardToggleButton,
+                  leaderboardMode === "region" &&
+                    styles.leaderboardToggleButtonActive,
+                  pressed && styles.pressed,
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.leaderboardToggleText,
+                    leaderboardMode === "region" &&
+                      styles.leaderboardToggleTextActive,
+                  ]}
+                >
+                  Cities
+                </Text>
+              </Pressable>
+              <Pressable
                 onPress={() => setLeaderboardMode("group")}
                 style={({ pressed }) => [
                   styles.leaderboardToggleButton,
@@ -1572,10 +1668,10 @@ export default function Page() {
                 </Text>
               </Pressable>
               <Pressable
-                onPress={() => setLeaderboardMode("region")}
+                onPress={() => setLeaderboardMode("people")}
                 style={({ pressed }) => [
                   styles.leaderboardToggleButton,
-                  leaderboardMode === "region" &&
+                  leaderboardMode === "people" &&
                     styles.leaderboardToggleButtonActive,
                   pressed && styles.pressed,
                 ]}
@@ -1583,11 +1679,11 @@ export default function Page() {
                 <Text
                   style={[
                     styles.leaderboardToggleText,
-                    leaderboardMode === "region" &&
+                    leaderboardMode === "people" &&
                       styles.leaderboardToggleTextActive,
                   ]}
                 >
-                  Cities
+                  People
                 </Text>
               </Pressable>
             </View>
@@ -1602,6 +1698,12 @@ export default function Page() {
               {leaderboardMode === "region" ? (
                 <Text style={styles.leaderboardContextText}>
                   Ranked cities in your region by CO2 absorption.
+                </Text>
+              ) : null}
+
+              {leaderboardMode === "people" ? (
+                <Text style={styles.leaderboardContextText}>
+                  Ranked gardeners by individual CO2 absorption.
                 </Text>
               ) : null}
 
@@ -1623,7 +1725,7 @@ export default function Page() {
                     {leaderboardError}
                   </Text>
                 </View>
-              ) : leaderboardRows.length === 0 ? (
+              ) : leaderboardRowCount === 0 ? (
                 <View style={styles.leaderboardState}>
                   <Ionicons
                     name="people-outline"
@@ -1668,7 +1770,7 @@ export default function Page() {
                     </View>
                   ))}
                 </View>
-              ) : (
+              ) : leaderboardMode === "region" ? (
                 <View style={styles.leaderboardList}>
                   {regionalLeaderboard.slice(0, 8).map((row) => (
                     <View key={row.cityId} style={styles.leaderboardRow}>
@@ -1694,6 +1796,40 @@ export default function Page() {
                         </Text>
                         <Text style={styles.leaderboardMeta}>
                           {row.memberCount} members
+                        </Text>
+                      </View>
+                      <Text style={styles.leaderboardValue}>
+                        {Math.round(row.co2KgPerYear).toLocaleString()} kg/yr
+                      </Text>
+                    </View>
+                  ))}
+                </View>
+              ) : (
+                <View style={styles.leaderboardList}>
+                  {peopleLeaderboard.slice(0, 8).map((row) => (
+                    <View key={row.userId} style={styles.leaderboardRow}>
+                      <View
+                        style={[
+                          styles.rankBadge,
+                          row.rank === 1 && styles.rankBadgeTop,
+                        ]}
+                      >
+                        <Text style={styles.rankBadgeText}>#{row.rank}</Text>
+                      </View>
+                      <View style={styles.leaderboardRowMain}>
+                        <Text
+                          style={[
+                            styles.leaderboardName,
+                            row.isCurrentUser && styles.leaderboardNameCurrent,
+                          ]}
+                          numberOfLines={1}
+                        >
+                          {row.displayName}
+                          {row.isCurrentUser ? " (You)" : ""}
+                        </Text>
+                        <Text style={styles.leaderboardMeta}>
+                          {row.cityLabel} - {row.teamCount}{" "}
+                          {row.teamCount === 1 ? "group" : "groups"}
                         </Text>
                       </View>
                       <Text style={styles.leaderboardValue}>
@@ -1754,6 +1890,7 @@ export default function Page() {
           ref={settingsBottomSheetModalRef}
           index={0}
           snapPoints={settingsSnapPoints}
+          enableDynamicSizing={false}
           topInset={bottomSheetTopInset}
           enableDismissOnClose
           enablePanDownToClose
@@ -1766,7 +1903,7 @@ export default function Page() {
           <BottomSheetScrollView
             contentContainerStyle={[
               styles.bottomSheetContent,
-              { paddingBottom: Math.max(insets.bottom, 24) },
+              { paddingBottom: settingsSheetBottomPadding },
             ]}
             keyboardShouldPersistTaps="handled"
             keyboardDismissMode="on-drag"
@@ -1774,6 +1911,9 @@ export default function Page() {
             <SettingsSection
               ref={settingsRef}
               onRequestCamera={handleRequestCamera}
+              onInputFocus={() => {
+                settingsBottomSheetModalRef.current?.expand();
+              }}
               onProfileSaved={(profile) => {
                 const nextName =
                   profile.full_name.trim() ||
@@ -1887,7 +2027,7 @@ export default function Page() {
             contentContainerStyle={[
               styles.bottomSheetContent,
               styles.tipHistoryContent,
-              { paddingBottom: Math.max(insets.bottom, 24) },
+              { paddingBottom: achievementsSheetBottomPadding },
             ]}
           >
             <Text style={styles.tipHistoryTitle}>Achievements</Text>
