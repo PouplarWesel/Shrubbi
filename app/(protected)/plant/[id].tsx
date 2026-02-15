@@ -593,6 +593,14 @@ export default function PlantDetailPage() {
     ? new Date(plant.last_watered_at).toLocaleString()
     : "Never";
 
+  const onPressBack = () => {
+    if (router.canGoBack()) {
+      router.back();
+      return;
+    }
+    router.replace("/(protected)/(tabs)/plants");
+  };
+
   return (
     <View style={styles.container}>
       <ScrollView
@@ -605,7 +613,7 @@ export default function PlantDetailPage() {
         ]}
         showsVerticalScrollIndicator={false}
       >
-        <Pressable onPress={() => router.back()} style={styles.backButton}>
+        <Pressable onPress={onPressBack} style={styles.backButton}>
           <Ionicons name="arrow-back" size={24} color={COLORS.primary} />
           <Text style={styles.backButtonText}>Garden</Text>
         </Pressable>
