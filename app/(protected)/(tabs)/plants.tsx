@@ -117,31 +117,34 @@ export default function PlantsPage() {
     [plants],
   );
   const levelInfo = useMemo(() => {
-    if (totalPoints >= 500 && earnedAchievementCount >= GOLD_MIN_ACHIEVEMENTS) {
-      return { level: 3, tier: "Gold", color: GOLD };
+    if (
+      totalPoints >= 1000 &&
+      earnedAchievementCount >= GOLD_MIN_ACHIEVEMENTS
+    ) {
+      return { level: 3, tier: "Old Growth", color: GOLD };
     }
     if (
       totalPoints >= 100 &&
       earnedAchievementCount >= SILVER_MIN_ACHIEVEMENTS
     ) {
-      return { level: 2, tier: "Silver", color: SILVER };
+      return { level: 2, tier: "Evergreen", color: SILVER };
     }
-    return { level: 1, tier: "Bronze", color: BRONZE };
+    return { level: 1, tier: "Seedling", color: BRONZE };
   }, [earnedAchievementCount, totalPoints]);
   const levelRequirementText = useMemo(() => {
     if (totalPoints < 100) {
-      return `Need ${formatPlantPoints(100 - totalPoints)} more pts and ${Math.max(SILVER_MIN_ACHIEVEMENTS - earnedAchievementCount, 0)} more achievements for Silver`;
+      return `Need ${formatPlantPoints(100 - totalPoints)} more pts and ${Math.max(SILVER_MIN_ACHIEVEMENTS - earnedAchievementCount, 0)} more achievements for Evergreen`;
     }
     if (earnedAchievementCount < SILVER_MIN_ACHIEVEMENTS) {
-      return `Need ${SILVER_MIN_ACHIEVEMENTS - earnedAchievementCount} more achievements for Silver`;
+      return `Need ${SILVER_MIN_ACHIEVEMENTS - earnedAchievementCount} more achievements for Evergreen`;
     }
-    if (totalPoints < 500) {
-      return `Need ${formatPlantPoints(500 - totalPoints)} more pts and ${Math.max(GOLD_MIN_ACHIEVEMENTS - earnedAchievementCount, 0)} more achievements for Gold`;
+    if (totalPoints < 1000) {
+      return `Need ${formatPlantPoints(1000 - totalPoints)} more pts and ${Math.max(GOLD_MIN_ACHIEVEMENTS - earnedAchievementCount, 0)} more achievements for Old Growth`;
     }
     if (earnedAchievementCount < GOLD_MIN_ACHIEVEMENTS) {
-      return `Need ${GOLD_MIN_ACHIEVEMENTS - earnedAchievementCount} more achievements for Gold`;
+      return `Need ${GOLD_MIN_ACHIEVEMENTS - earnedAchievementCount} more achievements for Old Growth`;
     }
-    return "Gold requirements met";
+    return "Old Growth requirements met";
   }, [earnedAchievementCount, totalPoints]);
 
   const getPlantIcon = (type?: string | null) => {
@@ -166,7 +169,7 @@ export default function PlantsPage() {
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.header}>
-          <View>
+          <View style={styles.headerCopy}>
             <Text style={styles.title}>My Garden</Text>
             <Text style={styles.subtitle}>
               Blooming with {plantCount} {plantCount === 1 ? "plant" : "plants"}
@@ -321,6 +324,11 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     alignItems: "flex-start",
   },
+  headerCopy: {
+    flex: 1,
+    minWidth: 0,
+    paddingRight: 12,
+  },
   title: {
     color: COLORS.primary,
     fontSize: 40,
@@ -348,6 +356,7 @@ const styles = StyleSheet.create({
   statBadge: {
     flexDirection: "row",
     alignItems: "center",
+    alignSelf: "flex-start",
     backgroundColor: COLORS.accent,
     paddingHorizontal: 12,
     paddingVertical: 6,
@@ -355,6 +364,7 @@ const styles = StyleSheet.create({
     gap: 6,
     borderWidth: 1,
     borderColor: COLORS.primary + "30",
+    flexShrink: 0,
   },
   statText: {
     color: COLORS.primary,
