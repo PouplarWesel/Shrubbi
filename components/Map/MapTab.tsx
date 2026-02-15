@@ -48,6 +48,18 @@ type CityMapStatsRow = {
   type_breakdown: unknown;
 };
 
+type MapPressEvent = {
+  features: Array<GeoJSON.Feature> | null | undefined;
+  coordinates: {
+    latitude: number;
+    longitude: number;
+  };
+  point: {
+    x: number;
+    y: number;
+  };
+};
+
 const DEFAULT_CENTER: [number, number] = [-119.4179, 36.7783]; // California-ish
 const FALLBACK_BOX_DEG = 0.12;
 
@@ -56,6 +68,14 @@ const metricLabel: Record<MetricKey, string> = {
   plants: "Plants",
   members: "People",
 };
+
+const BASE_PLACE_LABEL_LAYER_IDS = [
+  "settlement-minor-label",
+  "settlement-subdivision-label",
+  "settlement-major-label",
+  "state-label",
+  "country-label",
+] as const;
 
 const formatCompactNumber = (value: number) => {
   if (!Number.isFinite(value)) return "0";
@@ -102,6 +122,11 @@ type GeoJSONPolygonGeometry =
   | { type: "Polygon"; coordinates: unknown }
   | { type: "MultiPolygon"; coordinates: unknown };
 
+type CityBounds = {
+  ne: [number, number];
+  sw: [number, number];
+};
+
 const pickBoundaryGeometry = (
   value: unknown,
 ): GeoJSONPolygonGeometry | null => {
@@ -132,9 +157,51 @@ const isCoordinatePair = (value: unknown): value is [number, number] => {
   );
 };
 
+const coordinatePairFromMapbox = (
+  coords: MapPressEvent["coordinates"] | null | undefined,
+): [number, number] | null => {
+  if (!coords) return null;
+  const { latitude, longitude } = coords;
+  if (!isFiniteNumber(latitude) || !isFiniteNumber(longitude)) return null;
+  return [longitude, latitude];
+};
+
 const isLinearRing = (value: unknown): value is [number, number][] => {
   if (!Array.isArray(value) || value.length < 3) return false;
   return value.every((point) => isCoordinatePair(point));
+};
+
+const signedRingArea = (ring: [number, number][]) => {
+  let area = 0;
+  for (let i = 0; i < ring.length; i += 1) {
+    const [x0, y0] = ring[i];
+    const [x1, y1] = ring[(i + 1) % ring.length];
+    area += x0 * y1 - x1 * y0;
+  }
+  return area / 2;
+};
+
+const primaryPolygonCoordinates = (
+  geometry: GeoJSONPolygonGeometry,
+): unknown => {
+  if (geometry.type === "Polygon") return geometry.coordinates;
+
+  let bestPolygon: unknown = null;
+  let bestArea = 0;
+
+  for (const polygon of geometry.coordinates as unknown[]) {
+    if (!Array.isArray(polygon) || !polygon.length) continue;
+    const outerRing = polygon[0];
+    if (!isLinearRing(outerRing)) continue;
+    const area = Math.abs(signedRingArea(outerRing));
+    if (area > bestArea) {
+      bestArea = area;
+      bestPolygon = polygon;
+    }
+  }
+
+  if (bestPolygon) return bestPolygon;
+  return (geometry.coordinates as unknown[])[0] ?? geometry.coordinates;
 };
 
 const collectCoordinatePairs = (value: unknown, out: [number, number][]) => {
@@ -171,6 +238,33 @@ const boundsCenterFromCoordinates = (
   return [(minLon + maxLon) / 2, (minLat + maxLat) / 2];
 };
 
+const boundsFromCoordinates = (coordinates: unknown): CityBounds | null => {
+  const points: [number, number][] = [];
+  collectCoordinatePairs(coordinates, points);
+  if (!points.length) return null;
+
+  let minLon = points[0][0];
+  let maxLon = points[0][0];
+  let minLat = points[0][1];
+  let maxLat = points[0][1];
+
+  for (const [lon, lat] of points) {
+    if (lon < minLon) minLon = lon;
+    if (lon > maxLon) maxLon = lon;
+    if (lat < minLat) minLat = lat;
+    if (lat > maxLat) maxLat = lat;
+  }
+
+  const lonSpan = Math.max(maxLon - minLon, 0);
+  const latSpan = Math.max(maxLat - minLat, 0);
+  if (lonSpan < 1e-6 || latSpan < 1e-6) return null;
+
+  return {
+    ne: [maxLon, maxLat],
+    sw: [minLon, minLat],
+  };
+};
+
 const accumulateRingMoments = (
   ring: [number, number][],
   totals: { cross: number; momentX: number; momentY: number },
@@ -192,20 +286,12 @@ const centroidFromBoundary = (
   geometry: GeoJSONPolygonGeometry,
 ): [number, number] | null => {
   const totals = { cross: 0, momentX: 0, momentY: 0 };
+  const polygonCoordinates = primaryPolygonCoordinates(geometry);
+  if (!Array.isArray(polygonCoordinates)) return null;
 
-  if (geometry.type === "Polygon") {
-    for (const ring of geometry.coordinates as unknown[]) {
-      if (!isLinearRing(ring)) continue;
-      accumulateRingMoments(ring, totals);
-    }
-  } else {
-    for (const polygon of geometry.coordinates as unknown[]) {
-      if (!Array.isArray(polygon)) continue;
-      for (const ring of polygon) {
-        if (!isLinearRing(ring)) continue;
-        accumulateRingMoments(ring, totals);
-      }
-    }
+  for (const ring of polygonCoordinates) {
+    if (!isLinearRing(ring)) continue;
+    accumulateRingMoments(ring, totals);
   }
 
   if (Math.abs(totals.cross) < 1e-12) return null;
@@ -218,14 +304,14 @@ const centroidFromBoundary = (
 };
 
 const resolveCityCenter = (row: CityMapStatsRow): [number, number] => {
-  if (isFiniteNumber(row.center_lon) && isFiniteNumber(row.center_lat)) {
-    return [row.center_lon, row.center_lat];
-  }
-
   const boundaryGeometry = pickBoundaryGeometry(row.boundary_geojson);
   if (boundaryGeometry) {
     const centroid = centroidFromBoundary(boundaryGeometry);
     if (centroid) return centroid;
+  }
+
+  if (isFiniteNumber(row.center_lon) && isFiniteNumber(row.center_lat)) {
+    return [row.center_lon, row.center_lat];
   }
 
   if (
@@ -246,6 +332,39 @@ const resolveCityCenter = (row: CityMapStatsRow): [number, number] => {
   }
 
   return DEFAULT_CENTER;
+};
+
+const resolveCityBounds = (
+  row: CityMapStatsRow,
+  fallbackCenter?: [number, number],
+): CityBounds => {
+  const boundaryGeometry = pickBoundaryGeometry(row.boundary_geojson);
+  if (boundaryGeometry) {
+    const bounds = boundsFromCoordinates(
+      primaryPolygonCoordinates(boundaryGeometry),
+    );
+    if (bounds) return bounds;
+  }
+
+  if (
+    isFiniteNumber(row.bbox_sw_lon) &&
+    isFiniteNumber(row.bbox_ne_lon) &&
+    isFiniteNumber(row.bbox_sw_lat) &&
+    isFiniteNumber(row.bbox_ne_lat) &&
+    row.bbox_ne_lon > row.bbox_sw_lon &&
+    row.bbox_ne_lat > row.bbox_sw_lat
+  ) {
+    return {
+      ne: [row.bbox_ne_lon, row.bbox_ne_lat],
+      sw: [row.bbox_sw_lon, row.bbox_sw_lat],
+    };
+  }
+
+  const [centerLon, centerLat] = fallbackCenter ?? resolveCityCenter(row);
+  return {
+    ne: [centerLon + FALLBACK_BOX_DEG, centerLat + FALLBACK_BOX_DEG],
+    sw: [centerLon - FALLBACK_BOX_DEG, centerLat - FALLBACK_BOX_DEG],
+  };
 };
 
 const buildStops = (max: number, colors: string[]) => {
@@ -522,13 +641,17 @@ export default function MapTab() {
 
   const handleSelectCity = (
     cityId: string,
-    preferredCenter: [number, number] | null = null,
+    opts: {
+      preferredCenter?: [number, number] | null;
+      preferredBounds?: CityBounds | null;
+    } = {},
   ) => {
     setSelectedCityId(cityId);
 
     const row = rows.find((r) => cityIdsMatch(r.city_id, cityId));
     if (!row) return;
 
+    const preferredCenter = opts.preferredCenter ?? null;
     const [resolvedCenterLon, resolvedCenterLat] = resolveCityCenter(row);
     let centerLon = resolvedCenterLon;
     let centerLat = resolvedCenterLat;
@@ -543,29 +666,44 @@ export default function MapTab() {
       }
     }
 
-    cameraRef.current?.setCamera({
-      centerCoordinate: [centerLon, centerLat],
-      zoomLevel: 9,
-      pitch: 0,
-      heading: 0,
-      animationDuration: 900,
-    });
+    const bounds =
+      opts.preferredBounds ?? resolveCityBounds(row, [centerLon, centerLat]);
+    const fitPadding: [number, number, number, number] = [
+      insets.top + 128,
+      20,
+      bottomInset + tabBarHeight + 236,
+      20,
+    ];
+
+    cameraRef.current?.fitBounds(bounds.ne, bounds.sw, fitPadding, 900);
   };
 
   const handleCloseSelected = useCallback(() => {
     setSelectedCityId(null);
   }, []);
 
-  const handleSourcePress = (event: {
-    coordinates?: [number, number];
-    features?: { id?: string | number; properties?: any }[];
-  }) => {
+  const handleSourcePress = (event: MapPressEvent) => {
     const hit = event.features?.[0];
-    const pressCoordinate = isCoordinatePair(event.coordinates)
-      ? event.coordinates
-      : isCoordinatePair(hit?.geometry?.coordinates)
-        ? hit.geometry.coordinates
+    const hitBoundaryGeometry = pickBoundaryGeometry(hit?.geometry);
+    const hitCenter = hitBoundaryGeometry
+      ? (centroidFromBoundary(hitBoundaryGeometry) ??
+        boundsCenterFromCoordinates(
+          primaryPolygonCoordinates(hitBoundaryGeometry),
+        ))
+      : null;
+    const hitBounds = hitBoundaryGeometry
+      ? boundsFromCoordinates(primaryPolygonCoordinates(hitBoundaryGeometry))
+      : null;
+    const hitGeometry = hit?.geometry;
+    const fallbackGeometryCoordinates =
+      hitGeometry && "coordinates" in hitGeometry
+        ? (hitGeometry as { coordinates: unknown }).coordinates
         : null;
+    const pressCoordinate =
+      coordinatePairFromMapbox(event.coordinates) ??
+      (isCoordinatePair(fallbackGeometryCoordinates)
+        ? (fallbackGeometryCoordinates as [number, number])
+        : null);
     const candidateCityId =
       normalizeCityId(hit?.properties?.city_id) ?? normalizeCityId(hit?.id);
     const cityName =
@@ -578,7 +716,10 @@ export default function MapTab() {
     const cityId = normalizeCityId(matchedRow?.city_id) ?? candidateCityId;
 
     if (!cityId) return;
-    handleSelectCity(cityId, pressCoordinate);
+    handleSelectCity(cityId, {
+      preferredCenter: hitCenter ?? pressCoordinate,
+      preferredBounds: hitBounds,
+    });
   };
 
   const statsBreakdown = useMemo(() => {
@@ -652,6 +793,18 @@ export default function MapTab() {
           animationMode="flyTo"
           animationDuration={0}
         />
+
+        {BASE_PLACE_LABEL_LAYER_IDS.map((layerId) => (
+          <SymbolLayer
+            key={`hide-base-label-${layerId}`}
+            id={layerId}
+            existing
+            style={{
+              textOpacity: 0,
+              iconOpacity: 0,
+            }}
+          />
+        ))}
 
         <ShapeSource
           id="shrubbi-city-stats"

@@ -1094,9 +1094,14 @@ export default function Page() {
                               >
                                 {task.name}
                               </Text>
-                              <Text style={styles.wateringTaskMeta}>
-                                {formatTaskWhenLabel(task)} â€¢ +{points} pts
-                              </Text>
+                              <View style={styles.wateringTaskMetaRow}>
+                                <Text style={styles.wateringTaskMeta}>
+                                  {formatTaskWhenLabel(task)}
+                                </Text>
+                                <Text style={styles.wateringTaskMetaPoints}>
+                                  +{points} pts
+                                </Text>
+                              </View>
                             </View>
                             <View style={styles.wateringTaskRight}>
                               <View style={styles.wateringQtyBadge}>
@@ -1788,6 +1793,17 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontFamily: "Boogaloo_400Regular",
     opacity: 0.6,
+  },
+  wateringTaskMetaRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+  },
+  wateringTaskMetaPoints: {
+    color: COLORS.secondary,
+    fontSize: 14,
+    fontFamily: "Boogaloo_400Regular",
+    opacity: 0.9,
   },
   wateringTaskRight: {
     flexDirection: "row",
