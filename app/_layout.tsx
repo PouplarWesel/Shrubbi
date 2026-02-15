@@ -10,6 +10,7 @@ import { StatusBar } from "expo-status-bar";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 
 import { AnimatedAppSplash } from "@/components/AnimatedAppSplash";
+import { WebStartupWarning } from "@/components/WebStartupWarning";
 import { useSupabase } from "@/hooks/useSupabase";
 import {
   cancelWateringRemindersAsync,
@@ -149,6 +150,7 @@ function RootNavigator() {
       {showAnimatedSplash ? (
         <AnimatedAppSplash onAnimationComplete={handleAnimatedSplashComplete} />
       ) : null}
+      {!showAnimatedSplash ? <WebStartupWarning /> : null}
     </View>
   );
 }

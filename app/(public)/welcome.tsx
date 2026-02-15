@@ -3,8 +3,9 @@ import {
   StyleSheet,
   Text,
   View,
-  Dimensions,
   Image,
+  Platform,
+  useWindowDimensions,
 } from "react-native";
 
 import { Ionicons } from "@expo/vector-icons";
@@ -13,15 +14,52 @@ import { SafeAreaView } from "react-native-safe-area-context";
 
 import { COLORS } from "@/constants/colors";
 
-const { width } = Dimensions.get("window");
-
 export default function Page() {
+  const { width: windowWidth } = useWindowDimensions();
+  const blobBase = Platform.OS === "web" ? Math.min(windowWidth, 420) : windowWidth;
+
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.backgroundDecoration}>
-        <View style={[styles.blob, styles.blob1]} />
-        <View style={[styles.blob, styles.blob2]} />
-        <View style={[styles.blob, styles.blob3]} />
+        <View
+          style={[
+            styles.blob,
+            styles.blob1,
+            {
+              width: blobBase * 1.2,
+              height: blobBase * 1.2,
+              borderRadius: blobBase,
+              top: -blobBase * 0.4,
+              right: -blobBase * 0.4,
+            },
+          ]}
+        />
+        <View
+          style={[
+            styles.blob,
+            styles.blob2,
+            {
+              width: blobBase,
+              height: blobBase,
+              borderRadius: blobBase,
+              bottom: -blobBase * 0.2,
+              left: -blobBase * 0.3,
+            },
+          ]}
+        />
+        <View
+          style={[
+            styles.blob,
+            styles.blob3,
+            {
+              width: blobBase * 0.6,
+              height: blobBase * 0.6,
+              borderRadius: blobBase,
+              top: blobBase * 0.3,
+              left: -blobBase * 0.2,
+            },
+          ]}
+        />
       </View>
 
       <View style={styles.content}>
@@ -85,30 +123,17 @@ const styles = StyleSheet.create({
   },
   blob: {
     position: "absolute",
-    borderRadius: width,
     opacity: 0.2,
   },
   blob1: {
-    width: width * 1.2,
-    height: width * 1.2,
     backgroundColor: COLORS.accent,
-    top: -width * 0.4,
-    right: -width * 0.4,
   },
   blob2: {
-    width: width,
-    height: width,
     backgroundColor: COLORS.primary,
-    bottom: -width * 0.2,
-    left: -width * 0.3,
     opacity: 0.1,
   },
   blob3: {
-    width: width * 0.6,
-    height: width * 0.6,
     backgroundColor: COLORS.secondary,
-    top: width * 0.3,
-    left: -width * 0.2,
     opacity: 0.05,
   },
   content: {

@@ -2,7 +2,14 @@ import { useEffect, useState } from "react";
 import { Tabs } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { COLORS } from "@/constants/colors";
-import { Keyboard, Platform, Pressable, StyleSheet, View } from "react-native";
+import {
+  Keyboard,
+  Platform,
+  Pressable,
+  StyleSheet,
+  View,
+  useWindowDimensions,
+} from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import type { BottomTabBarProps } from "@react-navigation/bottom-tabs";
@@ -18,7 +25,15 @@ const ICON_GLYPH_SIZE = 24;
 
 export default function TabsLayout() {
   const insets = useSafeAreaInsets();
+  const { width: viewportWidth } = useWindowDimensions();
   const bottomInset = Math.max(insets.bottom, 0);
+  const isWeb = Platform.OS === "web";
+  const isDesktopWeb = isWeb && viewportWidth >= 1024;
+  const webTabWidth = isWeb
+    ? isDesktopWeb
+      ? Math.min(Math.max(viewportWidth * 0.56, 520), 700)
+      : Math.max(viewportWidth - 24, 280)
+    : undefined;
   const [isKeyboardVisible, setIsKeyboardVisible] = useState(false);
 
   useEffect(() => {
@@ -49,6 +64,8 @@ export default function TabsLayout() {
           {...props}
           bottomInset={bottomInset}
           isKeyboardVisible={isKeyboardVisible}
+          isWeb={isWeb}
+          webTabWidth={webTabWidth}
         />
       )}
       screenOptions={{
@@ -120,7 +137,14 @@ function CustomTabBar({
   navigation,
   bottomInset,
   isKeyboardVisible,
-}: BottomTabBarProps & { bottomInset: number; isKeyboardVisible: boolean }) {
+  isWeb,
+  webTabWidth,
+}: BottomTabBarProps & {
+  bottomInset: number;
+  isKeyboardVisible: boolean;
+  isWeb: boolean;
+  webTabWidth?: number;
+}) {
   if (isKeyboardVisible) {
     return null;
   }
@@ -129,6 +153,14 @@ function CustomTabBar({
     <View
       style={[
         styles.tabBarStack,
+        !isWeb && styles.tabBarStackInset,
+        isWeb && webTabWidth
+          ? {
+              width: webTabWidth,
+              left: "50%",
+              marginLeft: -webTabWidth / 2,
+            }
+          : null,
         { bottom: Math.max(bottomInset, TAB_BAR_BOTTOM_GAP) },
       ]}
     >
@@ -247,6 +279,8 @@ function TabIcon({
 const styles = StyleSheet.create({
   tabBarStack: {
     position: "absolute",
+  },
+  tabBarStackInset: {
     left: TAB_BAR_SIDE_INSET,
     right: TAB_BAR_SIDE_INSET,
   },

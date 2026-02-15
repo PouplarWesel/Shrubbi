@@ -457,6 +457,7 @@ export default function MapTabWeb() {
   const mapContainerRef = useRef<any>(null);
   const mapRef = useRef<any>(null);
   const selectedCityIdRef = useRef<string | null>(null);
+  const hasAutoCenteredRef = useRef(false);
 
   const [metric, setMetric] = useState<MetricKey>("co2");
   const [userLocation, setUserLocation] = useState<{
@@ -649,40 +650,12 @@ export default function MapTabWeb() {
   const fetchUserLocation = useCallback(
     async (opts: { forceFresh?: boolean } = {}) => {
       const forceFresh = Boolean(opts.forceFresh);
-
-      try {
-        const existing = await Location.getForegroundPermissionsAsync();
-        let status = existing.status;
-
-        if (status !== "granted") {
-          const requested = await Location.requestForegroundPermissionsAsync();
-          status = requested.status;
+      const fetchFromBrowserGeolocation = async () => {
+        if (typeof navigator === "undefined" || !navigator.geolocation) {
+          return null;
         }
 
-        if (status !== "granted") return null;
-
-        const lastKnown = forceFresh
-          ? null
-          : await Location.getLastKnownPositionAsync({});
-        const position =
-          lastKnown ??
-          (await Location.getCurrentPositionAsync({
-            accuracy: Location.Accuracy.Balanced,
-          }));
-
-        const coords = {
-          latitude: position.coords.latitude,
-          longitude: position.coords.longitude,
-        };
-
-        setUserLocation(coords);
-        return coords;
-      } catch {
         try {
-          if (typeof navigator === "undefined" || !navigator.geolocation) {
-            return null;
-          }
-
           const coords = await new Promise<{
             latitude: number;
             longitude: number;
@@ -708,7 +681,40 @@ export default function MapTabWeb() {
         } catch {
           return null;
         }
+      };
+
+      try {
+        const existing = await Location.getForegroundPermissionsAsync();
+        let status = existing.status;
+
+        if (status !== "granted") {
+          const requested = await Location.requestForegroundPermissionsAsync();
+          status = requested.status;
+        }
+
+        if (status === "granted") {
+          const lastKnown = forceFresh
+            ? null
+            : await Location.getLastKnownPositionAsync({});
+          const position =
+            lastKnown ??
+            (await Location.getCurrentPositionAsync({
+              accuracy: Location.Accuracy.Balanced,
+            }));
+
+          const coords = {
+            latitude: position.coords.latitude,
+            longitude: position.coords.longitude,
+          };
+
+          setUserLocation(coords);
+          return coords;
+        }
+      } catch {
+        // Fall through to browser geolocation fallback.
       }
+
+      return await fetchFromBrowserGeolocation();
     },
     [],
   );
@@ -831,8 +837,11 @@ export default function MapTabWeb() {
       if (!isMapReady) return;
       const map = mapRef.current;
       if (!map) return;
+      if (hasAutoCenteredRef.current) return;
 
-      const coords = await fetchUserLocation();
+      const coords =
+        (await fetchUserLocation()) ??
+        (await fetchUserLocation({ forceFresh: true }));
       if (isCancelled || !coords) return;
       if (selectedCityIdRef.current) return;
 
@@ -841,6 +850,7 @@ export default function MapTabWeb() {
         zoom: 11,
         duration: 900,
       });
+      hasAutoCenteredRef.current = true;
     };
 
     void centerOnUser();
@@ -1009,7 +1019,7 @@ export default function MapTabWeb() {
 
     const bounds = resolveCityBounds(row, [centerLon, centerLat]);
     map.fitBounds([bounds.sw, bounds.ne], {
-      padding: { top: 122, right: 24, bottom: 250, left: 24 },
+      padding: { top: 122, right: 24, bottom: 290, left: 24 },
       duration: 900,
       pitch: 0,
     });
@@ -1234,11 +1244,12 @@ const styles = StyleSheet.create({
     right: 0,
     paddingHorizontal: 14,
     paddingTop: 14,
+    alignItems: "center",
   },
   locateButton: {
     position: "absolute",
     right: 16,
-    bottom: 108,
+    bottom: 124,
     width: 46,
     height: 46,
     borderRadius: 23,
@@ -1252,7 +1263,7 @@ const styles = StyleSheet.create({
   globalCounter: {
     position: "absolute",
     left: 16,
-    bottom: 108,
+    bottom: 124,
     paddingVertical: 8,
     paddingHorizontal: 12,
     borderRadius: 14,
@@ -1276,6 +1287,8 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   panel: {
+    width: "100%",
+    maxWidth: 520,
     borderRadius: 18,
     overflow: "hidden",
     padding: 14,
@@ -1375,11 +1388,14 @@ const styles = StyleSheet.create({
     position: "absolute",
     left: 0,
     right: 0,
-    bottom: 0,
+    bottom: 80,
     padding: 14,
-    paddingBottom: 18,
+    paddingBottom: 14,
+    alignItems: "center",
   },
   sheet: {
+    width: "100%",
+    maxWidth: 620,
     borderRadius: 20,
     padding: 16,
     backgroundColor: COLORS.background + "F2",

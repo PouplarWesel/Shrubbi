@@ -11,9 +11,11 @@ import {
   ActivityIndicator,
   Alert,
   Image,
+  Platform,
   Pressable,
   StyleSheet,
   Text,
+  TextInput,
   View,
 } from "react-native";
 
@@ -153,6 +155,8 @@ const SettingsSectionComponent = (
   const [isSaving, setIsSaving] = useState(false);
   const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
   const [status, setStatus] = useState<SettingsStatus>(null);
+  const InputComponent =
+    Platform.OS === "web" ? TextInput : BottomSheetTextInput;
 
   useEffect(() => {
     const userId = session?.user?.id;
@@ -567,7 +571,7 @@ const SettingsSectionComponent = (
                 color={COLORS.secondary}
                 style={styles.inputIcon}
               />
-              <BottomSheetTextInput
+              <InputComponent
                 value={fullName}
                 onChangeText={(value) => {
                   setFullName(value);
@@ -590,7 +594,7 @@ const SettingsSectionComponent = (
                 color={COLORS.secondary}
                 style={styles.inputIcon}
               />
-              <BottomSheetTextInput
+              <InputComponent
                 value={displayName}
                 onChangeText={(value) => {
                   setDisplayName(value);
@@ -613,7 +617,7 @@ const SettingsSectionComponent = (
                 color={COLORS.secondary}
                 style={styles.inputIcon}
               />
-              <BottomSheetTextInput
+              <InputComponent
                 value={locationQuery}
                 onChangeText={onLocationChange}
                 onFocus={onInputFocus}
