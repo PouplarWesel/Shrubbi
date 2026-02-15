@@ -2,9 +2,7 @@ import { useEffect, useRef } from "react";
 import {
   Animated,
   Easing,
-  Platform,
   StyleSheet,
-  View,
   type ImageSourcePropType,
 } from "react-native";
 
@@ -18,9 +16,9 @@ const SPLASH_ICON = require("../assets/icon_nobg.png") as ImageSourcePropType;
 export function AnimatedAppSplash({
   onAnimationComplete,
 }: AnimatedAppSplashProps) {
-  const showBurstRings = Platform.OS !== "web";
+  const showBurstRings = true;
+  const containerOpacity = useRef(new Animated.Value(1)).current;
   const iconScale = useRef(new Animated.Value(0.72)).current;
-  const iconOpacity = useRef(new Animated.Value(1)).current;
   const burstScale = useRef(new Animated.Value(0.36)).current;
   const burstOpacity = useRef(new Animated.Value(0)).current;
   const burstScaleSoft = useRef(new Animated.Value(0.2)).current;
@@ -59,12 +57,6 @@ export function AnimatedAppSplash({
           easing: Easing.out(Easing.exp),
           useNativeDriver: true,
         }),
-        Animated.timing(iconOpacity, {
-          toValue: 0,
-          duration: 1050,
-          easing: Easing.out(Easing.quad),
-          useNativeDriver: true,
-        }),
         Animated.timing(burstScale, {
           toValue: 4,
           duration: 1120,
@@ -90,7 +82,13 @@ export function AnimatedAppSplash({
           useNativeDriver: true,
         }),
       ]),
-      Animated.delay(180),
+      Animated.delay(120),
+      Animated.timing(containerOpacity, {
+        toValue: 0,
+        duration: 280,
+        easing: Easing.out(Easing.quad),
+        useNativeDriver: true,
+      }),
     ]);
 
     animation.start(({ finished }) => {
@@ -108,13 +106,13 @@ export function AnimatedAppSplash({
     burstOpacitySoft,
     burstScale,
     burstScaleSoft,
-    iconOpacity,
+    containerOpacity,
     iconScale,
     onAnimationComplete,
   ]);
 
   return (
-    <View style={styles.container}>
+    <Animated.View style={[styles.container, { opacity: containerOpacity }]}>
       {showBurstRings ? (
         <>
           <Animated.View
@@ -142,12 +140,11 @@ export function AnimatedAppSplash({
         style={[
           styles.icon,
           {
-            opacity: iconOpacity,
             transform: [{ scale: iconScale }],
           },
         ]}
       />
-    </View>
+    </Animated.View>
   );
 }
 
