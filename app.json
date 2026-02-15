@@ -8,7 +8,11 @@
     "scheme": "shrubbi",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
-    "platforms": ["ios", "android", "web"],
+    "platforms": [
+      "ios",
+      "android",
+      "web"
+    ],
     "web": {
       "output": "static"
     },
@@ -55,6 +59,13 @@
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
-    }
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "209678f0-4046-4402-a8bf-1f81ef6947df"
+      }
+    },
+    "owner": "wesels"
   }
 }

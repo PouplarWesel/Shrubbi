@@ -12,7 +12,7 @@ import {
 import { COLORS } from "@/constants/colors";
 
 const DISMISS_WAIT_SECONDS = 3;
-const APK_URL = "http://github.com/PouplarWesel/shrubbi/";
+const APK_URL = "https://github.com/PouplarWesel/Shrubbi/releases";
 
 export function WebStartupWarning() {
   const [visible, setVisible] = useState(Platform.OS === "web");

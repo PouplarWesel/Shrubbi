@@ -41,7 +41,6 @@ type SettingsStatus = {
 
 type SettingsSectionProps = {
   onRequestCamera?: () => void;
-  onInputFocus?: () => void;
   onProfileSaved?: (profile: {
     full_name: string;
     display_name: string;
@@ -141,7 +140,7 @@ const decodeBase64ToBytes = (value: string) => {
 };
 
 const SettingsSectionComponent = (
-  { onRequestCamera, onInputFocus, onProfileSaved }: SettingsSectionProps,
+  { onRequestCamera, onProfileSaved }: SettingsSectionProps,
   ref: ForwardedRef<SettingsSectionHandle>,
 ) => {
   const { session, supabase } = useSupabase();
@@ -577,7 +576,6 @@ const SettingsSectionComponent = (
                   setFullName(value);
                   setStatus(null);
                 }}
-                onFocus={onInputFocus}
                 placeholder="Jane Doe"
                 placeholderTextColor={COLORS.secondary + "80"}
                 style={styles.input}
@@ -600,7 +598,6 @@ const SettingsSectionComponent = (
                   setDisplayName(value);
                   setStatus(null);
                 }}
-                onFocus={onInputFocus}
                 placeholder="GardenerExtraordinaire"
                 placeholderTextColor={COLORS.secondary + "80"}
                 style={styles.input}
@@ -620,7 +617,6 @@ const SettingsSectionComponent = (
               <InputComponent
                 value={locationQuery}
                 onChangeText={onLocationChange}
-                onFocus={onInputFocus}
                 placeholder="Search city..."
                 placeholderTextColor={COLORS.secondary + "80"}
                 style={styles.input}

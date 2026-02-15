@@ -7,9 +7,11 @@ import {
   KeyboardAvoidingView,
   Platform,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
+  useWindowDimensions,
   View,
   Image,
 } from "react-native";
@@ -41,6 +43,52 @@ type TeamOption = {
 };
 
 type PermissionState = "undetermined" | "granted" | "denied" | "unavailable";
+
+type OnboardingFeature = {
+  icon: keyof typeof Ionicons.glyphMap;
+  title: string;
+  description: string;
+  tourNote: string;
+};
+
+const ONBOARDING_FEATURES: OnboardingFeature[] = [
+  {
+    icon: "leaf-outline",
+    title: "Add Plants",
+    description:
+      "Log houseplants and local trees, then track progress over time.",
+    tourNote: "Start with one plant and build your collection as you go.",
+  },
+  {
+    icon: "water-outline",
+    title: "Watering Reminders",
+    description: "Set schedules and stay on top of what needs water each day.",
+    tourNote:
+      "Reminders are tied to each plant, so your schedule stays personal.",
+  },
+  {
+    icon: "calendar-outline",
+    title: "Local Events",
+    description:
+      "Join community events from the Social tab and coordinate with others.",
+    tourNote:
+      "Events keep teams active with cleanups, meetups, and planting days.",
+  },
+  {
+    icon: "people-outline",
+    title: "Groups and Social",
+    description:
+      "Join one or more teams in your city for chat, progress, and activities.",
+    tourNote:
+      "You can join multiple teams and switch between city and team chats.",
+  },
+  {
+    icon: "map-outline",
+    title: "City Map and Impact",
+    description: "See map activity, city momentum, and environmental progress.",
+    tourNote: "The map helps you spot where community action is happening.",
+  },
+];
 
 const normalizeValue = (value: string | null | undefined) =>
   (value ?? "").trim().toLowerCase();
@@ -75,8 +123,11 @@ const requestCameraPermissionState = async (): Promise<PermissionState> => {
 };
 
 export default function OnboardingPage() {
+  const { width: viewportWidth } = useWindowDimensions();
+  const isWeb = Platform.OS === "web";
+  const isLargeWebViewport = isWeb && viewportWidth >= 1024;
   const { session, supabase } = useSupabase();
-  const [step, setStep] = useState(0); // 0: Profile, 1: Permissions, 2: City, 3: Group
+  const [step, setStep] = useState(0); // 0: Profile, 1: Feature tour, 2: Permissions, 3: City, 4: Groups
   const [fullName, setFullName] = useState("");
   const [displayName, setDisplayName] = useState("");
   const [selectedCityId, setSelectedCityId] = useState<string | null>(null);
@@ -84,7 +135,7 @@ export default function OnboardingPage() {
   const [citySearch, setCitySearch] = useState("");
   const [teams, setTeams] = useState<TeamOption[]>([]);
   const [teamSearch, setTeamSearch] = useState("");
-  const [selectedTeamId, setSelectedTeamId] = useState<string | null>(null);
+  const [selectedTeamIds, setSelectedTeamIds] = useState<string[]>([]);
   const [joinedTeamIds, setJoinedTeamIds] = useState<string[]>([]);
   const [locationPermission, setLocationPermission] =
     useState<PermissionState>("undetermined");
@@ -107,6 +158,8 @@ export default function OnboardingPage() {
   const [isJoiningGroup, setIsJoiningGroup] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
   const [isKeyboardVisible, setKeyboardVisible] = useState(false);
+  const [featureIndex, setFeatureIndex] = useState(0);
+  const isSearchStep = step === 3 || step === 4;
 
   useEffect(() => {
     const showSubscription = Keyboard.addListener("keyboardDidShow", () =>
@@ -252,18 +305,29 @@ export default function OnboardingPage() {
     });
   }, [teamSearch, teams]);
 
+  const selectedTeams = useMemo(
+    () => teams.filter((team) => selectedTeamIds.includes(team.id)),
+    [selectedTeamIds, teams],
+  );
+
   const onNextStep = () => {
     if (!fullName.trim()) {
       setErrorMessage("Full name is required.");
       return;
     }
     setErrorMessage("");
+    setFeatureIndex(0);
     setStep(1);
+  };
+
+  const onContinueFromFeatureTour = () => {
+    setErrorMessage("");
+    setStep(2);
   };
 
   const onContinueFromPermissions = () => {
     setErrorMessage("");
-    setStep(2);
+    setStep(3);
   };
 
   const requestLocationPermission = async () => {
@@ -361,7 +425,7 @@ export default function OnboardingPage() {
   }, [locationPermission, cities, isDetectingCity, citySearch]);
 
   useEffect(() => {
-    if (step !== 2 || locationPermission !== "granted" || hasTriedAutoCity)
+    if (step !== 3 || locationPermission !== "granted" || hasTriedAutoCity)
       return;
     void autoSelectCityFromLocation();
   }, [step, locationPermission, hasTriedAutoCity, autoSelectCityFromLocation]);
@@ -408,17 +472,20 @@ export default function OnboardingPage() {
         ]);
 
       const normalizedTeams = (teamsData ?? []) as TeamOption[];
+      const existingMemberships = (membershipsData ?? []).map((m) => m.team_id);
       setTeams(normalizedTeams);
-      setJoinedTeamIds((membershipsData ?? []).map((m) => m.team_id));
-      setSelectedTeamId((current) => {
-        if (current) return current;
-        const joined = (membershipsData ?? []).map((m) => m.team_id);
-        const joinedMatch = normalizedTeams.find((team) =>
-          joined.includes(team.id),
+      setJoinedTeamIds(existingMemberships);
+      setSelectedTeamIds((current) => {
+        const currentValid = current.filter((id) =>
+          normalizedTeams.some((team) => team.id === id),
         );
-        return joinedMatch?.id ?? null;
+        if (currentValid.length > 0) return currentValid;
+
+        return existingMemberships.filter((id) =>
+          normalizedTeams.some((team) => team.id === id),
+        );
       });
-      setStep(3);
+      setStep(4);
     } finally {
       setIsSaving(false);
     }
@@ -432,13 +499,21 @@ export default function OnboardingPage() {
       setErrorMessage("");
       setIsJoiningGroup(true);
 
-      if (selectedTeamId && !joinedTeamIds.includes(selectedTeamId)) {
-        const { error } = await supabase.from("team_memberships").insert({
-          user_id: userId,
-          team_id: selectedTeamId,
-        });
+      const teamIdsToJoin = selectedTeamIds.filter(
+        (teamId) => !joinedTeamIds.includes(teamId),
+      );
+
+      if (teamIdsToJoin.length > 0) {
+        const { error } = await supabase.from("team_memberships").insert(
+          teamIdsToJoin.map((teamId) => ({
+            user_id: userId,
+            team_id: teamId,
+          })),
+        );
         if (error) {
-          setErrorMessage("Could not join team. You can join later in Social.");
+          setErrorMessage(
+            "Could not join selected groups. You can join later in Social.",
+          );
           return;
         }
       }
@@ -449,23 +524,35 @@ export default function OnboardingPage() {
     }
   };
 
+  const toggleTeamSelection = (teamId: string) => {
+    setSelectedTeamIds((current) =>
+      current.includes(teamId)
+        ? current.filter((id) => id !== teamId)
+        : [...current, teamId],
+    );
+  };
+
   const headerTitle =
     step === 0
       ? "About You"
       : step === 1
-        ? "Permissions"
+        ? "How Shrubbi Works"
         : step === 2
-          ? "Your Location"
-          : "Join a Group";
+          ? "Permissions"
+          : step === 3
+            ? "Your Location"
+            : "Join Groups";
 
   const headerSubtitle =
     step === 0
       ? "Help us personalize your experience"
       : step === 1
-        ? "Allow what you want. Everything here is optional."
+        ? "Quick tour of plants, events, map, and social features."
         : step === 2
-          ? "We'll suggest nearby cities, then you can adjust."
-          : "Join a local group now, or skip and do it later in Social.";
+          ? "Allow what you want. Everything here is optional."
+          : step === 3
+            ? "We'll suggest nearby cities, then you can adjust."
+            : "Pick as many local groups as you want.";
 
   if (isLoading) {
     return (
@@ -489,11 +576,17 @@ export default function OnboardingPage() {
         style={styles.flex}
         keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 20}
       >
-        <View style={styles.content}>
+        <View
+          style={[
+            styles.content,
+            isWeb && styles.webContent,
+            isLargeWebViewport && styles.webContentLarge,
+          ]}
+        >
           <View
             style={[
               styles.header,
-              isKeyboardVisible && step === 2 && styles.headerCompact,
+              isKeyboardVisible && isSearchStep && styles.headerCompact,
             ]}
           >
             {!isKeyboardVisible && (
@@ -508,13 +601,26 @@ export default function OnboardingPage() {
             <Text
               style={[
                 styles.title,
-                isKeyboardVisible && step === 2 && styles.titleCompact,
+                isLargeWebViewport && styles.titleDesktop,
+                isKeyboardVisible && isSearchStep && styles.titleCompact,
               ]}
             >
               {headerTitle}
             </Text>
             {!isKeyboardVisible && (
-              <Text style={styles.subtitle}>{headerSubtitle}</Text>
+              <View style={styles.stepMetaBadge}>
+                <Text style={styles.stepMetaText}>Step {step + 1} of 5</Text>
+              </View>
+            )}
+            {!isKeyboardVisible && (
+              <Text
+                style={[
+                  styles.subtitle,
+                  isLargeWebViewport && styles.subtitleDesktop,
+                ]}
+              >
+                {headerSubtitle}
+              </Text>
             )}
           </View>
 
@@ -579,6 +685,106 @@ export default function OnboardingPage() {
               </Pressable>
             </View>
           ) : step === 1 ? (
+            <View style={styles.formContainer}>
+              <View
+                style={[
+                  styles.permissionsList,
+                  styles.featureTourCard,
+                  isWeb && styles.featureTourCardWeb,
+                ]}
+              >
+                <View style={styles.featureTourHeader}>
+                  <Text style={styles.featureTourEyebrow}>Feature Tour</Text>
+                  <View style={styles.featureCountPill}>
+                    <Text style={styles.featureCountPillText}>
+                      {featureIndex + 1} / {ONBOARDING_FEATURES.length}
+                    </Text>
+                  </View>
+                </View>
+
+                <View
+                  style={[
+                    styles.featureSingle,
+                    isLargeWebViewport && styles.featureSingleDesktop,
+                  ]}
+                >
+                  <View style={styles.featureIconCircleLarge}>
+                    <Ionicons
+                      name={ONBOARDING_FEATURES[featureIndex].icon}
+                      size={30}
+                      color={COLORS.primary}
+                    />
+                  </View>
+                  <Text style={styles.featureSingleTitle}>
+                    {ONBOARDING_FEATURES[featureIndex].title}
+                  </Text>
+                  <Text style={styles.featureSingleDescription}>
+                    {ONBOARDING_FEATURES[featureIndex].description}
+                  </Text>
+                  <View style={styles.featureTip}>
+                    <Ionicons
+                      name="sparkles-outline"
+                      size={16}
+                      color={COLORS.primary}
+                    />
+                    <Text style={styles.featureTipText}>
+                      {ONBOARDING_FEATURES[featureIndex].tourNote}
+                    </Text>
+                  </View>
+                </View>
+
+                <View style={styles.featureDots}>
+                  {ONBOARDING_FEATURES.map((feature, index) => (
+                    <View
+                      key={feature.title}
+                      style={[
+                        styles.featureDot,
+                        index === featureIndex && styles.featureDotActive,
+                      ]}
+                    />
+                  ))}
+                </View>
+              </View>
+
+              <View style={styles.footerButtons}>
+                <Pressable
+                  onPress={() => {
+                    if (featureIndex > 0) {
+                      setFeatureIndex((current) => current - 1);
+                      return;
+                    }
+                    setStep(0);
+                  }}
+                  style={[styles.primaryButton, styles.secondaryButton]}
+                >
+                  <Text style={styles.secondaryButtonText}>
+                    {featureIndex > 0 ? "Previous" : "Back"}
+                  </Text>
+                </Pressable>
+                <Pressable
+                  onPress={() => {
+                    if (featureIndex < ONBOARDING_FEATURES.length - 1) {
+                      setFeatureIndex((current) => current + 1);
+                      return;
+                    }
+                    onContinueFromFeatureTour();
+                  }}
+                  style={[styles.primaryButton, styles.flex]}
+                >
+                  <Text style={styles.primaryButtonText}>
+                    {featureIndex < ONBOARDING_FEATURES.length - 1
+                      ? "Next Feature"
+                      : "Continue"}
+                  </Text>
+                  <Ionicons
+                    name="arrow-forward"
+                    size={20}
+                    color={COLORS.background}
+                  />
+                </Pressable>
+              </View>
+            </View>
+          ) : step === 2 ? (
             <View style={styles.formContainer}>
               <View style={styles.permissionsList}>
                 <View style={styles.permissionItem}>
@@ -703,7 +909,7 @@ export default function OnboardingPage() {
 
               <View style={styles.footerButtons}>
                 <Pressable
-                  onPress={() => setStep(0)}
+                  onPress={() => setStep(1)}
                   style={[styles.primaryButton, styles.secondaryButton]}
                 >
                   <Text style={styles.secondaryButtonText}>Back</Text>
@@ -721,7 +927,7 @@ export default function OnboardingPage() {
                 </Pressable>
               </View>
             </View>
-          ) : step === 2 ? (
+          ) : step === 3 ? (
             <View style={styles.formContainer}>
               <View style={styles.inputGroup}>
                 <View style={styles.inputWrapper}>
@@ -808,7 +1014,7 @@ export default function OnboardingPage() {
               {!isKeyboardVisible && (
                 <View style={styles.footerButtons}>
                   <Pressable
-                    onPress={() => setStep(1)}
+                    onPress={() => setStep(2)}
                     style={[styles.primaryButton, styles.secondaryButton]}
                   >
                     <Text style={styles.secondaryButtonText}>Back</Text>
@@ -841,9 +1047,10 @@ export default function OnboardingPage() {
           ) : (
             <View style={styles.formContainer}>
               <View style={[styles.permissionsList, styles.groupsContainer]}>
-                <Text style={styles.permissionItemTitle}>Join a Group</Text>
+                <Text style={styles.permissionItemTitle}>Join Groups</Text>
                 <Text style={styles.permissionItemDescription}>
-                  Pick a local team to connect with people in your city.
+                  Pick one or more local teams to connect with people in your
+                  city.
                 </Text>
 
                 {teams.length === 0 ? (
@@ -870,6 +1077,42 @@ export default function OnboardingPage() {
                         />
                       </View>
                     </View>
+                    <View style={styles.selectionSummary}>
+                      <View style={styles.selectionSummaryHeader}>
+                        <View style={styles.selectionSummaryIcon}>
+                          <Ionicons
+                            name="people-outline"
+                            size={14}
+                            color={COLORS.primary}
+                          />
+                        </View>
+                        <Text style={styles.selectionSummaryLabel}>
+                          Selected teams
+                        </Text>
+                        <Text style={styles.selectionSummaryCount}>
+                          {selectedTeamIds.length}
+                        </Text>
+                      </View>
+                      {selectedTeams.length > 0 ? (
+                        <ScrollView
+                          horizontal
+                          showsHorizontalScrollIndicator={false}
+                          contentContainerStyle={styles.selectedTeamsRow}
+                        >
+                          {selectedTeams.map((team) => (
+                            <View key={team.id} style={styles.selectedTeamChip}>
+                              <Text style={styles.selectedTeamChipText}>
+                                {team.name}
+                              </Text>
+                            </View>
+                          ))}
+                        </ScrollView>
+                      ) : (
+                        <Text style={styles.selectionSummaryHint}>
+                          Pick teams from the list below.
+                        </Text>
+                      )}
+                    </View>
 
                     <FlatList
                       data={filteredTeams}
@@ -880,18 +1123,16 @@ export default function OnboardingPage() {
                       keyboardShouldPersistTaps="handled"
                       keyboardDismissMode="on-drag"
                       renderItem={({ item }) => {
-                        const isSelected = selectedTeamId === item.id;
+                        const isSelected = selectedTeamIds.includes(item.id);
                         const isJoined = joinedTeamIds.includes(item.id);
                         return (
                           <Pressable
-                            onPress={() =>
-                              setSelectedTeamId((current) =>
-                                current === item.id ? null : item.id,
-                              )
-                            }
+                            disabled={isJoined}
+                            onPress={() => toggleTeamSelection(item.id)}
                             style={[
                               styles.cityItem,
-                              isSelected && styles.cityItemSelected,
+                              (isSelected || isJoined) &&
+                                styles.cityItemSelected,
                             ]}
                           >
                             <View style={styles.cityInfo}>
@@ -938,7 +1179,7 @@ export default function OnboardingPage() {
               {!isKeyboardVisible && (
                 <View style={styles.footerButtons}>
                   <Pressable
-                    onPress={() => setStep(2)}
+                    onPress={() => setStep(3)}
                     style={[styles.primaryButton, styles.secondaryButton]}
                   >
                     <Text style={styles.secondaryButtonText}>Back</Text>
@@ -957,7 +1198,9 @@ export default function OnboardingPage() {
                     ) : (
                       <>
                         <Text style={styles.primaryButtonText}>
-                          {selectedTeamId ? "Join & Finish" : "Finish"}
+                          {selectedTeamIds.length > 0
+                            ? `Join ${selectedTeamIds.length} & Finish`
+                            : "Finish"}
                         </Text>
                         <Ionicons
                           name="checkmark-done"
@@ -1015,6 +1258,14 @@ const styles = StyleSheet.create({
     flex: 1,
     padding: 24,
   },
+  webContent: {
+    width: "100%",
+    alignSelf: "center",
+  },
+  webContentLarge: {
+    paddingHorizontal: 20,
+    paddingTop: 20,
+  },
   header: {
     alignItems: "center",
     marginBottom: 30,
@@ -1047,6 +1298,9 @@ const styles = StyleSheet.create({
     fontFamily: "Boogaloo_400Regular",
     textAlign: "center",
   },
+  titleDesktop: {
+    fontSize: 32,
+  },
   titleCompact: {
     fontSize: 24,
     textAlign: "left",
@@ -1059,9 +1313,33 @@ const styles = StyleSheet.create({
     marginTop: 8,
     opacity: 0.8,
   },
+  subtitleDesktop: {
+    fontSize: 16,
+  },
+  stepMetaBadge: {
+    marginTop: 10,
+    backgroundColor: COLORS.primary,
+    borderColor: COLORS.primary,
+    borderRadius: 999,
+    borderWidth: 1,
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+  },
+  stepMetaText: {
+    color: COLORS.background,
+    fontSize: 14,
+    fontFamily: "Boogaloo_400Regular",
+    letterSpacing: 0.2,
+  },
   formContainer: {
     flex: 1,
     gap: 20,
+  },
+  featureList: {
+    flex: 1,
+  },
+  featureListContent: {
+    paddingBottom: 8,
   },
   permissionsList: {
     gap: 16,
@@ -1073,6 +1351,124 @@ const styles = StyleSheet.create({
   },
   groupsContainer: {
     flex: 1,
+  },
+  featureTourCard: {
+    flex: 1,
+    justifyContent: "space-between",
+  },
+  featureTourCardWeb: {
+    minHeight: 360,
+  },
+  featureTourHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  featureTourEyebrow: {
+    color: COLORS.primary,
+    fontSize: 17,
+    fontFamily: "Boogaloo_400Regular",
+    letterSpacing: 0.3,
+  },
+  featureCountPill: {
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderWidth: 1,
+    borderColor: COLORS.primary + "45",
+    backgroundColor: COLORS.primary + "18",
+  },
+  featureCountPillText: {
+    color: COLORS.primary,
+    fontSize: 13,
+    fontFamily: "Boogaloo_400Regular",
+  },
+  featureItem: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 12,
+    paddingVertical: 8,
+  },
+  featureIconCircle: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: COLORS.accent + "50",
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+    borderColor: COLORS.primary + "28",
+    marginTop: 2,
+  },
+  featureSingle: {
+    alignItems: "center",
+    paddingHorizontal: 8,
+    paddingVertical: 8,
+    gap: 10,
+  },
+  featureSingleDesktop: {
+    paddingHorizontal: 20,
+  },
+  featureIconCircleLarge: {
+    width: 76,
+    height: 76,
+    borderRadius: 38,
+    backgroundColor: COLORS.accent + "45",
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+    borderColor: COLORS.primary + "35",
+  },
+  featureSingleTitle: {
+    color: COLORS.primary,
+    fontSize: 28,
+    fontFamily: "Boogaloo_400Regular",
+    textAlign: "center",
+  },
+  featureSingleDescription: {
+    color: COLORS.text,
+    opacity: 0.82,
+    textAlign: "center",
+    fontSize: 16,
+    fontFamily: "Boogaloo_400Regular",
+    lineHeight: 22,
+    maxWidth: 500,
+  },
+  featureTip: {
+    marginTop: 6,
+    width: "100%",
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: COLORS.primary + "22",
+    backgroundColor: COLORS.accent + "55",
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+  },
+  featureTipText: {
+    flex: 1,
+    color: COLORS.text,
+    fontSize: 14,
+    fontFamily: "Boogaloo_400Regular",
+    opacity: 0.82,
+  },
+  featureDots: {
+    flexDirection: "row",
+    justifyContent: "center",
+    gap: 8,
+    paddingTop: 8,
+  },
+  featureDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: COLORS.secondary + "55",
+  },
+  featureDotActive: {
+    width: 18,
+    backgroundColor: COLORS.primary,
   },
   permissionItem: {
     flexDirection: "row",
@@ -1161,6 +1557,67 @@ const styles = StyleSheet.create({
   },
   groupListContent: {
     paddingBottom: 8,
+  },
+  selectionSummary: {
+    gap: 8,
+    backgroundColor: COLORS.accent + "20",
+    borderWidth: 1,
+    borderColor: COLORS.secondary + "24",
+    borderRadius: 14,
+    padding: 12,
+  },
+  selectionSummaryHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  selectionSummaryIcon: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: COLORS.accent + "55",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  selectionSummaryLabel: {
+    color: COLORS.primary,
+    fontSize: 16,
+    fontFamily: "Boogaloo_400Regular",
+    flex: 1,
+  },
+  selectionSummaryCount: {
+    color: COLORS.background,
+    backgroundColor: COLORS.primary,
+    minWidth: 24,
+    textAlign: "center",
+    borderRadius: 12,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    fontSize: 14,
+    fontFamily: "Boogaloo_400Regular",
+  },
+  selectionSummaryHint: {
+    color: COLORS.secondary,
+    fontSize: 14,
+    fontFamily: "Boogaloo_400Regular",
+    opacity: 0.8,
+  },
+  selectedTeamsRow: {
+    gap: 8,
+    paddingRight: 4,
+  },
+  selectedTeamChip: {
+    backgroundColor: COLORS.primary + "14",
+    borderWidth: 1,
+    borderColor: COLORS.primary + "45",
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+  },
+  selectedTeamChipText: {
+    color: COLORS.primary,
+    fontSize: 14,
+    fontFamily: "Boogaloo_400Regular",
   },
   cityItem: {
     flexDirection: "row",

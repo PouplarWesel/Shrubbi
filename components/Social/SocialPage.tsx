@@ -19,7 +19,10 @@ import {
 
 import { Ionicons } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
-import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
+import {
+  SafeAreaView,
+  useSafeAreaInsets,
+} from "react-native-safe-area-context";
 import { BlurView } from "expo-blur";
 
 import { COLORS } from "@/constants/colors";
@@ -200,12 +203,17 @@ const formatTime = (value: string) =>
   });
 
 const buildGoogleMapsUrl = (event: EventRow) => {
-  if (typeof event.latitude === "number" && typeof event.longitude === "number") {
+  if (
+    typeof event.latitude === "number" &&
+    typeof event.longitude === "number"
+  ) {
     return `https://www.google.com/maps/search/?api=1&query=${event.latitude},${event.longitude}`;
   }
 
   const locationQuery = [event.location_name, event.location_address]
-    .filter((segment): segment is string => !!segment && segment.trim().length > 0)
+    .filter(
+      (segment): segment is string => !!segment && segment.trim().length > 0,
+    )
     .join(", ");
   if (!locationQuery) return null;
 
@@ -460,7 +468,9 @@ export default function SocialPage() {
   const [newEventLocationName, setNewEventLocationName] = useState("");
   const [newEventLocationAddress, setNewEventLocationAddress] = useState("");
   const [newEventLatitude, setNewEventLatitude] = useState<number | null>(null);
-  const [newEventLongitude, setNewEventLongitude] = useState<number | null>(null);
+  const [newEventLongitude, setNewEventLongitude] = useState<number | null>(
+    null,
+  );
   const [newEventLocationNotes, setNewEventLocationNotes] = useState("");
   const [locationSuggestions, setLocationSuggestions] = useState<
     LocationSuggestion[]
@@ -526,6 +536,11 @@ export default function SocialPage() {
 
   const userId = session?.user?.id ?? null;
   const { height: windowHeight } = useWindowDimensions();
+  const isPhoneWeb = useMemo(() => {
+    if (Platform.OS !== "web" || typeof navigator === "undefined") return false;
+    return /android|iphone|ipod|mobile/i.test(navigator.userAgent);
+  }, []);
+  const isChatComposeDisabled = isPhoneWeb;
 
   const messageIdSetRef = useRef<Set<string>>(new Set());
   const profilesByIdRef = useRef<Record<string, PublicProfileRow>>({});
@@ -631,21 +646,27 @@ export default function SocialPage() {
     setIsLocationSuggestionListOpen(value.trim().length >= 2);
   }, []);
 
-  const handleCreateEventLocationAddressChange = useCallback((value: string) => {
-    setNewEventLocationAddress(value);
-    setNewEventLatitude(null);
-    setNewEventLongitude(null);
-    setIsLocationSuggestionListOpen(value.trim().length >= 2);
-  }, []);
+  const handleCreateEventLocationAddressChange = useCallback(
+    (value: string) => {
+      setNewEventLocationAddress(value);
+      setNewEventLatitude(null);
+      setNewEventLongitude(null);
+      setIsLocationSuggestionListOpen(value.trim().length >= 2);
+    },
+    [],
+  );
 
-  const applyLocationSuggestion = useCallback((suggestion: LocationSuggestion) => {
-    setNewEventLocationName(suggestion.name);
-    setNewEventLocationAddress(suggestion.address);
-    setNewEventLatitude(suggestion.latitude);
-    setNewEventLongitude(suggestion.longitude);
-    setLocationSuggestions([]);
-    setIsLocationSuggestionListOpen(false);
-  }, []);
+  const applyLocationSuggestion = useCallback(
+    (suggestion: LocationSuggestion) => {
+      setNewEventLocationName(suggestion.name);
+      setNewEventLocationAddress(suggestion.address);
+      setNewEventLatitude(suggestion.latitude);
+      setNewEventLongitude(suggestion.longitude);
+      setLocationSuggestions([]);
+      setIsLocationSuggestionListOpen(false);
+    },
+    [],
+  );
 
   useEffect(() => {
     if (!isCreateEventOpen || !isLocationSuggestionListOpen) {
@@ -686,7 +707,9 @@ export default function SocialPage() {
         }
 
         const payload = await response.json();
-        const features = Array.isArray(payload?.features) ? payload.features : [];
+        const features = Array.isArray(payload?.features)
+          ? payload.features
+          : [];
         const nextSuggestions = features
           .map((feature: any, index: number): LocationSuggestion | null => {
             const address =
@@ -696,7 +719,8 @@ export default function SocialPage() {
             if (!address) return null;
 
             const baseName =
-              typeof feature?.text === "string" && feature.text.trim().length > 0
+              typeof feature?.text === "string" &&
+              feature.text.trim().length > 0
                 ? feature.text.trim()
                 : address.split(",")[0]?.trim() || address;
             const center = Array.isArray(feature?.center) ? feature.center : [];
@@ -715,8 +739,9 @@ export default function SocialPage() {
             };
           })
           .filter(
-            (suggestion: LocationSuggestion | null): suggestion is LocationSuggestion =>
-              !!suggestion,
+            (
+              suggestion: LocationSuggestion | null,
+            ): suggestion is LocationSuggestion => !!suggestion,
           );
 
         if (locationSuggestionRequestIdRef.current === requestId) {
@@ -1749,30 +1774,34 @@ export default function SocialPage() {
     return [mine, other] as const;
   }, [joinedTeamIds, teams]);
 
-  const joinTeam = async (teamId: string) => {
+  const switchTeam = async (teamId: string) => {
     if (!userId || isWorkingTeamId) return;
     setErrorMessage("");
     setIsWorkingTeamId(teamId);
-    const { error } = await supabase
-      .from("team_memberships")
-      .insert({ user_id: userId, team_id: teamId });
 
-    if (error) {
-      setErrorMessage(error.message);
+    const { error: clearError } = await supabase
+      .from("team_memberships")
+      .delete()
+      .eq("user_id", userId);
+
+    if (clearError) {
+      setErrorMessage(clearError.message);
       setIsWorkingTeamId(null);
       return;
     }
 
-    setJoinedTeamIds((prev) =>
-      prev.includes(teamId) ? prev : [...prev, teamId],
-    );
-    setTeamMemberCountById((previous) => {
-      const current = previous[teamId];
-      if (typeof current !== "number") return previous;
-      return { ...previous, [teamId]: current + 1 };
-    });
-    void loadTeamMemberCounts(cityId);
-    await refreshChatChannels(cityId);
+    const { error: joinError } = await supabase
+      .from("team_memberships")
+      .insert({ user_id: userId, team_id: teamId });
+
+    if (joinError) {
+      setErrorMessage(joinError.message);
+      await loadSocialData();
+      setIsWorkingTeamId(null);
+      return;
+    }
+
+    await loadSocialData();
     setIsWorkingTeamId(null);
   };
 
@@ -1792,14 +1821,7 @@ export default function SocialPage() {
       return;
     }
 
-    setJoinedTeamIds((prev) => prev.filter((id) => id !== teamId));
-    setTeamMemberCountById((previous) => {
-      const current = previous[teamId];
-      if (typeof current !== "number") return previous;
-      return { ...previous, [teamId]: Math.max(0, current - 1) };
-    });
-    void loadTeamMemberCounts(cityId);
-    await refreshChatChannels(cityId);
+    await loadSocialData();
     setIsWorkingTeamId(null);
   };
 
@@ -1849,6 +1871,18 @@ export default function SocialPage() {
       return;
     }
 
+    const { error: clearMembershipsError } = await supabase
+      .from("team_memberships")
+      .delete()
+      .eq("user_id", userId);
+
+    if (clearMembershipsError) {
+      setErrorMessage(getFriendlyErrorMessage(clearMembershipsError.message));
+      setIsCreatingTeam(false);
+      await loadSocialData();
+      return;
+    }
+
     const { error: joinError } = await supabase
       .from("team_memberships")
       .insert({
@@ -1880,7 +1914,7 @@ export default function SocialPage() {
     setNewTeamDescription("");
     setIsCreateOpen(false);
     setIsCreatingTeam(false);
-    await refreshChatChannels(cityId);
+    await loadSocialData();
   };
 
   const resetCreateEventDrafts = () => {
@@ -2310,6 +2344,11 @@ export default function SocialPage() {
   };
 
   const sendComposer = async () => {
+    if (isChatComposeDisabled) {
+      setErrorMessage("Typing is disabled on web on phone.");
+      return;
+    }
+
     if (!activeChannelId || !userId || isSendingMessage || isUploadingImage) {
       return;
     }
@@ -2409,6 +2448,11 @@ export default function SocialPage() {
   const uploadKeyboardMediaMessage = async (
     event: KeyboardImageChangeEvent,
   ) => {
+    if (isChatComposeDisabled) {
+      setErrorMessage("Typing is disabled on web on phone.");
+      return;
+    }
+
     if (!activeChannelId || !userId || isUploadingImage || isSendingMessage) {
       return;
     }
@@ -2538,132 +2582,155 @@ export default function SocialPage() {
     }
   };
 
-  const uploadWebFileMessage = async (file: File) => {
-    if (Platform.OS !== "web") return;
-    if (!activeChannelId || !userId || isUploadingImage || isSendingMessage) {
-      return;
-    }
-
-    const mimeType = (file.type || "application/octet-stream").toLowerCase();
-    const attachmentKind = mimeType.includes("gif")
-      ? ("gif" as const)
-      : mimeType.startsWith("image/")
-        ? ("image" as const)
-        : null;
-
-    if (!attachmentKind) {
-      setErrorMessage("Only images (including GIFs) are supported here.");
-      return;
-    }
-
-    setErrorMessage("");
-    setIsUploadingImage(true);
-
-    try {
-      const extension = getFileExtension(file.name || "upload", mimeType);
-      const storagePath = `${activeChannelId}/${userId}/${Date.now()}-${Math.random()
-        .toString(36)
-        .slice(2, 8)}.${extension}`;
-
-      const { error: uploadError } = await supabase.storage
-        .from("chat-media")
-        .upload(storagePath, file, {
-          cacheControl: "3600",
-          upsert: false,
-          contentType: mimeType,
-        });
-
-      if (uploadError) {
-        setErrorMessage(uploadError.message);
-        setIsUploadingImage(false);
+  const uploadWebFileMessage = useCallback(
+    async (file: File) => {
+      if (isChatComposeDisabled) {
+        setErrorMessage("Typing is disabled on web on phone.");
         return;
       }
 
-      const { data: messageId, error: messageError } = await supabase.rpc(
-        "chat_send_message",
-        {
-          p_channel_id: activeChannelId,
-          p_body: composerText.trim() || null,
-          p_kind: attachmentKind,
-          p_thread_id: activeThreadId ?? null,
-          p_reply_to_message_id: replyToMessageId ?? null,
-          p_metadata: {},
-        },
-      );
-
-      if (messageError || !messageId) {
-        setErrorMessage(messageError?.message ?? "Could not create media message.");
-        setIsUploadingImage(false);
+      if (Platform.OS !== "web") return;
+      if (!activeChannelId || !userId || isUploadingImage || isSendingMessage) {
         return;
       }
 
-      const { data: insertedAttachment, error: attachmentError } = await supabase
-        .from("chat_message_attachments")
-        .insert({
-          message_id: messageId,
-          uploaded_by: userId,
+      const mimeType = (file.type || "application/octet-stream").toLowerCase();
+      const attachmentKind = mimeType.includes("gif")
+        ? ("gif" as const)
+        : mimeType.startsWith("image/")
+          ? ("image" as const)
+          : null;
+
+      if (!attachmentKind) {
+        setErrorMessage("Only images (including GIFs) are supported here.");
+        return;
+      }
+
+      setErrorMessage("");
+      setIsUploadingImage(true);
+
+      try {
+        const extension = getFileExtension(file.name || "upload", mimeType);
+        const storagePath = `${activeChannelId}/${userId}/${Date.now()}-${Math.random()
+          .toString(36)
+          .slice(2, 8)}.${extension}`;
+
+        const { error: uploadError } = await supabase.storage
+          .from("chat-media")
+          .upload(storagePath, file, {
+            cacheControl: "3600",
+            upsert: false,
+            contentType: mimeType,
+          });
+
+        if (uploadError) {
+          setErrorMessage(uploadError.message);
+          setIsUploadingImage(false);
+          return;
+        }
+
+        const { data: messageId, error: messageError } = await supabase.rpc(
+          "chat_send_message",
+          {
+            p_channel_id: activeChannelId,
+            p_body: composerText.trim() || null,
+            p_kind: attachmentKind,
+            p_thread_id: activeThreadId ?? null,
+            p_reply_to_message_id: replyToMessageId ?? null,
+            p_metadata: {},
+          },
+        );
+
+        if (messageError || !messageId) {
+          setErrorMessage(
+            messageError?.message ?? "Could not create media message.",
+          );
+          setIsUploadingImage(false);
+          return;
+        }
+
+        const { data: insertedAttachment, error: attachmentError } =
+          await supabase
+            .from("chat_message_attachments")
+            .insert({
+              message_id: messageId,
+              uploaded_by: userId,
+              kind: attachmentKind,
+              storage_bucket: "chat-media",
+              storage_path: storagePath,
+              mime_type: mimeType,
+              file_size_bytes: Math.max(1, file.size || 1),
+              width: null,
+              height: null,
+            })
+            .select(
+              "id, message_id, kind, storage_bucket, storage_path, mime_type, file_size_bytes, width, height, uploaded_by, created_at",
+            )
+            .single();
+
+        if (attachmentError) {
+          setErrorMessage(attachmentError.message);
+          setIsUploadingImage(false);
+          return;
+        }
+
+        upsertMessageInState({
+          id: messageId,
+          channel_id: activeChannelId,
+          thread_id: activeThreadId ?? null,
+          sender_id: userId,
+          reply_to_message_id: replyToMessageId ?? null,
           kind: attachmentKind,
-          storage_bucket: "chat-media",
-          storage_path: storagePath,
-          mime_type: mimeType,
-          file_size_bytes: Math.max(1, file.size || 1),
-          width: null,
-          height: null,
-        })
-        .select(
-          "id, message_id, kind, storage_bucket, storage_path, mime_type, file_size_bytes, width, height, uploaded_by, created_at",
-        )
-        .single();
-
-      if (attachmentError) {
-        setErrorMessage(attachmentError.message);
-        setIsUploadingImage(false);
-        return;
-      }
-
-      upsertMessageInState({
-        id: messageId,
-        channel_id: activeChannelId,
-        thread_id: activeThreadId ?? null,
-        sender_id: userId,
-        reply_to_message_id: replyToMessageId ?? null,
-        kind: attachmentKind,
-        body: composerText.trim() || null,
-        metadata: {},
-        created_at: new Date().toISOString(),
-        deleted_at: null,
-      });
-
-      if (insertedAttachment) {
-        upsertAttachmentInState(insertedAttachment as ChatAttachmentRow);
-      } else {
-        upsertAttachmentInState({
-          id: `local-${messageId}`,
-          message_id: messageId,
-          uploaded_by: userId,
-          kind: attachmentKind,
-          storage_bucket: "chat-media",
-          storage_path: storagePath,
-          mime_type: mimeType,
-          file_size_bytes: Math.max(1, file.size || 1),
-          width: null,
-          height: null,
+          body: composerText.trim() || null,
+          metadata: {},
           created_at: new Date().toISOString(),
+          deleted_at: null,
         });
-      }
 
-      setComposerText("");
-      setReplyToMessageId(null);
-      setThreadTitleDraft("");
-      setIsThreadMode(false);
-    } catch (error) {
-      setErrorMessage(
-        error instanceof Error ? error.message : "Could not upload image.",
-      );
-    } finally {
-      setIsUploadingImage(false);
-    }
-  };
+        if (insertedAttachment) {
+          upsertAttachmentInState(insertedAttachment as ChatAttachmentRow);
+        } else {
+          upsertAttachmentInState({
+            id: `local-${messageId}`,
+            message_id: messageId,
+            uploaded_by: userId,
+            kind: attachmentKind,
+            storage_bucket: "chat-media",
+            storage_path: storagePath,
+            mime_type: mimeType,
+            file_size_bytes: Math.max(1, file.size || 1),
+            width: null,
+            height: null,
+            created_at: new Date().toISOString(),
+          });
+        }
+
+        setComposerText("");
+        setReplyToMessageId(null);
+        setThreadTitleDraft("");
+        setIsThreadMode(false);
+      } catch (error) {
+        setErrorMessage(
+          error instanceof Error ? error.message : "Could not upload image.",
+        );
+      } finally {
+        setIsUploadingImage(false);
+      }
+    },
+    [
+      activeChannelId,
+      activeThreadId,
+      composerText,
+      isChatComposeDisabled,
+      isSendingMessage,
+      isUploadingImage,
+      replyToMessageId,
+      supabase,
+      upsertAttachmentInState,
+      upsertMessageInState,
+      userId,
+    ],
+  );
 
   const handleWebComposerPaste = useCallback(
     (event: any) => {
@@ -2720,6 +2787,11 @@ export default function SocialPage() {
   }, []);
 
   const uploadImageMessage = async () => {
+    if (isChatComposeDisabled) {
+      setErrorMessage("Typing is disabled on web on phone.");
+      return;
+    }
+
     if (!activeChannelId || !userId || isUploadingImage || isSendingMessage) {
       return;
     }
@@ -2961,7 +3033,9 @@ export default function SocialPage() {
                 {event.location_address}
               </Text>
             )}
-            <Text style={styles.eventLocationHintText}>Open in Google Maps</Text>
+            <Text style={styles.eventLocationHintText}>
+              Open in Google Maps
+            </Text>
           </View>
         </Pressable>
 
@@ -3036,7 +3110,7 @@ export default function SocialPage() {
           )}
         </View>
         <Pressable
-          onPress={() => (isJoined ? leaveTeam(team.id) : joinTeam(team.id))}
+          onPress={() => (isJoined ? leaveTeam(team.id) : switchTeam(team.id))}
           style={[styles.teamActionBtn, isJoined && styles.teamActionBtnJoined]}
         >
           <Text
@@ -3045,7 +3119,7 @@ export default function SocialPage() {
               isJoined && styles.teamActionBtnTextJoined,
             ]}
           >
-            {isJoined ? "Leave" : "Join"}
+            {isJoined ? "Leave" : joinedTeamIds.length > 0 ? "Switch" : "Join"}
           </Text>
         </Pressable>
       </View>
@@ -3459,11 +3533,26 @@ export default function SocialPage() {
               </View>
             )}
 
+            {isChatComposeDisabled && (
+              <View style={styles.composeDisabledBanner}>
+                <Ionicons
+                  name="information-circle-outline"
+                  size={16}
+                  color={COLORS.secondary}
+                />
+                <Text style={styles.composeDisabledBannerText}>
+                  Typing is disabled on web on phone.
+                </Text>
+              </View>
+            )}
+
             <View style={styles.composerControls}>
               <Pressable
                 onPress={() => setIsThreadMode(!isThreadMode)}
+                disabled={isChatComposeDisabled}
                 style={[
                   styles.controlButton,
+                  isChatComposeDisabled && styles.controlButtonDisabled,
                   isThreadMode && styles.controlButtonActive,
                 ]}
               >
@@ -3475,7 +3564,11 @@ export default function SocialPage() {
               </Pressable>
               <Pressable
                 onPress={() => void uploadImageMessage()}
-                style={styles.controlButton}
+                disabled={isChatComposeDisabled}
+                style={[
+                  styles.controlButton,
+                  isChatComposeDisabled && styles.controlButtonDisabled,
+                ]}
               >
                 <Ionicons name="image" size={18} color={COLORS.primary} />
               </Pressable>
@@ -3494,14 +3587,18 @@ export default function SocialPage() {
             <View style={styles.inputRow}>
               <TextInput
                 placeholder={
-                  Platform.OS === "web"
-                    ? "Say something... (paste or drop an image)"
-                    : "Say something..."
+                  isChatComposeDisabled
+                    ? "Typing is disabled on web on phone."
+                    : Platform.OS === "web"
+                      ? "Say something... (paste or drop an image)"
+                      : "Say something..."
                 }
                 placeholderTextColor={COLORS.text + "60"}
                 value={composerText}
                 onChangeText={setComposerText}
+                editable={!isChatComposeDisabled}
                 onFocus={() => {
+                  if (isChatComposeDisabled) return;
                   setIsKeyboardVisible(true);
                 }}
                 onBlur={() => {
@@ -3509,11 +3606,13 @@ export default function SocialPage() {
                   setIsKeyboardVisible(false);
                 }}
                 {...(Platform.OS === "web"
-                  ? ({
-                      onPaste: handleWebComposerPaste,
-                      onDrop: handleWebComposerDrop,
-                      onDragOver: handleWebComposerDragOver,
-                    } as any)
+                  ? !isChatComposeDisabled
+                    ? ({
+                        onPaste: handleWebComposerPaste,
+                        onDrop: handleWebComposerDrop,
+                        onDragOver: handleWebComposerDragOver,
+                      } as any)
+                    : ({} as any)
                   : {
                       onImageChange: (event: KeyboardImageChangeEvent) =>
                         void uploadKeyboardMediaMessage(event),
@@ -3524,9 +3623,15 @@ export default function SocialPage() {
               <Pressable
                 onPress={() => void sendComposer()}
                 disabled={
-                  isSendingMessage || isUploadingImage || !activeChannelId
+                  isChatComposeDisabled ||
+                  isSendingMessage ||
+                  isUploadingImage ||
+                  !activeChannelId
                 }
-                style={styles.sendButton}
+                style={[
+                  styles.sendButton,
+                  isChatComposeDisabled && styles.sendButtonDisabled,
+                ]}
               >
                 {isSendingMessage || isUploadingImage ? (
                   <ActivityIndicator color={COLORS.background} size="small" />
@@ -3816,11 +3921,15 @@ export default function SocialPage() {
                 style={styles.formInput}
               />
               {isLocationSuggestionListOpen &&
-                (isLoadingLocationSuggestions || locationSuggestions.length > 0) && (
+                (isLoadingLocationSuggestions ||
+                  locationSuggestions.length > 0) && (
                   <View style={styles.locationSuggestionsCard}>
                     {isLoadingLocationSuggestions ? (
                       <View style={styles.locationSuggestionsLoadingRow}>
-                        <ActivityIndicator size="small" color={COLORS.primary} />
+                        <ActivityIndicator
+                          size="small"
+                          color={COLORS.primary}
+                        />
                         <Text style={styles.locationSuggestionsLoadingText}>
                           Searching places...
                         </Text>
@@ -4325,6 +4434,23 @@ const styles = StyleSheet.create({
     gap: 8,
     marginBottom: 8,
   },
+  composeDisabledBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    backgroundColor: COLORS.warning + "18",
+    borderWidth: 1,
+    borderColor: COLORS.warning + "4D",
+    borderRadius: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    marginBottom: 8,
+  },
+  composeDisabledBannerText: {
+    color: COLORS.secondary,
+    fontSize: 13,
+    fontFamily: "Boogaloo_400Regular",
+  },
   controlButton: {
     width: 36,
     height: 36,
@@ -4332,6 +4458,9 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.accent + "30",
     justifyContent: "center",
     alignItems: "center",
+  },
+  controlButtonDisabled: {
+    opacity: 0.45,
   },
   controlButtonActive: {
     backgroundColor: COLORS.primary,
@@ -4372,6 +4501,9 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.primary,
     justifyContent: "center",
     alignItems: "center",
+  },
+  sendButtonDisabled: {
+    opacity: 0.45,
   },
   /* Form Styles */
   formCard: {

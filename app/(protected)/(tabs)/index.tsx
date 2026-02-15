@@ -1914,9 +1914,6 @@ export default function Page() {
             <SettingsSection
               ref={settingsRef}
               onRequestCamera={handleRequestCamera}
-              onInputFocus={() => {
-                settingsBottomSheetModalRef.current?.expand();
-              }}
               onProfileSaved={(profile) => {
                 const nextName =
                   profile.full_name.trim() ||
