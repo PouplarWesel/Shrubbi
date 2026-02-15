@@ -16,6 +16,12 @@ export default function ProtectedLayout() {
         }}
       />
       <Stack.Screen
+        name="help"
+        options={{
+          headerShown: false,
+        }}
+      />
+      <Stack.Screen
         name="(tabs)"
         options={{
           headerShown: false,

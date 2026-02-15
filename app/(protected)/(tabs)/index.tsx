@@ -1851,7 +1851,7 @@ export default function Page() {
                 styles.actionButton,
                 pressed && styles.pressed,
               ]}
-              onPress={() => router.push("/(protected)/onboarding")}
+              onPress={() => router.push("/(protected)/help")}
             >
               <Ionicons
                 name="help-circle-outline"
