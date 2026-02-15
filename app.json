@@ -9,6 +9,9 @@
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "platforms": ["ios", "android", "web"],
+    "web": {
+      "output": "static"
+    },
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.flemingvincent.shrubbi",
