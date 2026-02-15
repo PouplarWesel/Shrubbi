@@ -13,13 +13,30 @@ import { COLORS } from "@/constants/colors";
 
 const DISMISS_WAIT_SECONDS = 3;
 const APK_URL = "https://github.com/PouplarWesel/Shrubbi/releases";
+const WEB_WARNING_DISMISSED_KEY = "shrubbi:web_warning_dismissed:v1";
 
 export function WebStartupWarning() {
-  const [visible, setVisible] = useState(Platform.OS === "web");
+  const [visible, setVisible] = useState(false);
   const [secondsLeft, setSecondsLeft] = useState(DISMISS_WAIT_SECONDS);
   const isPhoneWeb = useMemo(() => {
     if (Platform.OS !== "web" || typeof navigator === "undefined") return false;
     return /android|iphone|ipod|mobile/i.test(navigator.userAgent);
+  }, []);
+
+  useEffect(() => {
+    if (Platform.OS !== "web" || typeof window === "undefined") {
+      setVisible(false);
+      return;
+    }
+
+    try {
+      const dismissedValue = window.localStorage.getItem(
+        WEB_WARNING_DISMISSED_KEY,
+      );
+      setVisible(dismissedValue !== "1");
+    } catch {
+      setVisible(true);
+    }
   }, []);
 
   useEffect(() => {
@@ -61,6 +78,19 @@ export function WebStartupWarning() {
     void Linking.openURL(APK_URL);
   };
 
+  const handleDismiss = () => {
+    if (!canClose) return;
+
+    if (Platform.OS === "web" && typeof window !== "undefined") {
+      try {
+        window.localStorage.setItem(WEB_WARNING_DISMISSED_KEY, "1");
+      } catch {
+        // Ignore localStorage failures.
+      }
+    }
+    setVisible(false);
+  };
+
   return (
     <View style={styles.backdrop}>
       <View style={styles.modal}>
@@ -78,7 +108,7 @@ export function WebStartupWarning() {
         <Pressable
           accessibilityRole="button"
           disabled={!canClose}
-          onPress={() => setVisible(false)}
+          onPress={handleDismiss}
           style={[styles.closeButton, !canClose && styles.closeButtonDisabled]}
         >
           <Text
