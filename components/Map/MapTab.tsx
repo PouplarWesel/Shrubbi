@@ -763,7 +763,16 @@ export default function MapTab() {
   const bottomInset = insets.bottom > 0 ? insets.bottom : 24;
   const tabBarHeight = 68;
   const locateButtonBottom = bottomInset + tabBarHeight + 16;
+  const globalCounterBottom = bottomInset + tabBarHeight + 16;
   const selectedCityCardBottom = bottomInset + tabBarHeight + 8;
+  const globalCo2RemovedKg = useMemo(
+    () =>
+      rows.reduce(
+        (total, row) => total + safeNumber(row.total_co2_removed_kg),
+        0,
+      ),
+    [rows],
+  );
 
   const handleLocatePress = useCallback(async () => {
     setIsLocating(true);
@@ -911,6 +920,13 @@ export default function MapTab() {
           <Ionicons name="locate" size={20} color={COLORS.primary} />
         )}
       </Pressable>
+
+      <View style={[styles.globalCounter, { bottom: globalCounterBottom }]}>
+        <Text style={styles.globalCounterLabel}>Global CO2 absorbed</Text>
+        <Text style={styles.globalCounterValue}>
+          {formatKg(globalCo2RemovedKg)}
+        </Text>
+      </View>
 
       <View style={[styles.overlay, { paddingTop: insets.top + 10 }]}>
         <View style={styles.panel}>
@@ -1103,6 +1119,36 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 6 },
     shadowOpacity: 0.25,
     shadowRadius: 10,
+  },
+  globalCounter: {
+    position: "absolute",
+    left: 16,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 14,
+    backgroundColor: COLORS.background + "EB",
+    borderWidth: 1,
+    borderColor: COLORS.primary + "22",
+    zIndex: 50,
+    elevation: 10,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.22,
+    shadowRadius: 10,
+  },
+  globalCounterLabel: {
+    color: COLORS.secondary,
+    fontSize: 10,
+    fontWeight: "700",
+    opacity: 0.88,
+    textTransform: "uppercase",
+    letterSpacing: 0.3,
+  },
+  globalCounterValue: {
+    color: COLORS.primary,
+    fontSize: 15,
+    fontWeight: "900",
+    marginTop: 2,
   },
   panel: {
     borderRadius: 18,

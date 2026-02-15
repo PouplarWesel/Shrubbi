@@ -1026,6 +1026,14 @@ export default function MapTabWeb() {
     if (!statsBreakdown.length) return 1;
     return Math.max(1, statsBreakdown[0]?.value ?? 1);
   }, [statsBreakdown]);
+  const globalCo2RemovedKg = useMemo(
+    () =>
+      rows.reduce(
+        (total, row) => total + safeNumber(row.total_co2_removed_kg),
+        0,
+      ),
+    [rows],
+  );
 
   const handleCloseSelected = useCallback(() => {
     setSelectedCityId(null);
@@ -1105,6 +1113,13 @@ export default function MapTabWeb() {
           <Ionicons name="locate" size={20} color={COLORS.primary} />
         )}
       </Pressable>
+
+      <View style={styles.globalCounter}>
+        <Text style={styles.globalCounterLabel}>Global CO2 absorbed</Text>
+        <Text style={styles.globalCounterValue}>
+          {formatKg(globalCo2RemovedKg)}
+        </Text>
+      </View>
 
       {selectedCity ? (
         <View style={styles.bottomOverlay}>
@@ -1229,6 +1244,32 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: COLORS.primary + "22",
     zIndex: 50,
+  },
+  globalCounter: {
+    position: "absolute",
+    left: 16,
+    bottom: 108,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 14,
+    backgroundColor: COLORS.background + "EB",
+    borderWidth: 1,
+    borderColor: COLORS.primary + "22",
+    zIndex: 50,
+  },
+  globalCounterLabel: {
+    color: COLORS.secondary,
+    fontSize: 10,
+    fontWeight: "700",
+    opacity: 0.88,
+    textTransform: "uppercase",
+    letterSpacing: 0.3,
+  },
+  globalCounterValue: {
+    color: COLORS.primary,
+    fontSize: 15,
+    fontWeight: "900",
+    marginTop: 2,
   },
   panel: {
     borderRadius: 18,
