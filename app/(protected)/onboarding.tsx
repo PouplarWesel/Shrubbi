@@ -29,6 +29,7 @@ import {
 } from "@/lib/localCache";
 
 const { width } = Dimensions.get("window");
+const MAX_JOINED_GROUPS = 3;
 
 type CityOption = {
   id: string;
@@ -136,16 +137,17 @@ const getNotificationPermissionState = async (): Promise<PermissionState> => {
   }
 };
 
-const requestNotificationPermissionState = async (): Promise<PermissionState> => {
-  if (Platform.OS === "web") return "unavailable";
-  try {
-    const Notifications = await import("expo-notifications");
-    const result = await Notifications.requestPermissionsAsync();
-    return normalizePermissionState(result.status);
-  } catch {
-    return "unavailable";
-  }
-};
+const requestNotificationPermissionState =
+  async (): Promise<PermissionState> => {
+    if (Platform.OS === "web") return "unavailable";
+    try {
+      const Notifications = await import("expo-notifications");
+      const result = await Notifications.requestPermissionsAsync();
+      return normalizePermissionState(result.status);
+    } catch {
+      return "unavailable";
+    }
+  };
 
 export default function OnboardingPage() {
   const { width: viewportWidth } = useWindowDimensions();
@@ -489,14 +491,16 @@ export default function OnboardingPage() {
       setTeams(normalizedTeams);
       setJoinedTeamIds(existingMemberships);
       setSelectedTeamIds((current) => {
+        const existingValid = existingMemberships.filter((id) =>
+          normalizedTeams.some((team) => team.id === id),
+        );
         const currentValid = current.filter((id) =>
           normalizedTeams.some((team) => team.id === id),
         );
-        if (currentValid.length > 0) return currentValid;
-
-        return existingMemberships.filter((id) =>
-          normalizedTeams.some((team) => team.id === id),
+        const combined = Array.from(
+          new Set([...existingValid, ...currentValid]),
         );
+        return combined.slice(0, MAX_JOINED_GROUPS);
       });
       setStep(4);
     } finally {
@@ -511,6 +515,13 @@ export default function OnboardingPage() {
     try {
       setErrorMessage("");
       setIsJoiningGroup(true);
+
+      const totalSelectedTeams = new Set([...joinedTeamIds, ...selectedTeamIds])
+        .size;
+      if (totalSelectedTeams > MAX_JOINED_GROUPS) {
+        setErrorMessage(`You can only join up to ${MAX_JOINED_GROUPS} groups.`);
+        return;
+      }
 
       const teamIdsToJoin = selectedTeamIds.filter(
         (teamId) => !joinedTeamIds.includes(teamId),
@@ -544,11 +555,18 @@ export default function OnboardingPage() {
   };
 
   const toggleTeamSelection = (teamId: string) => {
-    setSelectedTeamIds((current) =>
-      current.includes(teamId)
-        ? current.filter((id) => id !== teamId)
-        : [...current, teamId],
-    );
+    setSelectedTeamIds((current) => {
+      if (current.includes(teamId)) {
+        return current.filter((id) => id !== teamId);
+      }
+
+      if (current.length >= MAX_JOINED_GROUPS) {
+        setErrorMessage(`You can only join up to ${MAX_JOINED_GROUPS} groups.`);
+        return current;
+      }
+
+      return [...current, teamId];
+    });
   };
 
   const headerTitle =
@@ -571,7 +589,7 @@ export default function OnboardingPage() {
           ? "Allow what you want. Everything here is optional."
           : step === 3
             ? "We'll suggest nearby cities, then you can adjust."
-            : "Pick as many local groups as you want.";
+            : `Pick up to ${MAX_JOINED_GROUPS} local groups.`;
 
   if (isLoading) {
     return (
@@ -1068,8 +1086,8 @@ export default function OnboardingPage() {
               <View style={[styles.permissionsList, styles.groupsContainer]}>
                 <Text style={styles.permissionItemTitle}>Join Groups</Text>
                 <Text style={styles.permissionItemDescription}>
-                  Pick one or more local teams to connect with people in your
-                  city.
+                  Pick up to {MAX_JOINED_GROUPS} local teams to connect with
+                  people in your city.
                 </Text>
 
                 {teams.length === 0 ? (
@@ -1106,7 +1124,7 @@ export default function OnboardingPage() {
                           />
                         </View>
                         <Text style={styles.selectionSummaryLabel}>
-                          Selected teams
+                          Selected teams (max {MAX_JOINED_GROUPS})
                         </Text>
                         <Text style={styles.selectionSummaryCount}>
                           {selectedTeamIds.length}
@@ -1128,7 +1146,8 @@ export default function OnboardingPage() {
                         </ScrollView>
                       ) : (
                         <Text style={styles.selectionSummaryHint}>
-                          Pick teams from the list below.
+                          Pick up to {MAX_JOINED_GROUPS} teams from the list
+                          below.
                         </Text>
                       )}
                     </View>
@@ -1144,9 +1163,13 @@ export default function OnboardingPage() {
                       renderItem={({ item }) => {
                         const isSelected = selectedTeamIds.includes(item.id);
                         const isJoined = joinedTeamIds.includes(item.id);
+                        const isSelectionDisabled =
+                          isJoined ||
+                          (!isSelected &&
+                            selectedTeamIds.length >= MAX_JOINED_GROUPS);
                         return (
                           <Pressable
-                            disabled={isJoined}
+                            disabled={isSelectionDisabled}
                             onPress={() => toggleTeamSelection(item.id)}
                             style={[
                               styles.cityItem,
@@ -1164,6 +1187,10 @@ export default function OnboardingPage() {
                             </View>
                             {isJoined ? (
                               <Text style={styles.cityCountry}>Joined</Text>
+                            ) : isSelectionDisabled ? (
+                              <Text style={styles.cityCountry}>
+                                Max {MAX_JOINED_GROUPS}
+                              </Text>
                             ) : isSelected ? (
                               <Ionicons
                                 name="checkmark-circle"

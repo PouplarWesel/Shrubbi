@@ -36,16 +36,13 @@ const getErrorMessage = (err: unknown, fallback: string) => {
 const isValidEmail = (value: string) => /\S+@\S+\.\S+/.test(value.trim());
 
 export default function Page() {
-  const { isLoaded, signUp, verifyOtp } = useSignUp();
+  const { isLoaded, signUp } = useSignUp();
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
-  const [pendingVerification, setPendingVerification] = useState(false);
-  const [token, setToken] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [isVerifying, setIsVerifying] = useState(false);
 
   const onSignUpPress = async () => {
     if (!isLoaded || isSubmitting) return;
@@ -65,7 +62,6 @@ export default function Page() {
         email,
         password,
       });
-      setPendingVerification(true);
     } catch (err) {
       setErrorMessage(getErrorMessage(err, "Could not create account."));
     } finally {
@@ -73,124 +69,7 @@ export default function Page() {
     }
   };
 
-  const onVerifyPress = async () => {
-    if (!isLoaded || isVerifying) return;
-    if (!token.trim()) {
-      setErrorMessage("Enter the verification code.");
-      return;
-    }
-
-    try {
-      setErrorMessage("");
-      setIsVerifying(true);
-      await verifyOtp({
-        email,
-        token,
-      });
-    } catch (err) {
-      setErrorMessage(getErrorMessage(err, "Could not verify code."));
-    } finally {
-      setIsVerifying(false);
-    }
-  };
-
   const signUpDisabled = !email || !password || !isLoaded || isSubmitting;
-  const verifyDisabled = !token || !isLoaded || isVerifying;
-
-  if (pendingVerification) {
-    return (
-      <SafeAreaView style={styles.safeArea}>
-        {Platform.OS !== "web" ? (
-          <View style={styles.backgroundDecoration}>
-            <View style={[styles.blob, styles.blob1]} />
-            <View style={[styles.blob, styles.blob2]} />
-          </View>
-        ) : null}
-
-        <ScrollView
-          automaticallyAdjustsScrollIndicatorInsets
-          contentInsetAdjustmentBehavior="automatic"
-          contentContainerStyle={styles.scrollContent}
-          showsVerticalScrollIndicator={false}
-        >
-          <View style={styles.header}>
-            <View style={styles.logoContainer}>
-              <Image
-                source={require("@/assets/icon_nobg.png")}
-                style={styles.logo}
-                resizeMode="contain"
-              />
-            </View>
-            <Text style={styles.title}>Verify Account</Text>
-            <Text style={styles.subtitle}>Enter the code sent to {email}</Text>
-          </View>
-
-          <View style={styles.formContainer}>
-            <View style={styles.inputGroup}>
-              <Text style={styles.label}>Verification Code</Text>
-              <View style={styles.inputWrapper}>
-                <Ionicons
-                  name="key-outline"
-                  size={20}
-                  color={COLORS.secondary}
-                  style={styles.inputIcon}
-                />
-                <TextInput
-                  placeholder="Enter 6-digit code"
-                  placeholderTextColor={COLORS.secondary + "80"}
-                  keyboardType="number-pad"
-                  style={styles.input}
-                  value={token}
-                  onChangeText={setToken}
-                />
-              </View>
-            </View>
-
-            {!!errorMessage && (
-              <View style={styles.messageContainer}>
-                <Ionicons
-                  name="alert-circle-outline"
-                  size={18}
-                  color={COLORS.secondary}
-                />
-                <Text style={styles.errorMessage}>{errorMessage}</Text>
-              </View>
-            )}
-
-            <Pressable
-              disabled={verifyDisabled}
-              onPress={onVerifyPress}
-              style={({ pressed }) => [
-                styles.primaryButton,
-                verifyDisabled && styles.disabledButton,
-                pressed && !verifyDisabled && styles.pressedButton,
-              ]}
-            >
-              {isVerifying ? (
-                <ActivityIndicator color={COLORS.background} />
-              ) : (
-                <>
-                  <Text style={styles.primaryButtonText}>Verify</Text>
-                  <Ionicons
-                    name="checkmark-circle"
-                    size={20}
-                    color={COLORS.background}
-                  />
-                </>
-              )}
-            </Pressable>
-
-            <Pressable
-              onPress={() => setPendingVerification(false)}
-              style={styles.backButton}
-            >
-              <Text style={styles.backButtonText}>Use a different email</Text>
-            </Pressable>
-          </View>
-        </ScrollView>
-      </SafeAreaView>
-    );
-  }
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -468,15 +347,6 @@ const styles = StyleSheet.create({
     opacity: 0.5,
     shadowOpacity: 0,
     elevation: 0,
-  },
-  backButton: {
-    alignItems: "center",
-    padding: 12,
-  },
-  backButtonText: {
-    color: COLORS.secondary,
-    fontSize: 16,
-    fontFamily: "Boogaloo_400Regular",
   },
   footer: {
     flexDirection: "row",

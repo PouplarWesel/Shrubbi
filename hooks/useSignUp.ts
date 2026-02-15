@@ -18,29 +18,27 @@ export const useSignUp = () => {
       password: normalizedPassword,
     });
     if (error) throw error;
-  };
 
-  const verifyOtp = async ({
-    email,
-    token,
-  }: {
-    email: string;
-    token: string;
-  }) => {
-    const normalizedEmail = email.trim().toLowerCase();
-    const normalizedToken = token.trim();
-
-    const { error } = await supabase.auth.verifyOtp({
+    const { error: signInError } = await supabase.auth.signInWithPassword({
       email: normalizedEmail,
-      token: normalizedToken,
-      type: "email",
+      password: normalizedPassword,
     });
-    if (error) throw error;
+
+    if (signInError) {
+      if (
+        signInError.message.toLowerCase().includes("email not confirmed") ||
+        signInError.message.toLowerCase().includes("email_not_confirmed")
+      ) {
+        throw new Error(
+          "Email confirmation is enabled in Supabase. Disable Confirm email in Auth settings to skip email codes.",
+        );
+      }
+      throw signInError;
+    }
   };
 
   return {
     isLoaded,
     signUp,
-    verifyOtp,
   };
 };

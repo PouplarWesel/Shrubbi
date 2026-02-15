@@ -195,6 +195,7 @@ const EVENT_DATE_TIME_REGEX =
 const CHAT_MEDIA_SIGNED_URL_TTL_SECONDS = 6 * 60 * 60;
 const LOCATION_AUTOCOMPLETE_DEBOUNCE_MS = 300;
 const LOCATION_AUTOCOMPLETE_LIMIT = 6;
+const MAX_JOINED_GROUPS = 3;
 const MAPBOX_ACCESS_TOKEN = process.env.EXPO_PUBLIC_MAPBOX_ACCESS_TOKEN ?? "";
 
 const getFriendlyErrorMessage = (message: string) => {
@@ -2089,21 +2090,18 @@ export default function SocialPage() {
     ]);
   }, [attachmentsByMessage, channels, userId]);
 
-  const switchTeam = async (teamId: string) => {
+  const joinTeam = async (teamId: string) => {
     if (!userId || isWorkingTeamId) return;
-    setErrorMessage("");
-    setIsWorkingTeamId(teamId);
-
-    const { error: clearError } = await supabase
-      .from("team_memberships")
-      .delete()
-      .eq("user_id", userId);
-
-    if (clearError) {
-      setErrorMessage(clearError.message);
-      setIsWorkingTeamId(null);
+    if (joinedTeamIds.includes(teamId)) return;
+    if (joinedTeamIds.length >= MAX_JOINED_GROUPS) {
+      setErrorMessage(
+        `You can only join up to ${MAX_JOINED_GROUPS} groups. Leave one first.`,
+      );
       return;
     }
+
+    setErrorMessage("");
+    setIsWorkingTeamId(teamId);
 
     const { error: joinError } = await supabase
       .from("team_memberships")
@@ -2145,6 +2143,13 @@ export default function SocialPage() {
 
   const createTeam = async () => {
     if (!userId || !cityId || isCreatingTeam) return;
+    if (joinedTeamIds.length >= MAX_JOINED_GROUPS) {
+      setErrorMessage(
+        `You can only join up to ${MAX_JOINED_GROUPS} groups. Leave one first.`,
+      );
+      return;
+    }
+
     const trimmedName = newTeamName.trim();
     const trimmedDescription = newTeamDescription.trim();
 
@@ -2184,18 +2189,6 @@ export default function SocialPage() {
         createdTeamError?.message ??
           "Group was created, but we could not load it right away.",
       );
-      setIsCreatingTeam(false);
-      await loadSocialData();
-      return;
-    }
-
-    const { error: clearMembershipsError } = await supabase
-      .from("team_memberships")
-      .delete()
-      .eq("user_id", userId);
-
-    if (clearMembershipsError) {
-      setErrorMessage(getFriendlyErrorMessage(clearMembershipsError.message));
       setIsCreatingTeam(false);
       await loadSocialData();
       return;
@@ -3416,6 +3409,9 @@ export default function SocialPage() {
 
   const renderTeamCard = (team: TeamRow) => {
     const isJoined = joinedTeamIds.includes(team.id);
+    const isAtJoinLimit = joinedTeamIds.length >= MAX_JOINED_GROUPS;
+    const isJoinDisabled = !isJoined && isAtJoinLimit;
+    const isWorkingThisTeam = isWorkingTeamId === team.id;
     const memberCount = teamMemberCountById[team.id];
     const memberLabel =
       typeof memberCount === "number" ? `${memberCount} members` : "Members...";
@@ -3435,16 +3431,23 @@ export default function SocialPage() {
           )}
         </View>
         <Pressable
-          onPress={() => (isJoined ? leaveTeam(team.id) : switchTeam(team.id))}
-          style={[styles.teamActionBtn, isJoined && styles.teamActionBtnJoined]}
+          disabled={isWorkingThisTeam || isJoinDisabled}
+          onPress={() => (isJoined ? leaveTeam(team.id) : joinTeam(team.id))}
+          style={[
+            styles.teamActionBtn,
+            isJoined && styles.teamActionBtnJoined,
+            (isWorkingThisTeam || isJoinDisabled) &&
+              styles.teamActionBtnDisabled,
+          ]}
         >
           <Text
             style={[
               styles.teamActionBtnText,
               isJoined && styles.teamActionBtnTextJoined,
+              isJoinDisabled && styles.teamActionBtnTextDisabled,
             ]}
           >
-            {isJoined ? "Leave" : joinedTeamIds.length > 0 ? "Switch" : "Join"}
+            {isJoined ? "Leave" : isJoinDisabled ? "Full" : "Join"}
           </Text>
         </Pressable>
       </View>
@@ -4387,6 +4390,9 @@ export default function SocialPage() {
             </View>
           ) : (
             <>
+              <Text style={styles.groupLimitText}>
+                Joined {joinedTeamIds.length}/{MAX_JOINED_GROUPS} groups
+              </Text>
               {joinedTeams.length > 0 && (
                 <>
                   <Text style={styles.sectionLabel}>Your Groups</Text>
@@ -5105,6 +5111,9 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     backgroundColor: COLORS.primary,
   },
+  teamActionBtnDisabled: {
+    opacity: 0.55,
+  },
   teamActionBtnJoined: {
     backgroundColor: "transparent",
     borderWidth: 1,
@@ -5117,6 +5126,16 @@ const styles = StyleSheet.create({
   },
   teamActionBtnTextJoined: {
     color: COLORS.secondary,
+  },
+  teamActionBtnTextDisabled: {
+    color: COLORS.background + "CC",
+  },
+  groupLimitText: {
+    color: COLORS.secondary,
+    fontFamily: "Boogaloo_400Regular",
+    fontSize: 14,
+    opacity: 0.85,
+    marginBottom: 8,
   },
   emptyState: {
     padding: 40,

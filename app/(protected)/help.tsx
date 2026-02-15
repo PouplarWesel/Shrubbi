@@ -4,6 +4,7 @@ import {
   Pressable,
   SafeAreaView,
   ScrollView,
+  StatusBar,
   StyleSheet,
   Text,
   View,
@@ -289,7 +290,13 @@ export default function HelpPage() {
         </View>
       ) : null}
 
-      <View style={[styles.container, isWide && styles.containerWide]}>
+      <View
+        style={[
+          styles.container,
+          Platform.OS === "android" && styles.containerAndroid,
+          isWide && styles.containerWide,
+        ]}
+      >
         <View style={styles.header}>
           <View style={styles.headerTop}>
             <Pressable
@@ -417,11 +424,7 @@ function HelpTopicPanel({ topic }: { topic: HelpTopic }) {
     <BlurView intensity={25} tint="dark" style={styles.detailCard}>
       <View style={styles.detailHeader}>
         <View style={styles.topicIconWrap}>
-          <Ionicons
-            name={topic.icon as any}
-            size={28}
-            color={COLORS.primary}
-          />
+          <Ionicons name={topic.icon as any} size={28} color={COLORS.primary} />
         </View>
         <View style={styles.detailHeaderText}>
           <Text style={styles.detailTitle}>{topic.title}</Text>
@@ -482,8 +485,14 @@ function HelpTopicPanel({ topic }: { topic: HelpTopic }) {
               pressed && styles.pressed,
             ]}
           >
-            <Text style={styles.primaryActionText}>Navigate to {topic.title}</Text>
-            <Ionicons name="arrow-forward" size={18} color={COLORS.background} />
+            <Text style={styles.primaryActionText}>
+              Navigate to {topic.title}
+            </Text>
+            <Ionicons
+              name="arrow-forward"
+              size={18}
+              color={COLORS.background}
+            />
           </Pressable>
         ) : null}
         <Pressable
@@ -531,6 +540,9 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingHorizontal: 20,
     paddingTop: 16,
+  },
+  containerAndroid: {
+    paddingTop: 16 + (StatusBar.currentHeight ?? 0),
   },
   containerWide: {
     maxWidth: 1200,
