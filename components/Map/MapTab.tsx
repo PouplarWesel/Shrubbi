@@ -70,11 +70,19 @@ const metricLabel: Record<MetricKey, string> = {
 };
 
 const BASE_PLACE_LABEL_LAYER_IDS = [
+  "place-label",
+  "settlement-label",
   "settlement-minor-label",
   "settlement-subdivision-label",
   "settlement-major-label",
   "state-label",
+  "state-label-sm",
+  "state-label-md",
+  "state-label-lg",
   "country-label",
+  "country-label-sm",
+  "country-label-md",
+  "country-label-lg",
 ] as const;
 
 const formatCompactNumber = (value: number) => {

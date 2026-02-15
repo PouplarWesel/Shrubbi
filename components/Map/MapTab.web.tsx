@@ -46,11 +46,19 @@ const metricLabel: Record<MetricKey, string> = {
 };
 
 const BASE_PLACE_LABEL_LAYER_IDS = [
+  "place-label",
+  "settlement-label",
   "settlement-minor-label",
   "settlement-subdivision-label",
   "settlement-major-label",
   "state-label",
+  "state-label-sm",
+  "state-label-md",
+  "state-label-lg",
   "country-label",
+  "country-label-sm",
+  "country-label-md",
+  "country-label-lg",
 ] as const;
 
 const formatCompactNumber = (value: number) => {
@@ -413,6 +421,29 @@ const loadMapboxGlAsync = () => {
 };
 
 const hideBasePlaceLabels = (map: any) => {
+  const shouldHidePlaceLayer = (layer: any) => {
+    if (!layer || layer.type !== "symbol") return false;
+    const id = typeof layer.id === "string" ? layer.id : "";
+    const sourceLayer =
+      typeof layer["source-layer"] === "string" ? layer["source-layer"] : "";
+
+    if (
+      /(?:^|-)place-label|settlement|state-label|country-label/i.test(id) ||
+      sourceLayer === "place_label"
+    ) {
+      return true;
+    }
+
+    return false;
+  };
+
+  const styleLayers = map.getStyle?.()?.layers ?? [];
+  for (const layer of styleLayers) {
+    if (shouldHidePlaceLayer(layer) && map.getLayer(layer.id)) {
+      map.setLayoutProperty(layer.id, "visibility", "none");
+    }
+  }
+
   for (const layerId of BASE_PLACE_LABEL_LAYER_IDS) {
     if (map.getLayer(layerId)) {
       map.setLayoutProperty(layerId, "visibility", "none");
@@ -764,6 +795,11 @@ export default function MapTabWeb() {
           if (isCancelled) return;
           hideBasePlaceLabels(map);
           setIsMapReady(true);
+        });
+
+        map.on("styledata", () => {
+          if (isCancelled) return;
+          hideBasePlaceLabels(map);
         });
       } catch (error) {
         setErrorMessage(

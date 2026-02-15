@@ -197,6 +197,7 @@ export default function Page() {
   const [tipHistoryError, setTipHistoryError] = useState("");
   const [plantTotal, setPlantTotal] = useState(0);
   const [toWaterTotal, setToWaterTotal] = useState(0);
+  const [co2CapturedKgPerYear, setCo2CapturedKgPerYear] = useState(0);
   const [wateringDueTasks, setWateringDueTasks] = useState<WateringTask[]>([]);
   const [wateringUpcomingTasks, setWateringUpcomingTasks] = useState<
     WateringTask[]
@@ -524,6 +525,7 @@ export default function Page() {
       if (!isLoaded || !userId) {
         setPlantTotal(0);
         setToWaterTotal(0);
+        setCo2CapturedKgPerYear(0);
         setWateringDueTasks([]);
         setWateringUpcomingTasks([]);
         setDailyQuest(null);
@@ -552,6 +554,7 @@ export default function Page() {
       if (error) {
         setPlantTotal(0);
         setToWaterTotal(0);
+        setCo2CapturedKgPerYear(0);
         setWateringDueTasks([]);
         setWateringUpcomingTasks([]);
         return;
@@ -660,6 +663,7 @@ export default function Page() {
 
       setPlantTotal(nextPlantTotal);
       setToWaterTotal(nextToWaterTotal);
+      setCo2CapturedKgPerYear(carbonPerYearKg);
       setWateringDueTasks(
         nextDueTasks.sort(
           (a, b) => a.scheduledAt.getTime() - b.scheduledAt.getTime(),
@@ -888,6 +892,7 @@ export default function Page() {
   const userEmail = session?.user?.email || "Gardener";
   const fallbackName = userEmail.split("@")[0];
   const userName = profileName || fallbackName;
+  const co2CapturedDisplay = Math.round(co2CapturedKgPerYear).toLocaleString();
 
   return (
     <BottomSheetModalProvider>
@@ -964,6 +969,23 @@ export default function Page() {
                 <Text style={styles.statLabel}>Need Water</Text>
               </LinearGradient>
             </View>
+          </View>
+          <View style={[styles.statCard, styles.co2StatCard]}>
+            <LinearGradient
+              colors={[COLORS.accent + "90", COLORS.accent + "40"]}
+              style={styles.cardGradient}
+            >
+              <View
+                style={[
+                  styles.statIconContainer,
+                  { backgroundColor: COLORS.primary + "24" },
+                ]}
+              >
+                <Ionicons name="cloud-done" size={20} color={COLORS.primary} />
+              </View>
+              <Text style={styles.statValue}>{co2CapturedDisplay}</Text>
+              <Text style={styles.statLabel}>CO2 Captured (kg/year)</Text>
+            </LinearGradient>
           </View>
 
           <View style={styles.wateringContainer}>
@@ -1094,7 +1116,7 @@ export default function Page() {
                               >
                                 {task.name}
                               </Text>
-                              <View style={styles.wateringTaskMetaRow}>
+                              <View style={styles.wateringTaskMetaColumn}>
                                 <Text style={styles.wateringTaskMeta}>
                                   {formatTaskWhenLabel(task)}
                                 </Text>
@@ -1600,6 +1622,9 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: COLORS.secondary + "20",
   },
+  co2StatCard: {
+    marginTop: 16,
+  },
   cardGradient: {
     flex: 1,
     padding: 20,
@@ -1794,10 +1819,9 @@ const styles = StyleSheet.create({
     fontFamily: "Boogaloo_400Regular",
     opacity: 0.6,
   },
-  wateringTaskMetaRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
+  wateringTaskMetaColumn: {
+    flexDirection: "column",
+    gap: 4,
   },
   wateringTaskMetaPoints: {
     color: COLORS.secondary,

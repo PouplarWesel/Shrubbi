@@ -37,6 +37,7 @@ import {
   isValidWaterTimeInput,
   normalizeWaterDays,
   normalizeWaterTimeForInput,
+  parseWaterTimeToMinutes,
   WEEKDAY_OPTIONS,
 } from "@/lib/wateringSchedule";
 
@@ -166,6 +167,65 @@ export default function PlantDetailPage() {
     setWaterDaysDraft(normalizeWaterDays(plant?.water_days));
     setWaterTimeDraft(normalizeWaterTimeForInput(plant?.water_time));
   }, [plant?.water_days, plant?.water_time]);
+
+  type AndroidTimePicker = {
+    open: (options: {
+      hour: number;
+      minute: number;
+      is24Hour: boolean;
+    }) => Promise<{
+      action: string;
+      hour?: number;
+      minute?: number;
+    }>;
+    timeSetAction: string;
+    dismissedAction: string;
+  };
+
+  const RNTimePickerAndroid: AndroidTimePicker | undefined =
+    Platform.OS === "android"
+      ? (require("react-native") as { TimePickerAndroid?: AndroidTimePicker })
+          .TimePickerAndroid
+      : undefined;
+
+  const padTime = (value: number) => String(value).padStart(2, "0");
+
+  const getDraftHourMinute = () => {
+    const minutes = parseWaterTimeToMinutes(waterTimeDraft);
+    if (minutes == null) {
+      const now = new Date();
+      return { hour: now.getHours(), minute: now.getMinutes() };
+    }
+    return {
+      hour: Math.floor(minutes / 60),
+      minute: minutes % 60,
+    };
+  };
+
+  const handleAndroidTimePicker = async () => {
+    if (!RNTimePickerAndroid) return;
+    const { hour, minute } = getDraftHourMinute();
+    try {
+      const { action, hour: selectedHour, minute: selectedMinute } =
+        await RNTimePickerAndroid.open({
+          hour,
+          minute,
+          is24Hour: true,
+        });
+      if (
+        action === RNTimePickerAndroid.timeSetAction &&
+        typeof selectedHour === "number" &&
+        typeof selectedMinute === "number"
+      ) {
+        setWaterTimeDraft(
+          `${padTime(selectedHour)}:${padTime(selectedMinute)}`,
+        );
+        setErrorMessage("");
+      }
+    } catch {
+      // ignore failures
+    }
+  };
 
   const onToggleWaterDay = (dayValue: number) => {
     setWaterDaysDraft((prev) => {
@@ -617,20 +677,36 @@ export default function PlantDetailPage() {
 
           <View style={styles.timeInputRow}>
             <Text style={styles.timeInputLabel}>Time (24-hour)</Text>
-            <TextInput
-              value={waterTimeDraft}
-              onChangeText={(value) => {
-                setWaterTimeDraft(value);
-                setErrorMessage("");
-              }}
-              placeholder="08:30"
-              placeholderTextColor={COLORS.secondary + "80"}
-              style={styles.timeInput}
-              keyboardType="numbers-and-punctuation"
-              autoCapitalize="none"
-              autoCorrect={false}
-              maxLength={5}
-            />
+            {Platform.OS === "android" ? (
+              <Pressable
+                onPress={handleAndroidTimePicker}
+                style={styles.timeInputPressable}
+              >
+                <Text
+                  style={[
+                    styles.timeInput,
+                    !waterTimeDraft && styles.timeInputPlaceholder,
+                  ]}
+                >
+                  {waterTimeDraft || "Select time"}
+                </Text>
+              </Pressable>
+            ) : (
+              <TextInput
+                value={waterTimeDraft}
+                onChangeText={(value) => {
+                  setWaterTimeDraft(value);
+                  setErrorMessage("");
+                }}
+                placeholder="08:30"
+                placeholderTextColor={COLORS.secondary + "80"}
+                style={styles.timeInput}
+                keyboardType="numbers-and-punctuation"
+                autoCapitalize="none"
+                autoCorrect={false}
+                maxLength={5}
+              />
+            )}
           </View>
 
           <Text style={styles.scheduleSavedText}>
@@ -943,6 +1019,21 @@ const styles = StyleSheet.create({
     color: COLORS.primary,
     fontSize: 18,
     fontFamily: "Boogaloo_400Regular",
+    textAlign: "right",
+    paddingVertical: 14,
+  },
+  timeInputPressable: {
+    flex: 1,
+    minHeight: 50,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: COLORS.secondary + "35",
+    backgroundColor: COLORS.accent + "35",
+    justifyContent: "center",
+    paddingHorizontal: 14,
+  },
+  timeInputPlaceholder: {
+    color: COLORS.secondary + "80",
   },
   scheduleSavedText: {
     color: COLORS.secondary,
