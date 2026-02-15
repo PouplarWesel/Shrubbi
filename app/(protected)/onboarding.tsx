@@ -18,7 +18,6 @@ import {
 
 import { Ionicons } from "@expo/vector-icons";
 import * as Location from "expo-location";
-import * as Notifications from "expo-notifications";
 import { router } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 
@@ -126,6 +125,28 @@ const requestCameraPermissionState = async (): Promise<PermissionState> => {
   }
 };
 
+const getNotificationPermissionState = async (): Promise<PermissionState> => {
+  if (Platform.OS === "web") return "unavailable";
+  try {
+    const Notifications = await import("expo-notifications");
+    const result = await Notifications.getPermissionsAsync();
+    return normalizePermissionState(result.status);
+  } catch {
+    return "unavailable";
+  }
+};
+
+const requestNotificationPermissionState = async (): Promise<PermissionState> => {
+  if (Platform.OS === "web") return "unavailable";
+  try {
+    const Notifications = await import("expo-notifications");
+    const result = await Notifications.requestPermissionsAsync();
+    return normalizePermissionState(result.status);
+  } catch {
+    return "unavailable";
+  }
+};
+
 export default function OnboardingPage() {
   const { width: viewportWidth } = useWindowDimensions();
   const isWeb = Platform.OS === "web";
@@ -190,14 +211,7 @@ export default function OnboardingPage() {
 
       setCameraPermission(await getCameraPermissionState());
 
-      try {
-        const notificationResult = await Notifications.getPermissionsAsync();
-        setNotificationPermission(
-          normalizePermissionState(notificationResult.status),
-        );
-      } catch {
-        setNotificationPermission("unavailable");
-      }
+      setNotificationPermission(await getNotificationPermissionState());
     };
 
     void loadPermissionStatuses();
@@ -349,12 +363,7 @@ export default function OnboardingPage() {
   };
 
   const requestNotificationPermission = async () => {
-    try {
-      const result = await Notifications.requestPermissionsAsync();
-      setNotificationPermission(normalizePermissionState(result.status));
-    } catch {
-      setNotificationPermission("unavailable");
-    }
+    setNotificationPermission(await requestNotificationPermissionState());
   };
 
   const autoSelectCityFromLocation = useCallback(async () => {

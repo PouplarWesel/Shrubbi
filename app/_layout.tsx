@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useState } from "react";
-import { Platform, View } from "react-native";
+import { LogBox, Platform, View } from "react-native";
 
 import { Boogaloo_400Regular } from "@expo-google-fonts/boogaloo";
 import { useFonts } from "expo-font";
 import { Stack, router } from "expo-router";
-import * as Notifications from "expo-notifications";
+import type { NotificationResponse } from "expo-notifications";
 import * as SplashScreen from "expo-splash-screen";
 import { StatusBar } from "expo-status-bar";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
@@ -25,6 +25,7 @@ SplashScreen.setOptions({
 });
 
 SplashScreen.preventAutoHideAsync();
+LogBox.ignoreLogs(['"shadow*" style props are deprecated. Use "boxShadow".']);
 
 export default function RootLayout() {
   return (
@@ -70,22 +71,30 @@ function RootNavigator() {
   useEffect(() => {
     if (Platform.OS === "web") return;
 
-    Notifications.setNotificationHandler({
-      handleNotification: async () => ({
-        shouldShowAlert: true,
-        shouldShowBanner: true,
-        shouldShowList: true,
-        shouldPlaySound: true,
-        shouldSetBadge: false,
-      }),
-    });
+    void (async () => {
+      try {
+        const Notifications = await import("expo-notifications");
+        Notifications.setNotificationHandler({
+          handleNotification: async () => ({
+            shouldShowAlert: true,
+            shouldShowBanner: true,
+            shouldShowList: true,
+            shouldPlaySound: true,
+            shouldSetBadge: false,
+          }),
+        });
+      } catch {
+        // Ignore startup notification setup failures.
+      }
+    })();
   }, []);
 
   useEffect(() => {
     if (Platform.OS === "web") return;
     let isMounted = true;
+    let removeSubscription: (() => void) | null = null;
 
-    const handleResponse = (response: Notifications.NotificationResponse) => {
+    const handleResponse = (response: NotificationResponse) => {
       const data = response.notification.request.content.data as any;
       const route = typeof data?.route === "string" ? data.route : null;
       if (!route) return;
@@ -94,9 +103,14 @@ function RootNavigator() {
 
     const hydrateInitial = async () => {
       try {
+        const Notifications = await import("expo-notifications");
         const response = await Notifications.getLastNotificationResponseAsync();
         if (!isMounted || !response) return;
         handleResponse(response);
+
+        const subscription =
+          Notifications.addNotificationResponseReceivedListener(handleResponse);
+        removeSubscription = () => subscription.remove();
       } catch {
         // Ignore.
       }
@@ -104,12 +118,9 @@ function RootNavigator() {
 
     void hydrateInitial();
 
-    const subscription =
-      Notifications.addNotificationResponseReceivedListener(handleResponse);
-
     return () => {
       isMounted = false;
-      subscription.remove();
+      removeSubscription?.();
     };
   }, []);
 

@@ -1,5 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import * as Notifications from "expo-notifications";
+import type * as ExpoNotifications from "expo-notifications";
 import { Platform } from "react-native";
 
 import { normalizeWaterDays, parseWaterTimeToMinutes } from "@/lib/wateringSchedule";
@@ -8,7 +8,7 @@ export const WATERING_REMINDER_CHANNEL_ID = "watering-reminders";
 const WATERING_REMINDER_TYPE = "watering_reminder_v1";
 
 export type WateringReminderPermissionState =
-  | Notifications.PermissionStatus
+  | ExpoNotifications.PermissionStatus
   | "unavailable";
 
 export type WateringReminderPlant = {
@@ -24,6 +24,17 @@ type ScheduledRequest = {
   content?: { data?: unknown } | null;
 };
 
+type NotificationsModule = typeof import("expo-notifications");
+
+async function getNotificationsModuleAsync(): Promise<NotificationsModule | null> {
+  if (Platform.OS === "web") return null;
+  try {
+    return await import("expo-notifications");
+  } catch {
+    return null;
+  }
+}
+
 function takeOne<T>(value: T | T[] | null | undefined): T | null {
   if (!value) return null;
   return Array.isArray(value) ? (value[0] ?? null) : value;
@@ -36,6 +47,8 @@ function isWateringReminderRequest(request: ScheduledRequest): boolean {
 
 export async function ensureWateringNotificationChannelAsync(): Promise<void> {
   if (Platform.OS !== "android") return;
+  const Notifications = await getNotificationsModuleAsync();
+  if (!Notifications) return;
 
   try {
     await Notifications.setNotificationChannelAsync(
@@ -51,7 +64,8 @@ export async function ensureWateringNotificationChannelAsync(): Promise<void> {
 }
 
 export async function getWateringNotificationPermissionStateAsync(): Promise<WateringReminderPermissionState> {
-  if (Platform.OS === "web") return "unavailable";
+  const Notifications = await getNotificationsModuleAsync();
+  if (!Notifications) return "unavailable";
   try {
     const { status } = await Notifications.getPermissionsAsync();
     return status;
@@ -61,7 +75,8 @@ export async function getWateringNotificationPermissionStateAsync(): Promise<Wat
 }
 
 export async function requestWateringNotificationPermissionAsync(): Promise<WateringReminderPermissionState> {
-  if (Platform.OS === "web") return "unavailable";
+  const Notifications = await getNotificationsModuleAsync();
+  if (!Notifications) return "unavailable";
   try {
     const { status } = await Notifications.requestPermissionsAsync();
     return status;
@@ -71,7 +86,8 @@ export async function requestWateringNotificationPermissionAsync(): Promise<Wate
 }
 
 export async function cancelWateringRemindersAsync(): Promise<void> {
-  if (Platform.OS === "web") return;
+  const Notifications = await getNotificationsModuleAsync();
+  if (!Notifications) return;
 
   try {
     const scheduled = (await Notifications.getAllScheduledNotificationsAsync()) as
@@ -108,7 +124,8 @@ function buildReminderBody(
 export async function syncWateringRemindersAsync(
   plants: WateringReminderPlant[],
 ): Promise<void> {
-  if (Platform.OS === "web") return;
+  const Notifications = await getNotificationsModuleAsync();
+  if (!Notifications) return;
 
   const permission = await getWateringNotificationPermissionStateAsync();
   if (permission !== "granted") return;
