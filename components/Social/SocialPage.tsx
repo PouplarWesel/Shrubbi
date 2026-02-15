@@ -11,13 +11,14 @@ import {
   Text,
   View,
   LayoutAnimation,
-  KeyboardAvoidingView,
+  Keyboard,
   Modal,
+  useWindowDimensions,
 } from "react-native";
 
 import { Ionicons } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { BlurView } from "expo-blur";
 
 import { COLORS } from "@/constants/colors";
@@ -25,6 +26,9 @@ import { useSupabase } from "@/hooks/useSupabase";
 import type { Json } from "@/supabase/database.types";
 
 import "./imageKeyboard";
+
+const SOCIAL_TAB_BAR_HEIGHT = 56;
+const SOCIAL_TAB_BAR_BOTTOM_GAP = 10;
 
 type TeamRow = {
   id: string;
@@ -397,6 +401,7 @@ const makeDefaultEventWindowDrafts = () => {
 
 export default function SocialPage() {
   const { session, supabase } = useSupabase();
+  const insets = useSafeAreaInsets();
   const initialEventWindow = useMemo(makeDefaultEventWindowDrafts, []);
   const [isLoading, setIsLoading] = useState(true);
   const [isWorkingTeamId, setIsWorkingTeamId] = useState<string | null>(null);
@@ -480,8 +485,11 @@ export default function SocialPage() {
     null,
   );
   const [isReactionPickerOpen, setIsReactionPickerOpen] = useState(false);
+  const [isKeyboardVisible, setIsKeyboardVisible] = useState(false);
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
 
   const userId = session?.user?.id ?? null;
+  const { height: windowHeight } = useWindowDimensions();
 
   const messageIdSetRef = useRef<Set<string>>(new Set());
   const profilesByIdRef = useRef<Record<string, PublicProfileRow>>({});
@@ -494,6 +502,13 @@ export default function SocialPage() {
   const messageHydrationTimersRef = useRef<
     Record<string, ReturnType<typeof setTimeout>>
   >({});
+  const maxWindowHeightRef = useRef(windowHeight);
+
+  useEffect(() => {
+    if (windowHeight > maxWindowHeightRef.current) {
+      maxWindowHeightRef.current = windowHeight;
+    }
+  }, [windowHeight]);
 
   useEffect(() => {
     messageIdSetRef.current = new Set(messages.map((message) => message.id));
@@ -510,6 +525,26 @@ export default function SocialPage() {
   useEffect(() => {
     attachmentsByMessageRef.current = attachmentsByMessage;
   }, [attachmentsByMessage]);
+
+  useEffect(() => {
+    const showEvent =
+      Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow";
+    const hideEvent =
+      Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide";
+    const showSubscription = Keyboard.addListener(showEvent, (event) => {
+      setKeyboardHeight(event.endCoordinates.height);
+      setIsKeyboardVisible(true);
+    });
+    const hideSubscription = Keyboard.addListener(hideEvent, () => {
+      setKeyboardHeight(0);
+      setIsKeyboardVisible(false);
+    });
+
+    return () => {
+      showSubscription.remove();
+      hideSubscription.remove();
+    };
+  }, []);
 
   useEffect(() => {
     pendingAttachmentsRef.current = {};
@@ -531,6 +566,19 @@ export default function SocialPage() {
   const replyToMessage = replyToMessageId
     ? messageById[replyToMessageId]
     : undefined;
+  const closedComposerBottomPadding =
+    Math.max(insets.bottom, SOCIAL_TAB_BAR_BOTTOM_GAP) +
+    SOCIAL_TAB_BAR_HEIGHT +
+    8;
+  const openComposerBottomPadding =
+    Platform.OS === "ios" ? Math.max(insets.bottom, 12) : 12;
+  const composerBottomPadding = isKeyboardVisible
+    ? openComposerBottomPadding
+    : closedComposerBottomPadding;
+  const windowShrink = Math.max(0, maxWindowHeightRef.current - windowHeight);
+  const composerKeyboardLift = isKeyboardVisible
+    ? Math.max(0, keyboardHeight - windowShrink)
+    : 0;
 
   const refreshChatChannels = useCallback(
     async (nextCityId: string | null) => {
@@ -2899,11 +2947,7 @@ export default function SocialPage() {
 
       {/* Tab Content */}
       {activeTab === "chat" && (
-        <KeyboardAvoidingView
-          style={styles.flexOne}
-          behavior={Platform.OS === "ios" ? "padding" : undefined}
-          keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 0}
-        >
+        <View style={styles.flexOne}>
           <View style={styles.chatNav}>
             <ScrollView
               horizontal
@@ -3168,7 +3212,13 @@ export default function SocialPage() {
           </View>
 
           {/* Chat Composer */}
-          <View style={styles.composerContainer}>
+          <View
+            style={[
+              styles.composerContainer,
+              { paddingBottom: composerBottomPadding },
+              { marginBottom: composerKeyboardLift },
+            ]}
+          >
             {replyToMessage && (
               <View style={styles.replyBar}>
                 <Ionicons
@@ -3231,6 +3281,13 @@ export default function SocialPage() {
                 placeholderTextColor={COLORS.text + "60"}
                 value={composerText}
                 onChangeText={setComposerText}
+                onFocus={() => {
+                  setIsKeyboardVisible(true);
+                }}
+                onBlur={() => {
+                  setKeyboardHeight(0);
+                  setIsKeyboardVisible(false);
+                }}
                 {...(Platform.OS === "web"
                   ? ({
                       onPaste: handleWebComposerPaste,
@@ -3263,7 +3320,7 @@ export default function SocialPage() {
               </Pressable>
             </View>
           </View>
-        </KeyboardAvoidingView>
+        </View>
       )}
 
       {/* Reaction Picker Modal */}
@@ -3994,7 +4051,6 @@ const styles = StyleSheet.create({
   composerContainer: {
     paddingHorizontal: 16,
     paddingTop: 12,
-    paddingBottom: Platform.OS === "ios" ? 140 : 120,
     backgroundColor: COLORS.background,
     borderTopWidth: 1,
     borderTopColor: COLORS.secondary + "15",

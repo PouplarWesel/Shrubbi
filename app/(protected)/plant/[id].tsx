@@ -3,6 +3,7 @@ import {
   ActivityIndicator,
   Alert,
   Image,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -15,6 +16,7 @@ import { router, useLocalSearchParams } from "expo-router";
 import * as ImagePicker from "expo-image-picker";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
+import { DateTimePicker } from "@expo/ui/jetpack-compose";
 
 import { CameraCapture } from "@/components/CameraCapture";
 import { COLORS } from "@/constants/colors";
@@ -90,6 +92,7 @@ export default function PlantDetailPage() {
   const [photoUrl, setPhotoUrl] = useState<string | null>(null);
   const [waterDaysDraft, setWaterDaysDraft] = useState<number[]>([]);
   const [waterTimeDraft, setWaterTimeDraft] = useState("");
+  const [selectedDate, setSelectedDate] = useState(() => new Date());
   const [isSavingSchedule, setIsSavingSchedule] = useState(false);
 
   const userId = session?.user?.id ?? null;
@@ -165,66 +168,25 @@ export default function PlantDetailPage() {
 
   useEffect(() => {
     setWaterDaysDraft(normalizeWaterDays(plant?.water_days));
-    setWaterTimeDraft(normalizeWaterTimeForInput(plant?.water_time));
+    const normalizedTime = normalizeWaterTimeForInput(plant?.water_time);
+    setWaterTimeDraft(normalizedTime);
+
+    const minutes = parseWaterTimeToMinutes(normalizedTime);
+    if (minutes != null) {
+      const next = new Date();
+      next.setHours(Math.floor(minutes / 60), minutes % 60, 0, 0);
+      setSelectedDate(next);
+    }
   }, [plant?.water_days, plant?.water_time]);
-
-  type AndroidTimePicker = {
-    open: (options: {
-      hour: number;
-      minute: number;
-      is24Hour: boolean;
-    }) => Promise<{
-      action: string;
-      hour?: number;
-      minute?: number;
-    }>;
-    timeSetAction: string;
-    dismissedAction: string;
-  };
-
-  const RNTimePickerAndroid: AndroidTimePicker | undefined =
-    Platform.OS === "android"
-      ? (require("react-native") as { TimePickerAndroid?: AndroidTimePicker })
-          .TimePickerAndroid
-      : undefined;
 
   const padTime = (value: number) => String(value).padStart(2, "0");
 
-  const getDraftHourMinute = () => {
-    const minutes = parseWaterTimeToMinutes(waterTimeDraft);
-    if (minutes == null) {
-      const now = new Date();
-      return { hour: now.getHours(), minute: now.getMinutes() };
-    }
-    return {
-      hour: Math.floor(minutes / 60),
-      minute: minutes % 60,
-    };
-  };
-
-  const handleAndroidTimePicker = async () => {
-    if (!RNTimePickerAndroid) return;
-    const { hour, minute } = getDraftHourMinute();
-    try {
-      const { action, hour: selectedHour, minute: selectedMinute } =
-        await RNTimePickerAndroid.open({
-          hour,
-          minute,
-          is24Hour: true,
-        });
-      if (
-        action === RNTimePickerAndroid.timeSetAction &&
-        typeof selectedHour === "number" &&
-        typeof selectedMinute === "number"
-      ) {
-        setWaterTimeDraft(
-          `${padTime(selectedHour)}:${padTime(selectedMinute)}`,
-        );
-        setErrorMessage("");
-      }
-    } catch {
-      // ignore failures
-    }
+  const handleDateSelected = (date: Date) => {
+    setSelectedDate(date);
+    setWaterTimeDraft(
+      `${padTime(date.getHours())}:${padTime(date.getMinutes())}`,
+    );
+    setErrorMessage("");
   };
 
   const onToggleWaterDay = (dayValue: number) => {
@@ -678,24 +640,25 @@ export default function PlantDetailPage() {
           <View style={styles.timeInputRow}>
             <Text style={styles.timeInputLabel}>Time (24-hour)</Text>
             {Platform.OS === "android" ? (
-              <Pressable
-                onPress={handleAndroidTimePicker}
-                style={styles.timeInputPressable}
-              >
-                <Text
-                  style={[
-                    styles.timeInput,
-                    !waterTimeDraft && styles.timeInputPlaceholder,
-                  ]}
-                >
-                  {waterTimeDraft || "Select time"}
-                </Text>
-              </Pressable>
+              <DateTimePicker
+                onDateSelected={(date) => {
+                  handleDateSelected(date);
+                }}
+                displayedComponents="hourAndMinute"
+                initialDate={selectedDate.toISOString()}
+                variant="picker"
+              />
             ) : (
               <TextInput
                 value={waterTimeDraft}
                 onChangeText={(value) => {
                   setWaterTimeDraft(value);
+                  const minutes = parseWaterTimeToMinutes(value);
+                  if (minutes != null) {
+                    const next = new Date(selectedDate);
+                    next.setHours(Math.floor(minutes / 60), minutes % 60, 0, 0);
+                    setSelectedDate(next);
+                  }
                   setErrorMessage("");
                 }}
                 placeholder="08:30"
@@ -1021,19 +984,6 @@ const styles = StyleSheet.create({
     fontFamily: "Boogaloo_400Regular",
     textAlign: "right",
     paddingVertical: 14,
-  },
-  timeInputPressable: {
-    flex: 1,
-    minHeight: 50,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: COLORS.secondary + "35",
-    backgroundColor: COLORS.accent + "35",
-    justifyContent: "center",
-    paddingHorizontal: 14,
-  },
-  timeInputPlaceholder: {
-    color: COLORS.secondary + "80",
   },
   scheduleSavedText: {
     color: COLORS.secondary,

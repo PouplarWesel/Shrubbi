@@ -1,7 +1,8 @@
+import { useEffect, useState } from "react";
 import { Tabs } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { COLORS } from "@/constants/colors";
-import { Pressable, StyleSheet, View } from "react-native";
+import { Keyboard, Platform, Pressable, StyleSheet, View } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import type { BottomTabBarProps } from "@react-navigation/bottom-tabs";
@@ -18,10 +19,38 @@ const ICON_GLYPH_SIZE = 24;
 export default function TabsLayout() {
   const insets = useSafeAreaInsets();
   const bottomInset = Math.max(insets.bottom, 0);
+  const [isKeyboardVisible, setIsKeyboardVisible] = useState(false);
+
+  useEffect(() => {
+    if (Platform.OS === "web") return;
+
+    const showEvent =
+      Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow";
+    const hideEvent =
+      Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide";
+
+    const showSubscription = Keyboard.addListener(showEvent, () => {
+      setIsKeyboardVisible(true);
+    });
+    const hideSubscription = Keyboard.addListener(hideEvent, () => {
+      setIsKeyboardVisible(false);
+    });
+
+    return () => {
+      showSubscription.remove();
+      hideSubscription.remove();
+    };
+  }, []);
 
   return (
     <Tabs
-      tabBar={(props) => <CustomTabBar {...props} bottomInset={bottomInset} />}
+      tabBar={(props) => (
+        <CustomTabBar
+          {...props}
+          bottomInset={bottomInset}
+          isKeyboardVisible={isKeyboardVisible}
+        />
+      )}
       screenOptions={{
         tabBarActiveTintColor: COLORS.primary,
         tabBarInactiveTintColor: COLORS.secondary + "99",
@@ -90,7 +119,12 @@ function CustomTabBar({
   descriptors,
   navigation,
   bottomInset,
-}: BottomTabBarProps & { bottomInset: number }) {
+  isKeyboardVisible,
+}: BottomTabBarProps & { bottomInset: number; isKeyboardVisible: boolean }) {
+  if (isKeyboardVisible) {
+    return null;
+  }
+
   return (
     <View
       style={[

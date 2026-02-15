@@ -111,6 +111,13 @@ export type Database = {
             foreignKeyName: "chat_channels_team_id_fkey"
             columns: ["team_id"]
             isOneToOne: false
+            referencedRelation: "team_user_co2_leaderboard"
+            referencedColumns: ["team_id"]
+          },
+          {
+            foreignKeyName: "chat_channels_team_id_fkey"
+            columns: ["team_id"]
+            isOneToOne: false
             referencedRelation: "teams"
             referencedColumns: ["id"]
           },
@@ -171,6 +178,20 @@ export type Database = {
             referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "chat_message_attachments_uploaded_by_fkey"
+            columns: ["uploaded_by"]
+            isOneToOne: false
+            referencedRelation: "public_profiles_with_co2"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "chat_message_attachments_uploaded_by_fkey"
+            columns: ["uploaded_by"]
+            isOneToOne: false
+            referencedRelation: "user_co2_leaderboard"
+            referencedColumns: ["user_id"]
+          },
         ]
       }
       chat_message_reactions: {
@@ -206,6 +227,20 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "profiles"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "chat_message_reactions_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "public_profiles_with_co2"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "chat_message_reactions_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "user_co2_leaderboard"
+            referencedColumns: ["user_id"]
           },
         ]
       }
@@ -275,6 +310,20 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "chat_messages_sender_id_fkey"
+            columns: ["sender_id"]
+            isOneToOne: false
+            referencedRelation: "public_profiles_with_co2"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "chat_messages_sender_id_fkey"
+            columns: ["sender_id"]
+            isOneToOne: false
+            referencedRelation: "user_co2_leaderboard"
+            referencedColumns: ["user_id"]
+          },
+          {
             foreignKeyName: "chat_messages_thread_id_fkey"
             columns: ["thread_id"]
             isOneToOne: false
@@ -325,6 +374,20 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "profiles"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "chat_threads_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "public_profiles_with_co2"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "chat_threads_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "user_co2_leaderboard"
+            referencedColumns: ["user_id"]
           },
         ]
       }
@@ -485,6 +548,20 @@ export type Database = {
             referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "event_attendees_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "public_profiles_with_co2"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "event_attendees_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "user_co2_leaderboard"
+            referencedColumns: ["user_id"]
+          },
         ]
       }
       events: {
@@ -582,6 +659,20 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "profiles"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "events_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "public_profiles_with_co2"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "events_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "user_co2_leaderboard"
+            referencedColumns: ["user_id"]
           },
         ]
       }
@@ -782,6 +873,20 @@ export type Database = {
             referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "public_profiles_id_fkey"
+            columns: ["id"]
+            isOneToOne: true
+            referencedRelation: "public_profiles_with_co2"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "public_profiles_id_fkey"
+            columns: ["id"]
+            isOneToOne: true
+            referencedRelation: "user_co2_leaderboard"
+            referencedColumns: ["user_id"]
+          },
         ]
       }
       team_memberships: {
@@ -815,6 +920,13 @@ export type Database = {
             foreignKeyName: "team_memberships_team_id_fkey"
             columns: ["team_id"]
             isOneToOne: false
+            referencedRelation: "team_user_co2_leaderboard"
+            referencedColumns: ["team_id"]
+          },
+          {
+            foreignKeyName: "team_memberships_team_id_fkey"
+            columns: ["team_id"]
+            isOneToOne: false
             referencedRelation: "teams"
             referencedColumns: ["id"]
           },
@@ -824,6 +936,20 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "profiles"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "team_memberships_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "public_profiles_with_co2"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "team_memberships_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "user_co2_leaderboard"
+            referencedColumns: ["user_id"]
           },
         ]
       }
@@ -884,6 +1010,20 @@ export type Database = {
             referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "teams_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "public_profiles_with_co2"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "teams_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "user_co2_leaderboard"
+            referencedColumns: ["user_id"]
+          },
         ]
       }
       user_achievements: {
@@ -922,6 +1062,20 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "profiles"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "user_achievements_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "public_profiles_with_co2"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "user_achievements_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "user_co2_leaderboard"
+            referencedColumns: ["user_id"]
           },
         ]
       }
@@ -973,6 +1127,20 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "profiles"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "user_daily_quests_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "public_profiles_with_co2"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "user_daily_quests_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "user_co2_leaderboard"
+            referencedColumns: ["user_id"]
           },
         ]
       }
@@ -1043,6 +1211,20 @@ export type Database = {
             referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "user_plants_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "public_profiles_with_co2"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "user_plants_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "user_co2_leaderboard"
+            referencedColumns: ["user_id"]
+          },
         ]
       }
     }
@@ -1083,6 +1265,21 @@ export type Database = {
         }
         Relationships: []
       }
+      public_profiles_with_co2: {
+        Row: {
+          avatar_url: string | null
+          city: string | null
+          country: string | null
+          display_name: string | null
+          id: string | null
+          state: string | null
+          team_count: number | null
+          team_ids: string[] | null
+          total_co2_removed_kg: number | null
+          total_plants: number | null
+        }
+        Relationships: []
+      }
       team_leaderboard: {
         Row: {
           city_country: string | null
@@ -1113,6 +1310,108 @@ export type Database = {
           },
           {
             foreignKeyName: "teams_city_id_fkey"
+            columns: ["city_id"]
+            isOneToOne: false
+            referencedRelation: "city_map_stats"
+            referencedColumns: ["city_id"]
+          },
+        ]
+      }
+      team_user_co2_leaderboard: {
+        Row: {
+          avatar_url: string | null
+          city_country: string | null
+          city_id: string | null
+          city_name: string | null
+          city_state: string | null
+          country_code: string | null
+          display_name: string | null
+          joined_at: string | null
+          membership_role: string | null
+          rank_in_team: number | null
+          team_id: string | null
+          team_name: string | null
+          total_co2_removed_kg: number | null
+          total_plants: number | null
+          user_id: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "team_memberships_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "team_memberships_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "public_profiles_with_co2"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "team_memberships_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "user_co2_leaderboard"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "teams_city_id_fkey"
+            columns: ["city_id"]
+            isOneToOne: false
+            referencedRelation: "cities"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "teams_city_id_fkey"
+            columns: ["city_id"]
+            isOneToOne: false
+            referencedRelation: "city_leaderboard"
+            referencedColumns: ["city_id"]
+          },
+          {
+            foreignKeyName: "teams_city_id_fkey"
+            columns: ["city_id"]
+            isOneToOne: false
+            referencedRelation: "city_map_stats"
+            referencedColumns: ["city_id"]
+          },
+        ]
+      }
+      user_co2_leaderboard: {
+        Row: {
+          avatar_url: string | null
+          city_country: string | null
+          city_id: string | null
+          city_name: string | null
+          city_state: string | null
+          country_code: string | null
+          display_name: string | null
+          team_count: number | null
+          team_ids: string[] | null
+          total_co2_removed_kg: number | null
+          total_plants: number | null
+          user_id: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "profiles_city_id_fkey"
+            columns: ["city_id"]
+            isOneToOne: false
+            referencedRelation: "cities"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "profiles_city_id_fkey"
+            columns: ["city_id"]
+            isOneToOne: false
+            referencedRelation: "city_leaderboard"
+            referencedColumns: ["city_id"]
+          },
+          {
+            foreignKeyName: "profiles_city_id_fkey"
             columns: ["city_id"]
             isOneToOne: false
             referencedRelation: "city_map_stats"
