@@ -187,6 +187,7 @@ export default function OnboardingPage() {
   const [isKeyboardVisible, setKeyboardVisible] = useState(false);
   const [featureIndex, setFeatureIndex] = useState(0);
   const isSearchStep = step === 3 || step === 4;
+  const useStepScroll = step === 0 || step === 1 || step === 2;
 
   useEffect(() => {
     const showSubscription = Keyboard.addListener("keyboardDidShow", () =>
@@ -661,309 +662,321 @@ export default function OnboardingPage() {
             )}
           </View>
 
-          {step === 0 ? (
-            <View style={styles.formContainer}>
-              <View style={styles.inputGroup}>
-                <Text style={styles.label}>Full Name</Text>
-                <View style={styles.inputWrapper}>
-                  <Ionicons
-                    name="person-outline"
-                    size={20}
-                    color={COLORS.secondary}
-                    style={styles.inputIcon}
-                  />
-                  <TextInput
-                    placeholder="Jane Doe"
-                    placeholderTextColor={COLORS.secondary + "80"}
-                    style={styles.input}
-                    value={fullName}
-                    onChangeText={setFullName}
-                  />
-                </View>
-              </View>
+          {useStepScroll ? (
+            <ScrollView
+              style={styles.stepScroll}
+              contentContainerStyle={styles.stepScrollContent}
+              showsVerticalScrollIndicator={false}
+              keyboardShouldPersistTaps="handled"
+              keyboardDismissMode="on-drag"
+            >
+              {step === 0 ? (
+                <View style={styles.formContainer}>
+                  <View style={styles.inputGroup}>
+                    <Text style={styles.label}>Full Name</Text>
+                    <View style={styles.inputWrapper}>
+                      <Ionicons
+                        name="person-outline"
+                        size={20}
+                        color={COLORS.secondary}
+                        style={styles.inputIcon}
+                      />
+                      <TextInput
+                        placeholder="Jane Doe"
+                        placeholderTextColor={COLORS.secondary + "80"}
+                        style={styles.input}
+                        value={fullName}
+                        onChangeText={setFullName}
+                      />
+                    </View>
+                  </View>
 
-              <View style={styles.inputGroup}>
-                <Text style={styles.label}>Display Name (Optional)</Text>
-                <View style={styles.inputWrapper}>
-                  <Ionicons
-                    name="at-outline"
-                    size={20}
-                    color={COLORS.secondary}
-                    style={styles.inputIcon}
-                  />
-                  <TextInput
-                    placeholder="How others see you"
-                    placeholderTextColor={COLORS.secondary + "80"}
-                    style={styles.input}
-                    value={displayName}
-                    onChangeText={setDisplayName}
-                  />
-                </View>
-              </View>
+                  <View style={styles.inputGroup}>
+                    <Text style={styles.label}>Display Name (Optional)</Text>
+                    <View style={styles.inputWrapper}>
+                      <Ionicons
+                        name="at-outline"
+                        size={20}
+                        color={COLORS.secondary}
+                        style={styles.inputIcon}
+                      />
+                      <TextInput
+                        placeholder="How others see you"
+                        placeholderTextColor={COLORS.secondary + "80"}
+                        style={styles.input}
+                        value={displayName}
+                        onChangeText={setDisplayName}
+                      />
+                    </View>
+                  </View>
 
-              {!!errorMessage && (
-                <View style={styles.messageContainer}>
-                  <Ionicons
-                    name="alert-circle-outline"
-                    size={18}
-                    color={COLORS.secondary}
-                  />
-                  <Text style={styles.errorMessage}>{errorMessage}</Text>
+                  {!!errorMessage && (
+                    <View style={styles.messageContainer}>
+                      <Ionicons
+                        name="alert-circle-outline"
+                        size={18}
+                        color={COLORS.secondary}
+                      />
+                      <Text style={styles.errorMessage}>{errorMessage}</Text>
+                    </View>
+                  )}
+
+                  <Pressable onPress={onNextStep} style={styles.primaryButton}>
+                    <Text style={styles.primaryButtonText}>Next</Text>
+                    <Ionicons
+                      name="arrow-forward"
+                      size={20}
+                      color={COLORS.background}
+                    />
+                  </Pressable>
+                </View>
+              ) : step === 1 ? (
+                <View style={styles.formContainer}>
+                  <View
+                    style={[
+                      styles.permissionsList,
+                      styles.featureTourCard,
+                      isWeb && styles.featureTourCardWeb,
+                    ]}
+                  >
+                    <View style={styles.featureTourHeader}>
+                      <Text style={styles.featureTourEyebrow}>
+                        Feature Tour
+                      </Text>
+                      <View style={styles.featureCountPill}>
+                        <Text style={styles.featureCountPillText}>
+                          {featureIndex + 1} / {ONBOARDING_FEATURES.length}
+                        </Text>
+                      </View>
+                    </View>
+
+                    <View
+                      style={[
+                        styles.featureSingle,
+                        isLargeWebViewport && styles.featureSingleDesktop,
+                      ]}
+                    >
+                      <View style={styles.featureIconCircleLarge}>
+                        <Ionicons
+                          name={ONBOARDING_FEATURES[featureIndex].icon}
+                          size={30}
+                          color={COLORS.primary}
+                        />
+                      </View>
+                      <Text style={styles.featureSingleTitle}>
+                        {ONBOARDING_FEATURES[featureIndex].title}
+                      </Text>
+                      <Text style={styles.featureSingleDescription}>
+                        {ONBOARDING_FEATURES[featureIndex].description}
+                      </Text>
+                      <View style={styles.featureTip}>
+                        <Ionicons
+                          name="sparkles-outline"
+                          size={16}
+                          color={COLORS.primary}
+                        />
+                        <Text style={styles.featureTipText}>
+                          {ONBOARDING_FEATURES[featureIndex].tourNote}
+                        </Text>
+                      </View>
+                    </View>
+
+                    <View style={styles.featureDots}>
+                      {ONBOARDING_FEATURES.map((feature, index) => (
+                        <View
+                          key={feature.title}
+                          style={[
+                            styles.featureDot,
+                            index === featureIndex && styles.featureDotActive,
+                          ]}
+                        />
+                      ))}
+                    </View>
+                  </View>
+
+                  <View style={styles.footerButtons}>
+                    <Pressable
+                      onPress={() => {
+                        if (featureIndex > 0) {
+                          setFeatureIndex((current) => current - 1);
+                          return;
+                        }
+                        setStep(0);
+                      }}
+                      style={[styles.primaryButton, styles.secondaryButton]}
+                    >
+                      <Text style={styles.secondaryButtonText}>
+                        {featureIndex > 0 ? "Previous" : "Back"}
+                      </Text>
+                    </Pressable>
+                    <Pressable
+                      onPress={() => {
+                        if (featureIndex < ONBOARDING_FEATURES.length - 1) {
+                          setFeatureIndex((current) => current + 1);
+                          return;
+                        }
+                        onContinueFromFeatureTour();
+                      }}
+                      style={[styles.primaryButton, styles.flex]}
+                    >
+                      <Text style={styles.primaryButtonText}>
+                        {featureIndex < ONBOARDING_FEATURES.length - 1
+                          ? "Next Feature"
+                          : "Continue"}
+                      </Text>
+                      <Ionicons
+                        name="arrow-forward"
+                        size={20}
+                        color={COLORS.background}
+                      />
+                    </Pressable>
+                  </View>
+                </View>
+              ) : (
+                <View style={styles.formContainer}>
+                  <View style={styles.permissionsList}>
+                    <View style={styles.permissionItem}>
+                      <View style={styles.permissionIconCircle}>
+                        <Ionicons
+                          name="locate-outline"
+                          size={24}
+                          color={
+                            locationPermission === "granted"
+                              ? COLORS.primary
+                              : COLORS.secondary
+                          }
+                        />
+                      </View>
+                      <View style={styles.permissionTextContent}>
+                        <Text style={styles.permissionItemTitle}>Location</Text>
+                        <Text style={styles.permissionItemDescription}>
+                          Suggests your current city first.
+                        </Text>
+                      </View>
+                      <Pressable
+                        onPress={requestLocationPermission}
+                        disabled={locationPermission === "granted"}
+                        style={[
+                          styles.permissionAction,
+                          locationPermission === "granted" &&
+                            styles.permissionActionGranted,
+                        ]}
+                      >
+                        {locationPermission === "granted" ? (
+                          <Ionicons
+                            name="checkmark-circle"
+                            size={24}
+                            color={COLORS.primary}
+                          />
+                        ) : (
+                          <Text style={styles.permissionActionText}>Allow</Text>
+                        )}
+                      </Pressable>
+                    </View>
+
+                    <View style={styles.permissionItem}>
+                      <View style={styles.permissionIconCircle}>
+                        <Ionicons
+                          name="camera-outline"
+                          size={24}
+                          color={
+                            cameraPermission === "granted"
+                              ? COLORS.primary
+                              : COLORS.secondary
+                          }
+                        />
+                      </View>
+                      <View style={styles.permissionTextContent}>
+                        <Text style={styles.permissionItemTitle}>Camera</Text>
+                        <Text style={styles.permissionItemDescription}>
+                          Upload plant photos instantly.
+                        </Text>
+                      </View>
+                      <Pressable
+                        onPress={requestCameraPermission}
+                        disabled={cameraPermission === "granted"}
+                        style={[
+                          styles.permissionAction,
+                          cameraPermission === "granted" &&
+                            styles.permissionActionGranted,
+                        ]}
+                      >
+                        {cameraPermission === "granted" ? (
+                          <Ionicons
+                            name="checkmark-circle"
+                            size={24}
+                            color={COLORS.primary}
+                          />
+                        ) : (
+                          <Text style={styles.permissionActionText}>Allow</Text>
+                        )}
+                      </Pressable>
+                    </View>
+
+                    <View style={styles.permissionItem}>
+                      <View style={styles.permissionIconCircle}>
+                        <Ionicons
+                          name="notifications-outline"
+                          size={24}
+                          color={
+                            notificationPermission === "granted"
+                              ? COLORS.primary
+                              : COLORS.secondary
+                          }
+                        />
+                      </View>
+                      <View style={styles.permissionTextContent}>
+                        <Text style={styles.permissionItemTitle}>
+                          Notifications
+                        </Text>
+                        <Text style={styles.permissionItemDescription}>
+                          Stay updated with your garden.
+                        </Text>
+                      </View>
+                      <Pressable
+                        onPress={requestNotificationPermission}
+                        disabled={notificationPermission === "granted"}
+                        style={[
+                          styles.permissionAction,
+                          notificationPermission === "granted" &&
+                            styles.permissionActionGranted,
+                        ]}
+                      >
+                        {notificationPermission === "granted" ? (
+                          <Ionicons
+                            name="checkmark-circle"
+                            size={24}
+                            color={COLORS.primary}
+                          />
+                        ) : (
+                          <Text style={styles.permissionActionText}>Allow</Text>
+                        )}
+                      </Pressable>
+                    </View>
+                  </View>
+
+                  <View style={styles.footerButtons}>
+                    <Pressable
+                      onPress={() => setStep(1)}
+                      style={[styles.primaryButton, styles.secondaryButton]}
+                    >
+                      <Text style={styles.secondaryButtonText}>Back</Text>
+                    </Pressable>
+                    <Pressable
+                      onPress={onContinueFromPermissions}
+                      style={[styles.primaryButton, styles.flex]}
+                    >
+                      <Text style={styles.primaryButtonText}>Continue</Text>
+                      <Ionicons
+                        name="arrow-forward"
+                        size={20}
+                        color={COLORS.background}
+                      />
+                    </Pressable>
+                  </View>
                 </View>
               )}
-
-              <Pressable onPress={onNextStep} style={styles.primaryButton}>
-                <Text style={styles.primaryButtonText}>Next</Text>
-                <Ionicons
-                  name="arrow-forward"
-                  size={20}
-                  color={COLORS.background}
-                />
-              </Pressable>
-            </View>
-          ) : step === 1 ? (
-            <View style={styles.formContainer}>
-              <View
-                style={[
-                  styles.permissionsList,
-                  styles.featureTourCard,
-                  isWeb && styles.featureTourCardWeb,
-                ]}
-              >
-                <View style={styles.featureTourHeader}>
-                  <Text style={styles.featureTourEyebrow}>Feature Tour</Text>
-                  <View style={styles.featureCountPill}>
-                    <Text style={styles.featureCountPillText}>
-                      {featureIndex + 1} / {ONBOARDING_FEATURES.length}
-                    </Text>
-                  </View>
-                </View>
-
-                <View
-                  style={[
-                    styles.featureSingle,
-                    isLargeWebViewport && styles.featureSingleDesktop,
-                  ]}
-                >
-                  <View style={styles.featureIconCircleLarge}>
-                    <Ionicons
-                      name={ONBOARDING_FEATURES[featureIndex].icon}
-                      size={30}
-                      color={COLORS.primary}
-                    />
-                  </View>
-                  <Text style={styles.featureSingleTitle}>
-                    {ONBOARDING_FEATURES[featureIndex].title}
-                  </Text>
-                  <Text style={styles.featureSingleDescription}>
-                    {ONBOARDING_FEATURES[featureIndex].description}
-                  </Text>
-                  <View style={styles.featureTip}>
-                    <Ionicons
-                      name="sparkles-outline"
-                      size={16}
-                      color={COLORS.primary}
-                    />
-                    <Text style={styles.featureTipText}>
-                      {ONBOARDING_FEATURES[featureIndex].tourNote}
-                    </Text>
-                  </View>
-                </View>
-
-                <View style={styles.featureDots}>
-                  {ONBOARDING_FEATURES.map((feature, index) => (
-                    <View
-                      key={feature.title}
-                      style={[
-                        styles.featureDot,
-                        index === featureIndex && styles.featureDotActive,
-                      ]}
-                    />
-                  ))}
-                </View>
-              </View>
-
-              <View style={styles.footerButtons}>
-                <Pressable
-                  onPress={() => {
-                    if (featureIndex > 0) {
-                      setFeatureIndex((current) => current - 1);
-                      return;
-                    }
-                    setStep(0);
-                  }}
-                  style={[styles.primaryButton, styles.secondaryButton]}
-                >
-                  <Text style={styles.secondaryButtonText}>
-                    {featureIndex > 0 ? "Previous" : "Back"}
-                  </Text>
-                </Pressable>
-                <Pressable
-                  onPress={() => {
-                    if (featureIndex < ONBOARDING_FEATURES.length - 1) {
-                      setFeatureIndex((current) => current + 1);
-                      return;
-                    }
-                    onContinueFromFeatureTour();
-                  }}
-                  style={[styles.primaryButton, styles.flex]}
-                >
-                  <Text style={styles.primaryButtonText}>
-                    {featureIndex < ONBOARDING_FEATURES.length - 1
-                      ? "Next Feature"
-                      : "Continue"}
-                  </Text>
-                  <Ionicons
-                    name="arrow-forward"
-                    size={20}
-                    color={COLORS.background}
-                  />
-                </Pressable>
-              </View>
-            </View>
-          ) : step === 2 ? (
-            <View style={styles.formContainer}>
-              <View style={styles.permissionsList}>
-                <View style={styles.permissionItem}>
-                  <View style={styles.permissionIconCircle}>
-                    <Ionicons
-                      name="locate-outline"
-                      size={24}
-                      color={
-                        locationPermission === "granted"
-                          ? COLORS.primary
-                          : COLORS.secondary
-                      }
-                    />
-                  </View>
-                  <View style={styles.permissionTextContent}>
-                    <Text style={styles.permissionItemTitle}>Location</Text>
-                    <Text style={styles.permissionItemDescription}>
-                      Suggests your current city first.
-                    </Text>
-                  </View>
-                  <Pressable
-                    onPress={requestLocationPermission}
-                    disabled={locationPermission === "granted"}
-                    style={[
-                      styles.permissionAction,
-                      locationPermission === "granted" &&
-                        styles.permissionActionGranted,
-                    ]}
-                  >
-                    {locationPermission === "granted" ? (
-                      <Ionicons
-                        name="checkmark-circle"
-                        size={24}
-                        color={COLORS.primary}
-                      />
-                    ) : (
-                      <Text style={styles.permissionActionText}>Allow</Text>
-                    )}
-                  </Pressable>
-                </View>
-
-                <View style={styles.permissionItem}>
-                  <View style={styles.permissionIconCircle}>
-                    <Ionicons
-                      name="camera-outline"
-                      size={24}
-                      color={
-                        cameraPermission === "granted"
-                          ? COLORS.primary
-                          : COLORS.secondary
-                      }
-                    />
-                  </View>
-                  <View style={styles.permissionTextContent}>
-                    <Text style={styles.permissionItemTitle}>Camera</Text>
-                    <Text style={styles.permissionItemDescription}>
-                      Upload plant photos instantly.
-                    </Text>
-                  </View>
-                  <Pressable
-                    onPress={requestCameraPermission}
-                    disabled={cameraPermission === "granted"}
-                    style={[
-                      styles.permissionAction,
-                      cameraPermission === "granted" &&
-                        styles.permissionActionGranted,
-                    ]}
-                  >
-                    {cameraPermission === "granted" ? (
-                      <Ionicons
-                        name="checkmark-circle"
-                        size={24}
-                        color={COLORS.primary}
-                      />
-                    ) : (
-                      <Text style={styles.permissionActionText}>Allow</Text>
-                    )}
-                  </Pressable>
-                </View>
-
-                <View style={styles.permissionItem}>
-                  <View style={styles.permissionIconCircle}>
-                    <Ionicons
-                      name="notifications-outline"
-                      size={24}
-                      color={
-                        notificationPermission === "granted"
-                          ? COLORS.primary
-                          : COLORS.secondary
-                      }
-                    />
-                  </View>
-                  <View style={styles.permissionTextContent}>
-                    <Text style={styles.permissionItemTitle}>
-                      Notifications
-                    </Text>
-                    <Text style={styles.permissionItemDescription}>
-                      Stay updated with your garden.
-                    </Text>
-                  </View>
-                  <Pressable
-                    onPress={requestNotificationPermission}
-                    disabled={notificationPermission === "granted"}
-                    style={[
-                      styles.permissionAction,
-                      notificationPermission === "granted" &&
-                        styles.permissionActionGranted,
-                    ]}
-                  >
-                    {notificationPermission === "granted" ? (
-                      <Ionicons
-                        name="checkmark-circle"
-                        size={24}
-                        color={COLORS.primary}
-                      />
-                    ) : (
-                      <Text style={styles.permissionActionText}>Allow</Text>
-                    )}
-                  </Pressable>
-                </View>
-              </View>
-
-              <View style={styles.footerButtons}>
-                <Pressable
-                  onPress={() => setStep(1)}
-                  style={[styles.primaryButton, styles.secondaryButton]}
-                >
-                  <Text style={styles.secondaryButtonText}>Back</Text>
-                </Pressable>
-                <Pressable
-                  onPress={onContinueFromPermissions}
-                  style={[styles.primaryButton, styles.flex]}
-                >
-                  <Text style={styles.primaryButtonText}>Continue</Text>
-                  <Ionicons
-                    name="arrow-forward"
-                    size={20}
-                    color={COLORS.background}
-                  />
-                </Pressable>
-              </View>
-            </View>
+            </ScrollView>
           ) : step === 3 ? (
             <View style={styles.formContainer}>
               <View style={styles.inputGroup}>
@@ -1048,38 +1061,36 @@ export default function OnboardingPage() {
                 </View>
               )}
 
-              {!isKeyboardVisible && (
-                <View style={styles.footerButtons}>
-                  <Pressable
-                    onPress={() => setStep(2)}
-                    style={[styles.primaryButton, styles.secondaryButton]}
-                  >
-                    <Text style={styles.secondaryButtonText}>Back</Text>
-                  </Pressable>
-                  <Pressable
-                    disabled={isSaving || !selectedCityId}
-                    onPress={onContinue}
-                    style={[
-                      styles.primaryButton,
-                      styles.flex,
-                      (isSaving || !selectedCityId) && styles.disabledButton,
-                    ]}
-                  >
-                    {isSaving ? (
-                      <ActivityIndicator color={COLORS.background} />
-                    ) : (
-                      <>
-                        <Text style={styles.primaryButtonText}>Next</Text>
-                        <Ionicons
-                          name="arrow-forward"
-                          size={20}
-                          color={COLORS.background}
-                        />
-                      </>
-                    )}
-                  </Pressable>
-                </View>
-              )}
+              <View style={styles.footerButtons}>
+                <Pressable
+                  onPress={() => setStep(2)}
+                  style={[styles.primaryButton, styles.secondaryButton]}
+                >
+                  <Text style={styles.secondaryButtonText}>Back</Text>
+                </Pressable>
+                <Pressable
+                  disabled={isSaving || !selectedCityId}
+                  onPress={onContinue}
+                  style={[
+                    styles.primaryButton,
+                    styles.flex,
+                    (isSaving || !selectedCityId) && styles.disabledButton,
+                  ]}
+                >
+                  {isSaving ? (
+                    <ActivityIndicator color={COLORS.background} />
+                  ) : (
+                    <>
+                      <Text style={styles.primaryButtonText}>Next</Text>
+                      <Ionicons
+                        name="arrow-forward"
+                        size={20}
+                        color={COLORS.background}
+                      />
+                    </>
+                  )}
+                </Pressable>
+              </View>
             </View>
           ) : (
             <View style={styles.formContainer}>
@@ -1222,42 +1233,40 @@ export default function OnboardingPage() {
                 </View>
               )}
 
-              {!isKeyboardVisible && (
-                <View style={styles.footerButtons}>
-                  <Pressable
-                    onPress={() => setStep(3)}
-                    style={[styles.primaryButton, styles.secondaryButton]}
-                  >
-                    <Text style={styles.secondaryButtonText}>Back</Text>
-                  </Pressable>
-                  <Pressable
-                    disabled={isJoiningGroup}
-                    onPress={onFinishOnboarding}
-                    style={[
-                      styles.primaryButton,
-                      styles.flex,
-                      isJoiningGroup && styles.disabledButton,
-                    ]}
-                  >
-                    {isJoiningGroup ? (
-                      <ActivityIndicator color={COLORS.background} />
-                    ) : (
-                      <>
-                        <Text style={styles.primaryButtonText}>
-                          {selectedTeamIds.length > 0
-                            ? `Join ${selectedTeamIds.length} & Finish`
-                            : "Finish"}
-                        </Text>
-                        <Ionicons
-                          name="checkmark-done"
-                          size={20}
-                          color={COLORS.background}
-                        />
-                      </>
-                    )}
-                  </Pressable>
-                </View>
-              )}
+              <View style={styles.footerButtons}>
+                <Pressable
+                  onPress={() => setStep(3)}
+                  style={[styles.primaryButton, styles.secondaryButton]}
+                >
+                  <Text style={styles.secondaryButtonText}>Back</Text>
+                </Pressable>
+                <Pressable
+                  disabled={isJoiningGroup}
+                  onPress={onFinishOnboarding}
+                  style={[
+                    styles.primaryButton,
+                    styles.flex,
+                    isJoiningGroup && styles.disabledButton,
+                  ]}
+                >
+                  {isJoiningGroup ? (
+                    <ActivityIndicator color={COLORS.background} />
+                  ) : (
+                    <>
+                      <Text style={styles.primaryButtonText}>
+                        {selectedTeamIds.length > 0
+                          ? `Join ${selectedTeamIds.length} & Finish`
+                          : "Finish"}
+                      </Text>
+                      <Ionicons
+                        name="checkmark-done"
+                        size={20}
+                        color={COLORS.background}
+                      />
+                    </>
+                  )}
+                </Pressable>
+              </View>
             </View>
           )}
         </View>
@@ -1380,6 +1389,13 @@ const styles = StyleSheet.create({
   formContainer: {
     flex: 1,
     gap: 20,
+  },
+  stepScroll: {
+    flex: 1,
+  },
+  stepScrollContent: {
+    flexGrow: 1,
+    paddingBottom: 10,
   },
   featureList: {
     flex: 1,
