@@ -3,7 +3,6 @@ import {
   ActivityIndicator,
   Alert,
   Image,
-  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -16,7 +15,6 @@ import { router, useLocalSearchParams } from "expo-router";
 import * as ImagePicker from "expo-image-picker";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
-import { DateTimePicker } from "@expo/ui/jetpack-compose";
 
 import { CameraCapture } from "@/components/CameraCapture";
 import { COLORS } from "@/constants/colors";
@@ -75,6 +73,63 @@ type PlantDetailRow = {
   plant: PlantCatalogRow | PlantCatalogRow[] | null;
 };
 
+const MERIDIEM_OPTIONS = ["AM", "PM"] as const;
+type Meridiem = (typeof MERIDIEM_OPTIONS)[number];
+
+const formatTimeInputFromDigits = (value: string) => {
+  const digits = value.replace(/\D/g, "").slice(0, 4);
+  if (digits.length <= 2) return digits;
+  if (digits.length === 3) return `${digits[0]}:${digits.slice(1)}`;
+  return `${digits.slice(0, 2)}:${digits.slice(2)}`;
+};
+
+const normalizeTimeInputOnBlur = (value: string) => {
+  const digits = value.replace(/\D/g, "").slice(0, 4);
+  if (!digits.length) return "";
+  if (digits.length === 1) return `0${digits}`;
+  if (digits.length === 2) return digits;
+  if (digits.length === 3) return `0${digits[0]}:${digits.slice(1)}`;
+  return `${digits.slice(0, 2)}:${digits.slice(2)}`;
+};
+
+const convert24HourToDraft = (
+  value: string | null | undefined,
+): { timeText: string; meridiem: Meridiem } => {
+  const normalizedTime = normalizeWaterTimeForInput(value);
+  const minutes = parseWaterTimeToMinutes(normalizedTime);
+  if (minutes == null) {
+    return { timeText: "", meridiem: "AM" };
+  }
+
+  const hour24 = Math.floor(minutes / 60);
+  const minute = minutes % 60;
+  const meridiem: Meridiem = hour24 >= 12 ? "PM" : "AM";
+  const hour12 = hour24 % 12 || 12;
+
+  return {
+    timeText: `${String(hour12).padStart(2, "0")}:${String(minute).padStart(2, "0")}`,
+    meridiem,
+  };
+};
+
+const convertDraftTo24Hour = (
+  timeDraft: string,
+  meridiem: Meridiem,
+): string | null => {
+  const digits = timeDraft.replace(/\D/g, "");
+  if (digits.length !== 4) return null;
+
+  const hour = Number(digits.slice(0, 2));
+  const minute = Number(digits.slice(2, 4));
+  if (!Number.isFinite(hour) || !Number.isFinite(minute)) return null;
+  if (hour < 1 || hour > 12 || minute < 0 || minute > 59) return null;
+
+  const hour24 =
+    meridiem === "AM" ? (hour === 12 ? 0 : hour) : hour === 12 ? 12 : hour + 12;
+
+  return `${String(hour24).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
+};
+
 export default function PlantDetailPage() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const insets = useSafeAreaInsets();
@@ -92,7 +147,7 @@ export default function PlantDetailPage() {
   const [photoUrl, setPhotoUrl] = useState<string | null>(null);
   const [waterDaysDraft, setWaterDaysDraft] = useState<number[]>([]);
   const [waterTimeDraft, setWaterTimeDraft] = useState("");
-  const [selectedDate, setSelectedDate] = useState(() => new Date());
+  const [timeMeridiemDraft, setTimeMeridiemDraft] = useState<Meridiem>("AM");
   const [isSavingSchedule, setIsSavingSchedule] = useState(false);
 
   const userId = session?.user?.id ?? null;
@@ -168,26 +223,10 @@ export default function PlantDetailPage() {
 
   useEffect(() => {
     setWaterDaysDraft(normalizeWaterDays(plant?.water_days));
-    const normalizedTime = normalizeWaterTimeForInput(plant?.water_time);
-    setWaterTimeDraft(normalizedTime);
-
-    const minutes = parseWaterTimeToMinutes(normalizedTime);
-    if (minutes != null) {
-      const next = new Date();
-      next.setHours(Math.floor(minutes / 60), minutes % 60, 0, 0);
-      setSelectedDate(next);
-    }
+    const { timeText, meridiem } = convert24HourToDraft(plant?.water_time);
+    setWaterTimeDraft(timeText);
+    setTimeMeridiemDraft(meridiem);
   }, [plant?.water_days, plant?.water_time]);
-
-  const padTime = (value: number) => String(value).padStart(2, "0");
-
-  const handleDateSelected = (date: Date) => {
-    setSelectedDate(date);
-    setWaterTimeDraft(
-      `${padTime(date.getHours())}:${padTime(date.getMinutes())}`,
-    );
-    setErrorMessage("");
-  };
 
   const onToggleWaterDay = (dayValue: number) => {
     setWaterDaysDraft((prev) => {
@@ -204,15 +243,18 @@ export default function PlantDetailPage() {
     if (!userId || !userPlantId || !plant || isSavingSchedule) return;
 
     const normalizedDays = normalizeWaterDays(waterDaysDraft);
-    const normalizedTime = waterTimeDraft.trim();
+    const normalizedTime = convertDraftTo24Hour(
+      waterTimeDraft.trim(),
+      timeMeridiemDraft,
+    );
 
     if (!normalizedDays.length) {
       setErrorMessage("Select at least one day to water this plant.");
       return;
     }
 
-    if (!isValidWaterTimeInput(normalizedTime)) {
-      setErrorMessage("Enter a valid time in 24-hour format (HH:MM).");
+    if (!normalizedTime || !isValidWaterTimeInput(normalizedTime)) {
+      setErrorMessage("Enter a valid time (HH:MM) and choose AM or PM.");
       return;
     }
 
@@ -274,6 +316,7 @@ export default function PlantDetailPage() {
     );
     setWaterDaysDraft([]);
     setWaterTimeDraft("");
+    setTimeMeridiemDraft("AM");
     void syncWateringRemindersForUserAsync(supabase, userId);
     setIsSavingSchedule(false);
   };
@@ -638,52 +681,110 @@ export default function PlantDetailPage() {
           </View>
 
           <View style={styles.timeInputRow}>
-            <Text style={styles.timeInputLabel}>Time (24-hour)</Text>
-            {Platform.OS === "android" ? (
-              <DateTimePicker
-                onDateSelected={(date) => {
-                  handleDateSelected(date);
-                }}
-                displayedComponents="hourAndMinute"
-                initialDate={selectedDate.toISOString()}
-                variant="picker"
-              />
-            ) : (
+            <Text style={styles.timeInputLabel}>Watering Time</Text>
+            <View style={styles.timeInputControls}>
               <TextInput
                 value={waterTimeDraft}
                 onChangeText={(value) => {
-                  setWaterTimeDraft(value);
-                  const minutes = parseWaterTimeToMinutes(value);
-                  if (minutes != null) {
-                    const next = new Date(selectedDate);
-                    next.setHours(Math.floor(minutes / 60), minutes % 60, 0, 0);
-                    setSelectedDate(next);
-                  }
+                  setWaterTimeDraft(formatTimeInputFromDigits(value));
                   setErrorMessage("");
+                }}
+                onBlur={() => {
+                  setWaterTimeDraft((prev) => normalizeTimeInputOnBlur(prev));
                 }}
                 placeholder="08:30"
                 placeholderTextColor={COLORS.secondary + "80"}
                 style={styles.timeInput}
-                keyboardType="numbers-and-punctuation"
+                keyboardType="number-pad"
                 autoCapitalize="none"
                 autoCorrect={false}
                 maxLength={5}
               />
-            )}
+              <View style={styles.meridiemToggle}>
+                {MERIDIEM_OPTIONS.map((option) => {
+                  const isSelected = timeMeridiemDraft === option;
+
+                  return (
+                    <Pressable
+                      key={option}
+                      onPress={() => {
+                        setTimeMeridiemDraft(option);
+                        setErrorMessage("");
+                      }}
+                      style={[
+                        styles.meridiemButton,
+                        isSelected && styles.meridiemButtonSelected,
+                      ]}
+                    >
+                      <Text
+                        style={[
+                          styles.meridiemButtonText,
+                          isSelected && styles.meridiemButtonTextSelected,
+                        ]}
+                      >
+                        {option}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+            </View>
+            <Text style={styles.timeInputHelper}>
+              Type 4 digits. We auto-format it as HH:MM.
+            </Text>
           </View>
 
-          <Text style={styles.scheduleSavedText}>
-            Saved: {savedScheduleText}
-          </Text>
-          <Text style={styles.scheduleSavedText}>
-            Last watered: {lastWateredLabel}
-          </Text>
-          <Text style={styles.scheduleSavedText}>
-            Watering points: {plant?.watering_points ?? 0} pts
-          </Text>
-          <Text style={styles.scheduleSavedText}>
-            Status: {isWateringDue ? "Due now" : "Up to date"}
-          </Text>
+          <View style={styles.scheduleInfo}>
+            <View style={styles.infoRow}>
+              <Ionicons
+                name="calendar-outline"
+                size={18}
+                color={COLORS.secondary}
+              />
+              <View style={styles.infoTextContainer}>
+                <Text style={styles.infoLabel}>Current Schedule</Text>
+                <Text style={styles.infoValue}>{savedScheduleText}</Text>
+              </View>
+            </View>
+
+            <View style={styles.infoRow}>
+              <Ionicons name="water-outline" size={18} color={COLORS.primary} />
+              <View style={styles.infoTextContainer}>
+                <Text style={styles.infoLabel}>Last Watered</Text>
+                <Text style={styles.infoValue}>{lastWateredLabel}</Text>
+              </View>
+            </View>
+
+            <View style={styles.infoRow}>
+              <Ionicons
+                name={isWateringDue ? "alert-circle" : "checkmark-done"}
+                size={18}
+                color={isWateringDue ? COLORS.warning : COLORS.primary}
+              />
+              <View style={styles.infoTextContainer}>
+                <Text style={styles.infoLabel}>Status</Text>
+                <Text
+                  style={[
+                    styles.infoValue,
+                    isWateringDue && styles.dueText,
+                    !isWateringDue && styles.upToDateText,
+                  ]}
+                >
+                  {isWateringDue ? "Thirsty! (Due now)" : "Up to date"}
+                </Text>
+              </View>
+            </View>
+
+            <View style={styles.infoRow}>
+              <Ionicons name="star-outline" size={18} color={COLORS.accent} />
+              <View style={styles.infoTextContainer}>
+                <Text style={styles.infoLabel}>Watering Points</Text>
+                <Text style={styles.infoValue}>
+                  {plant?.watering_points ?? 0} pts
+                </Text>
+              </View>
+            </View>
+          </View>
 
           <View style={styles.scheduleActions}>
             <Pressable
@@ -966,6 +1067,11 @@ const styles = StyleSheet.create({
   timeInputRow: {
     gap: 8,
   },
+  timeInputControls: {
+    flexDirection: "row",
+    gap: 10,
+    alignItems: "center",
+  },
   timeInputLabel: {
     color: COLORS.text,
     fontSize: 14,
@@ -973,6 +1079,7 @@ const styles = StyleSheet.create({
     opacity: 0.75,
   },
   timeInput: {
+    flex: 1,
     minHeight: 50,
     borderRadius: 14,
     borderWidth: 1,
@@ -982,13 +1089,70 @@ const styles = StyleSheet.create({
     color: COLORS.primary,
     fontSize: 18,
     fontFamily: "Boogaloo_400Regular",
-    textAlign: "right",
+    textAlign: "center",
+    letterSpacing: 0.8,
     paddingVertical: 14,
   },
-  scheduleSavedText: {
+  meridiemToggle: {
+    flexDirection: "row",
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: COLORS.secondary + "35",
+    backgroundColor: COLORS.accent + "35",
+    overflow: "hidden",
+  },
+  meridiemButton: {
+    minHeight: 50,
+    minWidth: 52,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 12,
+  },
+  meridiemButtonSelected: {
+    backgroundColor: COLORS.primary,
+  },
+  meridiemButtonText: {
     color: COLORS.secondary,
-    fontSize: 14,
     fontFamily: "Boogaloo_400Regular",
+    fontSize: 15,
+  },
+  meridiemButtonTextSelected: {
+    color: COLORS.background,
+  },
+  timeInputHelper: {
+    color: COLORS.secondary + "80",
+    fontFamily: "Boogaloo_400Regular",
+    fontSize: 13,
+  },
+  scheduleInfo: {
+    marginTop: 4,
+    gap: 12,
+    paddingVertical: 8,
+  },
+  infoRow: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 12,
+  },
+  infoTextContainer: {
+    flex: 1,
+  },
+  infoLabel: {
+    color: COLORS.secondary,
+    fontSize: 12,
+    fontFamily: "Boogaloo_400Regular",
+    opacity: 0.8,
+  },
+  infoValue: {
+    color: COLORS.primary,
+    fontSize: 15,
+    fontFamily: "Boogaloo_400Regular",
+  },
+  dueText: {
+    color: COLORS.warning,
+  },
+  upToDateText: {
+    color: COLORS.primary,
   },
   scheduleActions: {
     flexDirection: "row",
