@@ -469,6 +469,7 @@ export default function PlantDetailPage() {
       mediaTypes: ["images"],
       allowsEditing: true,
       quality: 0.8,
+      exif: false,
       base64: true,
     });
     if (result.canceled || !result.assets.length) return;

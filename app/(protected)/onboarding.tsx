@@ -24,6 +24,10 @@ import { SafeAreaView } from "react-native-safe-area-context";
 
 import { COLORS } from "@/constants/colors";
 import { useSupabase } from "@/hooks/useSupabase";
+import {
+  removeCachedValue,
+  removeCachedValuesByPrefix,
+} from "@/lib/localCache";
 
 const { width } = Dimensions.get("window");
 
@@ -517,6 +521,12 @@ export default function OnboardingPage() {
           return;
         }
       }
+
+      await Promise.all([
+        removeCachedValue(`home:dashboard:${userId}`),
+        removeCachedValue(`social:overview:${userId}`),
+        removeCachedValuesByPrefix(`social:chat:${userId}:`),
+      ]);
 
       router.replace("/(protected)/(tabs)");
     } finally {

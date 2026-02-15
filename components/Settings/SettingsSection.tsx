@@ -25,6 +25,12 @@ import { BottomSheetTextInput } from "@gorhom/bottom-sheet";
 
 import { COLORS } from "@/constants/colors";
 import { useSupabase } from "@/hooks/useSupabase";
+import {
+  readCachedValue,
+  removeCachedValue,
+  removeCachedValuesByPrefix,
+  writeCachedValue,
+} from "@/lib/localCache";
 
 type CityOption = {
   id: string;
@@ -38,6 +44,15 @@ type SettingsStatus = {
   type: "success" | "error";
   message: string;
 } | null;
+
+type SettingsCachePayload = {
+  avatarUrl: string | null;
+  cities: CityOption[];
+  displayName: string;
+  fullName: string;
+  locationQuery: string;
+  selectedCityId: string | null;
+};
 
 type SettingsSectionProps = {
   onRequestCamera?: () => void;
@@ -166,6 +181,23 @@ const SettingsSectionComponent = (
 
     const loadSettings = async () => {
       setIsLoading(true);
+      const cacheKey = `settings:profile:${userId}`;
+      const cachedSettings = await readCachedValue<SettingsCachePayload>(
+        cacheKey,
+        24 * 60 * 60 * 1000,
+      );
+
+      if (cachedSettings) {
+        setCities(cachedSettings.cities);
+        setFullName(cachedSettings.fullName);
+        setDisplayName(cachedSettings.displayName);
+        setSelectedCityId(cachedSettings.selectedCityId);
+        setAvatarUrl(cachedSettings.avatarUrl);
+        setLocationQuery(cachedSettings.locationQuery);
+        setStatus(null);
+        setIsLoading(false);
+      }
+
       const [
         { data: profile, error: profileError },
         { data: citiesData, error: citiesError },
@@ -205,6 +237,19 @@ const SettingsSectionComponent = (
       } else {
         setLocationQuery(profile?.city ?? "");
       }
+
+      const nextLocationQuery = selectedCity
+        ? formatCityLabel(selectedCity)
+        : (profile?.city ?? "");
+
+      void writeCachedValue<SettingsCachePayload>(cacheKey, {
+        avatarUrl: profile?.avatar_url ?? null,
+        cities: nextCities,
+        displayName: profile?.display_name ?? "",
+        fullName: profile?.full_name ?? "",
+        locationQuery: nextLocationQuery,
+        selectedCityId: profile?.city_id ?? null,
+      });
 
       setStatus(null);
       setIsLoading(false);
@@ -419,6 +464,7 @@ const SettingsSectionComponent = (
     try {
       setStatus(null);
       setIsSaving(true);
+      const previousCityId = selectedCityId;
 
       const { error } = await supabase
         .from("profiles")
@@ -446,6 +492,31 @@ const SettingsSectionComponent = (
           setLocationQuery(formatCityLabel(updatedCity));
           setSelectedCityId(updatedCity.id);
         }
+      }
+
+      const selectedCity = cities.find((city) => city.id === resolvedCityId);
+      const nextLocationQuery = selectedCity
+        ? formatCityLabel(selectedCity)
+        : normalizedLocation;
+
+      void writeCachedValue<SettingsCachePayload>(
+        `settings:profile:${userId}`,
+        {
+          avatarUrl,
+          cities,
+          displayName: normalizedDisplayName || normalizedFullName,
+          fullName: normalizedFullName,
+          locationQuery: nextLocationQuery,
+          selectedCityId: resolvedCityId,
+        },
+      );
+
+      if (previousCityId !== resolvedCityId) {
+        await Promise.all([
+          removeCachedValue(`home:dashboard:${userId}`),
+          removeCachedValue(`social:overview:${userId}`),
+          removeCachedValuesByPrefix(`social:chat:${userId}:`),
+        ]);
       }
 
       setStatus({ type: "success", message: "Settings saved successfully." });

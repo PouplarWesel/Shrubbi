@@ -1,5 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   Linking,
   Platform,
@@ -17,6 +17,10 @@ const APK_URL = "https://github.com/PouplarWesel/Shrubbi/releases";
 export function WebStartupWarning() {
   const [visible, setVisible] = useState(Platform.OS === "web");
   const [secondsLeft, setSecondsLeft] = useState(DISMISS_WAIT_SECONDS);
+  const isPhoneWeb = useMemo(() => {
+    if (Platform.OS !== "web" || typeof navigator === "undefined") return false;
+    return /android|iphone|ipod|mobile/i.test(navigator.userAgent);
+  }, []);
 
   useEffect(() => {
     if (!visible || Platform.OS !== "web") return;
@@ -42,6 +46,16 @@ export function WebStartupWarning() {
   }
 
   const canClose = secondsLeft <= 0;
+  const iconName = isPhoneWeb ? "phone-portrait" : "laptop-outline";
+  const title = isPhoneWeb
+    ? "Best On Android App"
+    : "Web Is Limited On Desktop";
+  const message = isPhoneWeb
+    ? "You are on mobile web. For the true Shrubbi experience, download the Android app from Releases."
+    : "You are on desktop web. Shrubbi is built for Android first. If possible, download the app. If you cannot right now, use the website on your phone for a better web experience.";
+  const linkLabel = isPhoneWeb
+    ? "Download Android app from Releases"
+    : "Download Android app (Releases)";
 
   const handleOpenApkLink = () => {
     void Linking.openURL(APK_URL);
@@ -51,17 +65,14 @@ export function WebStartupWarning() {
     <View style={styles.backdrop}>
       <View style={styles.modal}>
         <View style={styles.iconWrap}>
-          <Ionicons name="phone-portrait" size={28} color={COLORS.primary} />
+          <Ionicons name={iconName} size={28} color={COLORS.primary} />
         </View>
 
-        <Text style={styles.title}>Best On Android</Text>
-        <Text style={styles.message}>
-          Shrubbi is built as an Android app first. Web works via React Native,
-          but the full experience is on Android.
-        </Text>
+        <Text style={styles.title}>{title}</Text>
+        <Text style={styles.message}>{message}</Text>
 
         <Pressable onPress={handleOpenApkLink} hitSlop={8}>
-          <Text style={styles.link}>Download Android APK here</Text>
+          <Text style={styles.link}>{linkLabel}</Text>
         </Pressable>
 
         <Pressable

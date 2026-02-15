@@ -27,6 +27,12 @@ import { BlurView } from "expo-blur";
 
 import { COLORS } from "@/constants/colors";
 import { useSupabase } from "@/hooks/useSupabase";
+import {
+  readCachedValue,
+  removeCachedValue,
+  removeCachedValuesByPrefix,
+  writeCachedValue,
+} from "@/lib/localCache";
 import type { Json } from "@/supabase/database.types";
 
 import "./imageKeyboard";
@@ -156,6 +162,27 @@ type KeyboardImageChangeEvent = {
   };
 };
 
+type SocialOverviewCachePayload = {
+  activeChannelId: string | null;
+  channels: ChatChannelRow[];
+  cityId: string | null;
+  cityName: string | null;
+  eventAttendeesByEvent: Record<string, EventAttendeeRow[]>;
+  eventOrganizersById: Record<string, PublicProfileRow>;
+  events: EventRow[];
+  joinedTeamIds: string[];
+  teamMemberCountById: Record<string, number>;
+  teams: TeamRow[];
+};
+
+type SocialChatCachePayload = {
+  attachmentsByMessage: Record<string, ChatAttachmentRow[]>;
+  messages: ChatMessageRow[];
+  profilesById: Record<string, PublicProfileRow>;
+  reactionsByMessage: Record<string, ChatReactionRow[]>;
+  threads: ChatThreadRow[];
+};
+
 const QUICK_REACTIONS = [
   "\u{1F331}",
   "\u{1F525}",
@@ -251,6 +278,97 @@ const readImageUriAsBlob = async (uri: string) => {
       xhr.open("GET", uri, true);
       xhr.send(null);
     });
+  }
+};
+
+const sanitizeWebImageForUpload = async (
+  file: File,
+): Promise<{ body: Blob | File; mimeType: string; size: number }> => {
+  const normalizedType = (
+    file.type || "application/octet-stream"
+  ).toLowerCase();
+  if (normalizedType.includes("gif")) {
+    // Keep GIF binary as-is to preserve animation frames.
+    return {
+      body: file,
+      mimeType: normalizedType || "image/gif",
+      size: Math.max(1, file.size || 1),
+    };
+  }
+  if (
+    typeof document === "undefined" ||
+    typeof window === "undefined" ||
+    !normalizedType.startsWith("image/") ||
+    typeof URL === "undefined"
+  ) {
+    return {
+      body: file,
+      mimeType: normalizedType,
+      size: Math.max(1, file.size || 1),
+    };
+  }
+
+  const objectUrl = URL.createObjectURL(file);
+
+  try {
+    const image = await new Promise<HTMLImageElement>((resolve, reject) => {
+      const img = new window.Image();
+      img.onload = () => resolve(img);
+      img.onerror = () => reject(new Error("Could not read image file."));
+      img.src = objectUrl;
+    });
+
+    const width = image.naturalWidth || image.width;
+    const height = image.naturalHeight || image.height;
+    if (width <= 0 || height <= 0) {
+      return {
+        body: file,
+        mimeType: normalizedType,
+        size: Math.max(1, file.size || 1),
+      };
+    }
+
+    const canvas = document.createElement("canvas");
+    canvas.width = width;
+    canvas.height = height;
+
+    const context = canvas.getContext("2d");
+    if (!context) {
+      return {
+        body: file,
+        mimeType: normalizedType,
+        size: Math.max(1, file.size || 1),
+      };
+    }
+
+    context.drawImage(image, 0, 0, width, height);
+
+    const outputType =
+      normalizedType === "image/png" || normalizedType === "image/webp"
+        ? normalizedType
+        : "image/jpeg";
+
+    const blob = await new Promise<Blob>((resolve, reject) => {
+      canvas.toBlob(
+        (result) => {
+          if (result) {
+            resolve(result);
+            return;
+          }
+          reject(new Error("Could not process image for upload."));
+        },
+        outputType,
+        outputType === "image/jpeg" ? 0.9 : undefined,
+      );
+    });
+
+    return {
+      body: blob,
+      mimeType: outputType,
+      size: Math.max(1, blob.size),
+    };
+  } finally {
+    URL.revokeObjectURL(objectUrl);
   }
 };
 
@@ -541,6 +659,14 @@ export default function SocialPage() {
     return /android|iphone|ipod|mobile/i.test(navigator.userAgent);
   }, []);
   const isChatComposeDisabled = isPhoneWeb;
+  const socialOverviewCacheKey = userId ? `social:overview:${userId}` : null;
+  const socialChatCacheKey = useMemo(
+    () =>
+      userId && activeChannelId
+        ? `social:chat:${userId}:${activeChannelId}`
+        : null,
+    [activeChannelId, userId],
+  );
 
   const messageIdSetRef = useRef<Set<string>>(new Set());
   const profilesByIdRef = useRef<Record<string, PublicProfileRow>>({});
@@ -609,6 +735,38 @@ export default function SocialPage() {
     }
     messageHydrationTimersRef.current = {};
   }, [activeChannelId]);
+
+  useEffect(() => {
+    if (!socialOverviewCacheKey) return;
+
+    let isCancelled = false;
+
+    const hydrateSocialOverviewCache = async () => {
+      const cached = await readCachedValue<SocialOverviewCachePayload>(
+        socialOverviewCacheKey,
+        24 * 60 * 60 * 1000,
+      );
+      if (!cached || isCancelled) return;
+
+      setCityId(cached.cityId);
+      setCityName(cached.cityName);
+      setTeams(cached.teams);
+      setJoinedTeamIds(cached.joinedTeamIds);
+      setTeamMemberCountById(cached.teamMemberCountById);
+      setEvents(cached.events);
+      setEventAttendeesByEvent(cached.eventAttendeesByEvent);
+      setEventOrganizersById(cached.eventOrganizersById);
+      setChannels(cached.channels);
+      setActiveChannelId(cached.activeChannelId);
+      setIsLoading(false);
+    };
+
+    void hydrateSocialOverviewCache();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [socialOverviewCacheKey]);
 
   const messageById = useMemo(() => {
     const next: Record<string, ChatMessageRow> = {};
@@ -937,7 +1095,9 @@ export default function SocialPage() {
 
   const loadSocialData = useCallback(async () => {
     if (!userId) return;
-    setIsLoading(true);
+    if (teams.length === 0 && channels.length === 0 && events.length === 0) {
+      setIsLoading(true);
+    }
     setErrorMessage("");
 
     const { data: profile, error: profileError } = await supabase
@@ -987,16 +1147,46 @@ export default function SocialPage() {
     ]);
     setIsLoading(false);
   }, [
+    channels.length,
+    events.length,
     loadEventsData,
     loadTeamMemberCounts,
     refreshChatChannels,
     supabase,
+    teams.length,
     userId,
   ]);
 
   useEffect(() => {
     void loadSocialData();
   }, [loadSocialData]);
+
+  useEffect(() => {
+    if (!socialChatCacheKey) return;
+
+    let isCancelled = false;
+
+    const hydrateChatCache = async () => {
+      const cached = await readCachedValue<SocialChatCachePayload>(
+        socialChatCacheKey,
+        12 * 60 * 60 * 1000,
+      );
+      if (!cached || isCancelled) return;
+
+      setThreads(cached.threads);
+      setMessages(cached.messages);
+      setAttachmentsByMessage(cached.attachmentsByMessage);
+      setReactionsByMessage(cached.reactionsByMessage);
+      setProfilesById(cached.profilesById);
+      setIsChatLoading(false);
+    };
+
+    void hydrateChatCache();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [socialChatCacheKey]);
 
   const loadChatData = useCallback(async () => {
     if (!activeChannelId) {
@@ -1009,7 +1199,9 @@ export default function SocialPage() {
       return;
     }
 
-    setIsChatLoading(true);
+    if (messages.length === 0 && threads.length === 0) {
+      setIsChatLoading(true);
+    }
     const [
       { data: messageRows, error: messageError },
       { data: threadRows, error: threadError },
@@ -1164,11 +1356,114 @@ export default function SocialPage() {
         : null;
     });
     setIsChatLoading(false);
-  }, [activeChannelId, supabase]);
+  }, [activeChannelId, messages.length, supabase, threads.length]);
 
   useEffect(() => {
     void loadChatData();
   }, [loadChatData]);
+
+  useEffect(() => {
+    if (!socialOverviewCacheKey) return;
+
+    const persistTimeout = setTimeout(() => {
+      void writeCachedValue<SocialOverviewCachePayload>(
+        socialOverviewCacheKey,
+        {
+          activeChannelId,
+          channels,
+          cityId,
+          cityName,
+          eventAttendeesByEvent,
+          eventOrganizersById,
+          events,
+          joinedTeamIds,
+          teamMemberCountById,
+          teams,
+        },
+      );
+    }, 220);
+
+    return () => {
+      clearTimeout(persistTimeout);
+    };
+  }, [
+    activeChannelId,
+    channels,
+    cityId,
+    cityName,
+    eventAttendeesByEvent,
+    eventOrganizersById,
+    events,
+    joinedTeamIds,
+    socialOverviewCacheKey,
+    teamMemberCountById,
+    teams,
+  ]);
+
+  useEffect(() => {
+    if (!socialChatCacheKey) return;
+
+    const persistTimeout = setTimeout(() => {
+      const cachedMessages = messages.slice(-180);
+      const cachedThreads = threads.slice(0, 80);
+      const relevantProfileIds = new Set<string>();
+      const messageIds = new Set<string>();
+
+      for (const message of cachedMessages) {
+        messageIds.add(message.id);
+        if (message.sender_id) relevantProfileIds.add(message.sender_id);
+      }
+      for (const thread of cachedThreads) {
+        if (thread.created_by) relevantProfileIds.add(thread.created_by);
+      }
+
+      const cachedAttachmentsByMessage: Record<string, ChatAttachmentRow[]> =
+        {};
+      const cachedReactionsByMessage: Record<string, ChatReactionRow[]> = {};
+      const cachedProfilesById: Record<string, PublicProfileRow> = {};
+
+      for (const messageId of messageIds) {
+        const attachments = attachmentsByMessage[messageId];
+        if (attachments?.length) {
+          cachedAttachmentsByMessage[messageId] = attachments.slice(0, 8);
+        }
+
+        const reactions = reactionsByMessage[messageId];
+        if (reactions?.length) {
+          cachedReactionsByMessage[messageId] = reactions.slice(0, 20);
+          for (const reaction of reactions) {
+            if (reaction.user_id) relevantProfileIds.add(reaction.user_id);
+          }
+        }
+      }
+
+      for (const profileId of relevantProfileIds) {
+        const profile = profilesById[profileId];
+        if (profile) {
+          cachedProfilesById[profileId] = profile;
+        }
+      }
+
+      void writeCachedValue<SocialChatCachePayload>(socialChatCacheKey, {
+        attachmentsByMessage: cachedAttachmentsByMessage,
+        messages: cachedMessages,
+        profilesById: cachedProfilesById,
+        reactionsByMessage: cachedReactionsByMessage,
+        threads: cachedThreads,
+      });
+    }, 220);
+
+    return () => {
+      clearTimeout(persistTimeout);
+    };
+  }, [
+    attachmentsByMessage,
+    messages,
+    profilesById,
+    reactionsByMessage,
+    socialChatCacheKey,
+    threads,
+  ]);
 
   const ensureProfiles = useCallback(
     async (nextProfileIds: string[]) => {
@@ -1774,6 +2069,26 @@ export default function SocialPage() {
     return [mine, other] as const;
   }, [joinedTeamIds, teams]);
 
+  const invalidateMembershipDependentCache = useCallback(async () => {
+    if (!userId) return;
+
+    const knownChannelIds = Array.from(
+      new Set([
+        ...channels.map((channel) => channel.id),
+        ...Object.keys(attachmentsByMessage),
+      ]),
+    );
+
+    await Promise.all([
+      removeCachedValue(`home:dashboard:${userId}`),
+      removeCachedValue(`social:overview:${userId}`),
+      removeCachedValuesByPrefix(`social:chat:${userId}:`),
+      ...knownChannelIds.map((channelId) =>
+        removeCachedValue(`social:chat:${userId}:${channelId}`),
+      ),
+    ]);
+  }, [attachmentsByMessage, channels, userId]);
+
   const switchTeam = async (teamId: string) => {
     if (!userId || isWorkingTeamId) return;
     setErrorMessage("");
@@ -1796,11 +2111,13 @@ export default function SocialPage() {
 
     if (joinError) {
       setErrorMessage(joinError.message);
+      await invalidateMembershipDependentCache();
       await loadSocialData();
       setIsWorkingTeamId(null);
       return;
     }
 
+    await invalidateMembershipDependentCache();
     await loadSocialData();
     setIsWorkingTeamId(null);
   };
@@ -1821,6 +2138,7 @@ export default function SocialPage() {
       return;
     }
 
+    await invalidateMembershipDependentCache();
     await loadSocialData();
     setIsWorkingTeamId(null);
   };
@@ -1894,6 +2212,7 @@ export default function SocialPage() {
     if (joinError) {
       setErrorMessage(getFriendlyErrorMessage(joinError.message));
       setIsCreatingTeam(false);
+      await invalidateMembershipDependentCache();
       await loadSocialData();
       return;
     }
@@ -1914,6 +2233,7 @@ export default function SocialPage() {
     setNewTeamDescription("");
     setIsCreateOpen(false);
     setIsCreatingTeam(false);
+    await invalidateMembershipDependentCache();
     await loadSocialData();
   };
 
@@ -2610,17 +2930,22 @@ export default function SocialPage() {
       setIsUploadingImage(true);
 
       try {
-        const extension = getFileExtension(file.name || "upload", mimeType);
+        const sanitizedFile = await sanitizeWebImageForUpload(file);
+        const uploadMimeType = sanitizedFile.mimeType || mimeType;
+        const extension = getFileExtension(
+          file.name || "upload",
+          uploadMimeType,
+        );
         const storagePath = `${activeChannelId}/${userId}/${Date.now()}-${Math.random()
           .toString(36)
           .slice(2, 8)}.${extension}`;
 
         const { error: uploadError } = await supabase.storage
           .from("chat-media")
-          .upload(storagePath, file, {
+          .upload(storagePath, sanitizedFile.body, {
             cacheControl: "3600",
             upsert: false,
-            contentType: mimeType,
+            contentType: uploadMimeType,
           });
 
         if (uploadError) {
@@ -2658,8 +2983,8 @@ export default function SocialPage() {
               kind: attachmentKind,
               storage_bucket: "chat-media",
               storage_path: storagePath,
-              mime_type: mimeType,
-              file_size_bytes: Math.max(1, file.size || 1),
+              mime_type: uploadMimeType,
+              file_size_bytes: sanitizedFile.size,
               width: null,
               height: null,
             })
@@ -2697,8 +3022,8 @@ export default function SocialPage() {
             kind: attachmentKind,
             storage_bucket: "chat-media",
             storage_path: storagePath,
-            mime_type: mimeType,
-            file_size_bytes: Math.max(1, file.size || 1),
+            mime_type: uploadMimeType,
+            file_size_bytes: sanitizedFile.size,
             width: null,
             height: null,
             created_at: new Date().toISOString(),

@@ -27,6 +27,12 @@ import { SettingsSection } from "@/components/Settings";
 import type { SettingsSectionHandle } from "@/components/Settings";
 import { COLORS } from "@/constants/colors";
 import { useSupabase } from "@/hooks/useSupabase";
+import {
+  readCachedValue,
+  removeCachedValue,
+  removeCachedValuesByPrefix,
+  writeCachedValue,
+} from "@/lib/localCache";
 import { WATERING_POINTS_PER_PLANT } from "@/lib/plantPoints";
 import {
   getWateringNotificationPermissionStateAsync,
@@ -219,6 +225,24 @@ type CityRegionAnchorRow = {
   state: string | null;
 };
 
+type CachedWateringTask = Omit<WateringTask, "scheduledAt"> & {
+  scheduledAt: string;
+};
+
+type HomeCachePayload = {
+  co2CapturedKgPerYear: number;
+  dailyTipText: string;
+  groupLeaderboard: GroupLeaderboardEntry[];
+  peopleLeaderboard: PersonLeaderboardEntry[];
+  plantTotal: number;
+  primaryTeamName: string | null;
+  profileName: string | null;
+  regionalLeaderboard: CityLeaderboardEntry[];
+  toWaterTotal: number;
+  wateringDueTasks: CachedWateringTask[];
+  wateringUpcomingTasks: CachedWateringTask[];
+};
+
 function takeOne<T>(value: T | T[] | null | undefined): T | null {
   if (!value) return null;
   return Array.isArray(value) ? (value[0] ?? null) : value;
@@ -234,6 +258,16 @@ const formatTipDate = (tipDate: string) => {
     year: "numeric",
   });
 };
+
+const serializeWateringTask = (task: WateringTask): CachedWateringTask => ({
+  ...task,
+  scheduledAt: task.scheduledAt.toISOString(),
+});
+
+const deserializeWateringTask = (task: CachedWateringTask): WateringTask => ({
+  ...task,
+  scheduledAt: new Date(task.scheduledAt),
+});
 
 export default function Page() {
   const { signOut, session, supabase, isLoaded } = useSupabase();
@@ -294,6 +328,16 @@ export default function Page() {
 
   const handleSignOut = async () => {
     try {
+      const currentUserId = session?.user?.id ?? null;
+      if (currentUserId) {
+        await Promise.all([
+          removeCachedValue(`home:dashboard:${currentUserId}`),
+          removeCachedValue(`plants:overview:${currentUserId}`),
+          removeCachedValue(`settings:profile:${currentUserId}`),
+          removeCachedValue(`social:overview:${currentUserId}`),
+          removeCachedValuesByPrefix(`social:chat:${currentUserId}:`),
+        ]);
+      }
       await signOut();
     } catch (err) {
       console.error(JSON.stringify(err, null, 2));
@@ -325,6 +369,17 @@ export default function Page() {
       if (error) {
         Alert.alert("Delete failed", error.message);
         return;
+      }
+
+      const currentUserId = session?.user?.id ?? null;
+      if (currentUserId) {
+        await Promise.all([
+          removeCachedValue(`home:dashboard:${currentUserId}`),
+          removeCachedValue(`plants:overview:${currentUserId}`),
+          removeCachedValue(`settings:profile:${currentUserId}`),
+          removeCachedValue(`social:overview:${currentUserId}`),
+          removeCachedValuesByPrefix(`social:chat:${currentUserId}:`),
+        ]);
       }
 
       await signOut();
@@ -364,6 +419,42 @@ export default function Page() {
   };
 
   const userId = session?.user?.id ?? null;
+  const homeCacheKey = userId ? `home:dashboard:${userId}` : null;
+
+  useEffect(() => {
+    if (!homeCacheKey) return;
+
+    let isCancelled = false;
+
+    const hydrateDashboardCache = async () => {
+      const cached = await readCachedValue<HomeCachePayload>(
+        homeCacheKey,
+        24 * 60 * 60 * 1000,
+      );
+      if (!cached || isCancelled) return;
+
+      setProfileName(cached.profileName);
+      setDailyTipText(cached.dailyTipText || FALLBACK_DAILY_TIP);
+      setIsDailyTipLoading(false);
+      setPlantTotal(cached.plantTotal);
+      setToWaterTotal(cached.toWaterTotal);
+      setCo2CapturedKgPerYear(cached.co2CapturedKgPerYear);
+      setWateringDueTasks(cached.wateringDueTasks.map(deserializeWateringTask));
+      setWateringUpcomingTasks(
+        cached.wateringUpcomingTasks.map(deserializeWateringTask),
+      );
+      setPrimaryTeamName(cached.primaryTeamName);
+      setGroupLeaderboard(cached.groupLeaderboard);
+      setRegionalLeaderboard(cached.regionalLeaderboard);
+      setPeopleLeaderboard(cached.peopleLeaderboard);
+    };
+
+    void hydrateDashboardCache();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [homeCacheKey]);
 
   useEffect(() => {
     let isCancelled = false;
@@ -1116,6 +1207,43 @@ export default function Page() {
       isCancelled = true;
     };
   }, [isLoaded, userId, supabase]);
+
+  useEffect(() => {
+    if (!homeCacheKey) return;
+
+    const persistTimeout = setTimeout(() => {
+      void writeCachedValue<HomeCachePayload>(homeCacheKey, {
+        co2CapturedKgPerYear,
+        dailyTipText,
+        groupLeaderboard,
+        peopleLeaderboard,
+        plantTotal,
+        primaryTeamName,
+        profileName,
+        regionalLeaderboard,
+        toWaterTotal,
+        wateringDueTasks: wateringDueTasks.map(serializeWateringTask),
+        wateringUpcomingTasks: wateringUpcomingTasks.map(serializeWateringTask),
+      });
+    }, 200);
+
+    return () => {
+      clearTimeout(persistTimeout);
+    };
+  }, [
+    co2CapturedKgPerYear,
+    dailyTipText,
+    groupLeaderboard,
+    homeCacheKey,
+    peopleLeaderboard,
+    plantTotal,
+    primaryTeamName,
+    profileName,
+    regionalLeaderboard,
+    toWaterTotal,
+    wateringDueTasks,
+    wateringUpcomingTasks,
+  ]);
 
   const openPlantDetail = (id: string) => {
     router.push({ pathname: "/(protected)/plant/[id]", params: { id } });

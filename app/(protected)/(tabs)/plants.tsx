@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Pressable,
@@ -15,6 +15,7 @@ import { LinearGradient } from "expo-linear-gradient";
 
 import { COLORS } from "@/constants/colors";
 import { useSupabase } from "@/hooks/useSupabase";
+import { readCachedValue, writeCachedValue } from "@/lib/localCache";
 import { computePlantPoints, formatPlantPoints } from "@/lib/plantPoints";
 
 const { width } = Dimensions.get("window");
@@ -53,6 +54,11 @@ type UserPlantRow = {
   plant: PlantCatalogRow | PlantCatalogRow[] | null;
 };
 
+type PlantsCachePayload = {
+  earnedAchievementCount: number;
+  plants: UserPlantRow[];
+};
+
 export default function PlantsPage() {
   const insets = useSafeAreaInsets();
   const { session, supabase } = useSupabase();
@@ -62,10 +68,37 @@ export default function PlantsPage() {
   const [earnedAchievementCount, setEarnedAchievementCount] = useState(0);
 
   const userId = session?.user?.id ?? null;
+  const plantsCacheKey = userId ? `plants:overview:${userId}` : null;
+
+  useEffect(() => {
+    if (!plantsCacheKey) return;
+
+    let isCancelled = false;
+
+    const hydrateFromCache = async () => {
+      const cached = await readCachedValue<PlantsCachePayload>(
+        plantsCacheKey,
+        24 * 60 * 60 * 1000,
+      );
+      if (!cached || isCancelled) return;
+
+      setPlants(cached.plants);
+      setEarnedAchievementCount(cached.earnedAchievementCount);
+      setIsLoading(false);
+    };
+
+    void hydrateFromCache();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [plantsCacheKey]);
 
   const loadPlants = useCallback(async () => {
     if (!userId) return;
-    setIsLoading(true);
+    if (plants.length === 0) {
+      setIsLoading(true);
+    }
     setErrorMessage("");
 
     const [{ data, error }, { count, error: achievementError }] =
@@ -93,8 +126,14 @@ export default function PlantsPage() {
 
     setPlants((data ?? []) as unknown as UserPlantRow[]);
     setEarnedAchievementCount(count ?? 0);
+    if (plantsCacheKey) {
+      void writeCachedValue<PlantsCachePayload>(plantsCacheKey, {
+        earnedAchievementCount: count ?? 0,
+        plants: (data ?? []) as unknown as UserPlantRow[],
+      });
+    }
     setIsLoading(false);
-  }, [supabase, userId]);
+  }, [plants.length, plantsCacheKey, supabase, userId]);
 
   useFocusEffect(
     useCallback(() => {
