@@ -2,6 +2,7 @@ import { useEffect, useRef } from "react";
 import {
   Animated,
   Easing,
+  Platform,
   StyleSheet,
   View,
   type ImageSourcePropType,
@@ -17,6 +18,7 @@ const SPLASH_ICON = require("../assets/icon_nobg.png") as ImageSourcePropType;
 export function AnimatedAppSplash({
   onAnimationComplete,
 }: AnimatedAppSplashProps) {
+  const showBurstRings = Platform.OS !== "web";
   const iconScale = useRef(new Animated.Value(0.72)).current;
   const iconOpacity = useRef(new Animated.Value(1)).current;
   const burstScale = useRef(new Animated.Value(0.36)).current;
@@ -113,24 +115,28 @@ export function AnimatedAppSplash({
 
   return (
     <View style={styles.container}>
-      <Animated.View
-        style={[
-          styles.burstRing,
-          {
-            opacity: burstOpacity,
-            transform: [{ scale: burstScale }],
-          },
-        ]}
-      />
-      <Animated.View
-        style={[
-          styles.burstRingSoft,
-          {
-            opacity: burstOpacitySoft,
-            transform: [{ scale: burstScaleSoft }],
-          },
-        ]}
-      />
+      {showBurstRings ? (
+        <>
+          <Animated.View
+            style={[
+              styles.burstRing,
+              {
+                opacity: burstOpacity,
+                transform: [{ scale: burstScale }],
+              },
+            ]}
+          />
+          <Animated.View
+            style={[
+              styles.burstRingSoft,
+              {
+                opacity: burstOpacitySoft,
+                transform: [{ scale: burstScaleSoft }],
+              },
+            ]}
+          />
+        </>
+      ) : null}
       <Animated.Image
         source={SPLASH_ICON}
         style={[

@@ -1,6 +1,7 @@
 import { useState } from "react";
 import {
   ActivityIndicator,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -99,10 +100,12 @@ export default function Page() {
   if (pendingVerification) {
     return (
       <SafeAreaView style={styles.safeArea}>
-        <View style={styles.backgroundDecoration}>
-          <View style={[styles.blob, styles.blob1]} />
-          <View style={[styles.blob, styles.blob2]} />
-        </View>
+        {Platform.OS !== "web" ? (
+          <View style={styles.backgroundDecoration}>
+            <View style={[styles.blob, styles.blob1]} />
+            <View style={[styles.blob, styles.blob2]} />
+          </View>
+        ) : null}
 
         <ScrollView
           automaticallyAdjustsScrollIndicatorInsets
@@ -191,10 +194,12 @@ export default function Page() {
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      <View style={styles.backgroundDecoration}>
-        <View style={[styles.blob, styles.blob1]} />
-        <View style={[styles.blob, styles.blob2]} />
-      </View>
+      {Platform.OS !== "web" ? (
+        <View style={styles.backgroundDecoration}>
+          <View style={[styles.blob, styles.blob1]} />
+          <View style={[styles.blob, styles.blob2]} />
+        </View>
+      ) : null}
 
       <ScrollView
         automaticallyAdjustsScrollIndicatorInsets

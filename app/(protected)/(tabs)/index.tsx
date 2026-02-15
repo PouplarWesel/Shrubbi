@@ -4,6 +4,7 @@ import {
   Alert,
   Dimensions,
   Image,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -1221,10 +1222,12 @@ export default function Page() {
   return (
     <BottomSheetModalProvider>
       <View style={styles.container}>
-        <View style={styles.backgroundDecoration}>
-          <View style={[styles.blob, styles.blob1]} />
-          <View style={[styles.blob, styles.blob2]} />
-        </View>
+        {Platform.OS !== "web" ? (
+          <View style={styles.backgroundDecoration}>
+            <View style={[styles.blob, styles.blob1]} />
+            <View style={[styles.blob, styles.blob2]} />
+          </View>
+        ) : null}
 
         <ScrollView
           contentContainerStyle={[

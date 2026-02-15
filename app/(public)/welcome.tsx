@@ -16,51 +16,54 @@ import { COLORS } from "@/constants/colors";
 
 export default function Page() {
   const { width: windowWidth } = useWindowDimensions();
-  const blobBase = Platform.OS === "web" ? Math.min(windowWidth, 420) : windowWidth;
+  const blobBase =
+    Platform.OS === "web" ? Math.min(windowWidth, 420) : windowWidth;
 
   return (
     <SafeAreaView style={styles.container}>
-      <View style={styles.backgroundDecoration}>
-        <View
-          style={[
-            styles.blob,
-            styles.blob1,
-            {
-              width: blobBase * 1.2,
-              height: blobBase * 1.2,
-              borderRadius: blobBase,
-              top: -blobBase * 0.4,
-              right: -blobBase * 0.4,
-            },
-          ]}
-        />
-        <View
-          style={[
-            styles.blob,
-            styles.blob2,
-            {
-              width: blobBase,
-              height: blobBase,
-              borderRadius: blobBase,
-              bottom: -blobBase * 0.2,
-              left: -blobBase * 0.3,
-            },
-          ]}
-        />
-        <View
-          style={[
-            styles.blob,
-            styles.blob3,
-            {
-              width: blobBase * 0.6,
-              height: blobBase * 0.6,
-              borderRadius: blobBase,
-              top: blobBase * 0.3,
-              left: -blobBase * 0.2,
-            },
-          ]}
-        />
-      </View>
+      {Platform.OS !== "web" ? (
+        <View style={styles.backgroundDecoration}>
+          <View
+            style={[
+              styles.blob,
+              styles.blob1,
+              {
+                width: blobBase * 1.2,
+                height: blobBase * 1.2,
+                borderRadius: blobBase,
+                top: -blobBase * 0.4,
+                right: -blobBase * 0.4,
+              },
+            ]}
+          />
+          <View
+            style={[
+              styles.blob,
+              styles.blob2,
+              {
+                width: blobBase,
+                height: blobBase,
+                borderRadius: blobBase,
+                bottom: -blobBase * 0.2,
+                left: -blobBase * 0.3,
+              },
+            ]}
+          />
+          <View
+            style={[
+              styles.blob,
+              styles.blob3,
+              {
+                width: blobBase * 0.6,
+                height: blobBase * 0.6,
+                borderRadius: blobBase,
+                top: blobBase * 0.3,
+                left: -blobBase * 0.2,
+              },
+            ]}
+          />
+        </View>
+      ) : null}
 
       <View style={styles.content}>
         <View style={styles.logoContainer}>
