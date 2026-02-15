@@ -18,6 +18,10 @@ const globalWithSupabase = globalThis as typeof globalThis & {
   __supabaseClient?: SupabaseClient;
 };
 
+const isServerRuntime = typeof window === "undefined";
+const isReactNativeRuntime =
+  typeof navigator !== "undefined" && navigator.product === "ReactNative";
+
 const nonTimingOutLock = async <R>(
   name: string,
   _acquireTimeout: number,
@@ -29,11 +33,11 @@ const nonTimingOutLock = async <R>(
 if (!globalWithSupabase.__supabaseClient) {
   globalWithSupabase.__supabaseClient = createClient(supabaseUrl, supabaseKey, {
     auth: {
-      storage: AsyncStorage,
-      autoRefreshToken: true,
-      persistSession: true,
+      storage: isReactNativeRuntime ? AsyncStorage : undefined,
+      autoRefreshToken: !isServerRuntime,
+      persistSession: !isServerRuntime,
       detectSessionInUrl: false,
-      lock: nonTimingOutLock,
+      lock: isReactNativeRuntime ? nonTimingOutLock : undefined,
     },
   });
 }
