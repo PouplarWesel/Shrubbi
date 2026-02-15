@@ -61,6 +61,24 @@ const safeNumber = (value: unknown) => {
   return 0;
 };
 
+const normalizeCityId = (value: unknown) => {
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    return trimmed.length ? trimmed : null;
+  }
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return String(value);
+  }
+  return null;
+};
+
+const cityIdsMatch = (left: unknown, right: unknown) => {
+  const leftId = normalizeCityId(left);
+  const rightId = normalizeCityId(right);
+  if (!leftId || !rightId) return false;
+  return leftId.toLowerCase() === rightId.toLowerCase();
+};
+
 const sortBreakdown = (breakdown: Record<string, unknown>) => {
   return Object.entries(breakdown)
     .map(([key, val]) => ({ key, value: safeNumber(val) }))
@@ -88,6 +106,134 @@ const pickBoundaryGeometry = (
   if (!Array.isArray(g.coordinates)) return null;
 
   return g as GeoJSONPolygonGeometry;
+};
+
+const isFiniteNumber = (value: unknown): value is number =>
+  typeof value === "number" && Number.isFinite(value);
+
+const isCoordinatePair = (value: unknown): value is [number, number] => {
+  return (
+    Array.isArray(value) &&
+    value.length >= 2 &&
+    isFiniteNumber(value[0]) &&
+    isFiniteNumber(value[1])
+  );
+};
+
+const isLinearRing = (value: unknown): value is [number, number][] => {
+  if (!Array.isArray(value) || value.length < 3) return false;
+  return value.every((point) => isCoordinatePair(point));
+};
+
+const collectCoordinatePairs = (value: unknown, out: [number, number][]) => {
+  if (isCoordinatePair(value)) {
+    out.push([value[0], value[1]]);
+    return;
+  }
+
+  if (!Array.isArray(value)) return;
+  for (const item of value) {
+    collectCoordinatePairs(item, out);
+  }
+};
+
+const boundsCenterFromCoordinates = (
+  coordinates: unknown,
+): [number, number] | null => {
+  const points: [number, number][] = [];
+  collectCoordinatePairs(coordinates, points);
+  if (!points.length) return null;
+
+  let minLon = points[0][0];
+  let maxLon = points[0][0];
+  let minLat = points[0][1];
+  let maxLat = points[0][1];
+
+  for (const [lon, lat] of points) {
+    if (lon < minLon) minLon = lon;
+    if (lon > maxLon) maxLon = lon;
+    if (lat < minLat) minLat = lat;
+    if (lat > maxLat) maxLat = lat;
+  }
+
+  return [(minLon + maxLon) / 2, (minLat + maxLat) / 2];
+};
+
+const accumulateRingMoments = (
+  ring: [number, number][],
+  totals: { cross: number; momentX: number; momentY: number },
+) => {
+  const count = ring.length;
+  if (count < 3) return;
+
+  for (let i = 0; i < count; i += 1) {
+    const [x0, y0] = ring[i];
+    const [x1, y1] = ring[(i + 1) % count];
+    const cross = x0 * y1 - x1 * y0;
+    totals.cross += cross;
+    totals.momentX += (x0 + x1) * cross;
+    totals.momentY += (y0 + y1) * cross;
+  }
+};
+
+const centroidFromBoundary = (
+  geometry: GeoJSONPolygonGeometry,
+): [number, number] | null => {
+  const totals = { cross: 0, momentX: 0, momentY: 0 };
+
+  if (geometry.type === "Polygon") {
+    for (const ring of geometry.coordinates as unknown[]) {
+      if (!isLinearRing(ring)) continue;
+      accumulateRingMoments(ring, totals);
+    }
+  } else {
+    for (const polygon of geometry.coordinates as unknown[]) {
+      if (!Array.isArray(polygon)) continue;
+      for (const ring of polygon) {
+        if (!isLinearRing(ring)) continue;
+        accumulateRingMoments(ring, totals);
+      }
+    }
+  }
+
+  if (Math.abs(totals.cross) < 1e-12) return null;
+
+  const cx = totals.momentX / (3 * totals.cross);
+  const cy = totals.momentY / (3 * totals.cross);
+  if (!Number.isFinite(cx) || !Number.isFinite(cy)) return null;
+
+  return [cx, cy];
+};
+
+const resolveCityCenter = (row: CityMapStatsRow): [number, number] => {
+  if (isFiniteNumber(row.center_lon) && isFiniteNumber(row.center_lat)) {
+    return [row.center_lon, row.center_lat];
+  }
+
+  const boundaryGeometry = pickBoundaryGeometry(row.boundary_geojson);
+  if (boundaryGeometry) {
+    const centroid = centroidFromBoundary(boundaryGeometry);
+    if (centroid) return centroid;
+  }
+
+  if (
+    isFiniteNumber(row.bbox_sw_lon) &&
+    isFiniteNumber(row.bbox_ne_lon) &&
+    isFiniteNumber(row.bbox_sw_lat) &&
+    isFiniteNumber(row.bbox_ne_lat)
+  ) {
+    return [
+      (row.bbox_sw_lon + row.bbox_ne_lon) / 2,
+      (row.bbox_sw_lat + row.bbox_ne_lat) / 2,
+    ];
+  }
+
+  if (boundaryGeometry) {
+    const center = boundsCenterFromCoordinates(boundaryGeometry.coordinates);
+    if (center) return center;
+  }
+
+  return DEFAULT_CENTER;
 };
 
 const buildStops = (max: number, colors: string[]) => {
@@ -256,7 +402,9 @@ export default function MapTabWeb() {
 
   const selectedCity = useMemo(() => {
     if (!selectedCityId) return null;
-    return rows.find((row) => row.city_id === selectedCityId) ?? null;
+    return (
+      rows.find((row) => cityIdsMatch(row.city_id, selectedCityId)) ?? null
+    );
   }, [rows, selectedCityId]);
 
   const featureCollection = useMemo(() => {
@@ -275,16 +423,7 @@ export default function MapTabWeb() {
         );
       })
       .map((row) => {
-        const centerLon =
-          row.center_lon ??
-          (row.bbox_sw_lon != null && row.bbox_ne_lon != null
-            ? (row.bbox_sw_lon + row.bbox_ne_lon) / 2
-            : DEFAULT_CENTER[0]);
-        const centerLat =
-          row.center_lat ??
-          (row.bbox_sw_lat != null && row.bbox_ne_lat != null
-            ? (row.bbox_sw_lat + row.bbox_ne_lat) / 2
-            : DEFAULT_CENTER[1]);
+        const [centerLon, centerLat] = resolveCityCenter(row);
 
         const swLon = row.bbox_sw_lon ?? centerLon - FALLBACK_BOX_DEG;
         const swLat = row.bbox_sw_lat ?? centerLat - FALLBACK_BOX_DEG;
@@ -633,9 +772,7 @@ export default function MapTabWeb() {
       map.on("click", "shrubbi-city-fill", (event: any) => {
         const hit = event?.features?.[0];
         const cityId =
-          typeof hit?.properties?.city_id === "string"
-            ? hit.properties.city_id
-            : null;
+          normalizeCityId(hit?.properties?.city_id) ?? normalizeCityId(hit?.id);
         if (!cityId) return;
         setSelectedCityId(cityId);
       });
@@ -722,19 +859,10 @@ export default function MapTabWeb() {
 
     if (!selectedCityId) return;
 
-    const row = rows.find((r) => r.city_id === selectedCityId);
+    const row = rows.find((r) => cityIdsMatch(r.city_id, selectedCityId));
     if (!row) return;
 
-    const centerLon =
-      row.center_lon ??
-      (row.bbox_sw_lon != null && row.bbox_ne_lon != null
-        ? (row.bbox_sw_lon + row.bbox_ne_lon) / 2
-        : DEFAULT_CENTER[0]);
-    const centerLat =
-      row.center_lat ??
-      (row.bbox_sw_lat != null && row.bbox_ne_lat != null
-        ? (row.bbox_sw_lat + row.bbox_ne_lat) / 2
-        : DEFAULT_CENTER[1]);
+    const [centerLon, centerLat] = resolveCityCenter(row);
 
     map.easeTo({
       center: [centerLon, centerLat],

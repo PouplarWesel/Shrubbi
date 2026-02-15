@@ -14,6 +14,42 @@ export type Database = {
   }
   public: {
     Tables: {
+      achievements: {
+        Row: {
+          code: string
+          created_at: string
+          description: string | null
+          icon: string | null
+          id: string
+          is_active: boolean
+          points: number
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          code: string
+          created_at?: string
+          description?: string | null
+          icon?: string | null
+          id?: string
+          is_active?: boolean
+          points?: number
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          code?: string
+          created_at?: string
+          description?: string | null
+          icon?: string | null
+          id?: string
+          is_active?: boolean
+          points?: number
+          title?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       chat_channels: {
         Row: {
           city_id: string
@@ -55,6 +91,13 @@ export type Database = {
             columns: ["city_id"]
             isOneToOne: false
             referencedRelation: "city_leaderboard"
+            referencedColumns: ["city_id"]
+          },
+          {
+            foreignKeyName: "chat_channels_city_id_fkey"
+            columns: ["city_id"]
+            isOneToOne: false
+            referencedRelation: "city_map_stats"
             referencedColumns: ["city_id"]
           },
           {
@@ -287,6 +330,13 @@ export type Database = {
       }
       cities: {
         Row: {
+          bbox_ne_lat: number | null
+          bbox_ne_lon: number | null
+          bbox_sw_lat: number | null
+          bbox_sw_lon: number | null
+          boundary_geojson: Json | null
+          center_lat: number | null
+          center_lon: number | null
           country: string
           country_code: string
           created_at: string
@@ -297,6 +347,13 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          bbox_ne_lat?: number | null
+          bbox_ne_lon?: number | null
+          bbox_sw_lat?: number | null
+          bbox_sw_lon?: number | null
+          boundary_geojson?: Json | null
+          center_lat?: number | null
+          center_lon?: number | null
           country?: string
           country_code?: string
           created_at?: string
@@ -307,6 +364,13 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          bbox_ne_lat?: number | null
+          bbox_ne_lon?: number | null
+          bbox_sw_lat?: number | null
+          bbox_sw_lon?: number | null
+          boundary_geojson?: Json | null
+          center_lat?: number | null
+          center_lon?: number | null
           country?: string
           country_code?: string
           created_at?: string
@@ -314,6 +378,42 @@ export type Database = {
           name?: string
           region?: string | null
           state?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      daily_quests: {
+        Row: {
+          code: string
+          created_at: string
+          description: string | null
+          id: string
+          is_active: boolean
+          points: number
+          target_count: number
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          code: string
+          created_at?: string
+          description?: string | null
+          id?: string
+          is_active?: boolean
+          points?: number
+          target_count?: number
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          code?: string
+          created_at?: string
+          description?: string | null
+          id?: string
+          is_active?: boolean
+          points?: number
+          target_count?: number
+          title?: string
           updated_at?: string
         }
         Relationships: []
@@ -467,6 +567,13 @@ export type Database = {
             columns: ["city_id"]
             isOneToOne: false
             referencedRelation: "city_leaderboard"
+            referencedColumns: ["city_id"]
+          },
+          {
+            foreignKeyName: "events_city_id_fkey"
+            columns: ["city_id"]
+            isOneToOne: false
+            referencedRelation: "city_map_stats"
             referencedColumns: ["city_id"]
           },
           {
@@ -627,6 +734,13 @@ export type Database = {
             referencedRelation: "city_leaderboard"
             referencedColumns: ["city_id"]
           },
+          {
+            foreignKeyName: "profiles_city_id_fkey"
+            columns: ["city_id"]
+            isOneToOne: false
+            referencedRelation: "city_map_stats"
+            referencedColumns: ["city_id"]
+          },
         ]
       }
       public_profiles: {
@@ -757,8 +871,105 @@ export type Database = {
             referencedColumns: ["city_id"]
           },
           {
+            foreignKeyName: "teams_city_id_fkey"
+            columns: ["city_id"]
+            isOneToOne: false
+            referencedRelation: "city_map_stats"
+            referencedColumns: ["city_id"]
+          },
+          {
             foreignKeyName: "teams_created_by_fkey"
             columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      user_achievements: {
+        Row: {
+          achievement_id: string
+          created_at: string
+          earned_at: string
+          id: string
+          user_id: string
+        }
+        Insert: {
+          achievement_id: string
+          created_at?: string
+          earned_at?: string
+          id?: string
+          user_id: string
+        }
+        Update: {
+          achievement_id?: string
+          created_at?: string
+          earned_at?: string
+          id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_achievements_achievement_id_fkey"
+            columns: ["achievement_id"]
+            isOneToOne: false
+            referencedRelation: "achievements"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "user_achievements_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      user_daily_quests: {
+        Row: {
+          claimed_at: string | null
+          completed_at: string | null
+          created_at: string
+          id: string
+          progress_count: number
+          quest_date: string
+          quest_id: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          claimed_at?: string | null
+          completed_at?: string | null
+          created_at?: string
+          id?: string
+          progress_count?: number
+          quest_date?: string
+          quest_id: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          claimed_at?: string | null
+          completed_at?: string | null
+          created_at?: string
+          id?: string
+          progress_count?: number
+          quest_date?: string
+          quest_id?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_daily_quests_quest_id_fkey"
+            columns: ["quest_id"]
+            isOneToOne: false
+            referencedRelation: "daily_quests"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "user_daily_quests_user_id_fkey"
+            columns: ["user_id"]
             isOneToOne: false
             referencedRelation: "profiles"
             referencedColumns: ["id"]
@@ -771,6 +982,7 @@ export type Database = {
           created_at: string
           custom_name: string | null
           id: string
+          last_watered_at: string | null
           notes: string | null
           photo_path: string | null
           plant_id: string | null
@@ -778,16 +990,16 @@ export type Database = {
           quantity: number
           updated_at: string
           user_id: string
-          last_watered_at: string | null
           water_days: number[] | null
-          watering_points: number
           water_time: string | null
+          watering_points: number
         }
         Insert: {
           co2_kg_per_year_override?: number | null
           created_at?: string
           custom_name?: string | null
           id?: string
+          last_watered_at?: string | null
           notes?: string | null
           photo_path?: string | null
           plant_id?: string | null
@@ -795,16 +1007,16 @@ export type Database = {
           quantity?: number
           updated_at?: string
           user_id: string
-          last_watered_at?: string | null
           water_days?: number[] | null
-          watering_points?: number
           water_time?: string | null
+          watering_points?: number
         }
         Update: {
           co2_kg_per_year_override?: number | null
           created_at?: string
           custom_name?: string | null
           id?: string
+          last_watered_at?: string | null
           notes?: string | null
           photo_path?: string | null
           plant_id?: string | null
@@ -812,10 +1024,9 @@ export type Database = {
           quantity?: number
           updated_at?: string
           user_id?: string
-          last_watered_at?: string | null
           water_days?: number[] | null
-          watering_points?: number
           water_time?: string | null
+          watering_points?: number
         }
         Relationships: [
           {
@@ -849,6 +1060,29 @@ export type Database = {
         }
         Relationships: []
       }
+      city_map_stats: {
+        Row: {
+          bbox_ne_lat: number | null
+          bbox_ne_lon: number | null
+          bbox_sw_lat: number | null
+          bbox_sw_lon: number | null
+          best_plant_type: string | null
+          best_plant_type_count: number | null
+          boundary_geojson: Json | null
+          center_lat: number | null
+          center_lon: number | null
+          city_country: string | null
+          city_id: string | null
+          city_name: string | null
+          city_state: string | null
+          country_code: string | null
+          member_count: number | null
+          total_co2_removed_kg: number | null
+          total_plants: number | null
+          type_breakdown: Json | null
+        }
+        Relationships: []
+      }
       team_leaderboard: {
         Row: {
           city_country: string | null
@@ -875,6 +1109,13 @@ export type Database = {
             columns: ["city_id"]
             isOneToOne: false
             referencedRelation: "city_leaderboard"
+            referencedColumns: ["city_id"]
+          },
+          {
+            foreignKeyName: "teams_city_id_fkey"
+            columns: ["city_id"]
+            isOneToOne: false
+            referencedRelation: "city_map_stats"
             referencedColumns: ["city_id"]
           },
         ]

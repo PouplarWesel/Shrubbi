@@ -8,10 +8,10 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 const TAB_BAR_HEIGHT = 68;
 const TAB_BAR_RADIUS = TAB_BAR_HEIGHT / 2;
 const TAB_BAR_SIDE_INSET = 20;
-const TAB_BAR_PADDING_Y = 10;
 
 const ICON_SIZE = 44;
 const ICON_RADIUS = ICON_SIZE / 2;
+const ICON_VISUAL_OFFSET_Y = 2;
 
 export default function TabsLayout() {
   const insets = useSafeAreaInsets();
@@ -23,33 +23,34 @@ export default function TabsLayout() {
         tabBarActiveTintColor: COLORS.primary,
         tabBarInactiveTintColor: COLORS.secondary + "99",
         tabBarShowLabel: false,
-        safeAreaInsets: {
-          bottom: 0,
-          top: 0,
-          left: 0,
-          right: 0,
-        },
         tabBarItemStyle: {
+          height: TAB_BAR_HEIGHT,
           justifyContent: "center",
           alignItems: "center",
-          paddingVertical: 0,
+          paddingTop: 0,
+          paddingBottom: 0,
         },
         tabBarIconStyle: {
-          marginTop: 0,
+          width: ICON_SIZE,
+          height: ICON_SIZE,
+          justifyContent: "center",
+          alignItems: "center",
+          marginTop: ICON_VISUAL_OFFSET_Y,
         },
         tabBarStyle: {
           position: "absolute",
           left: TAB_BAR_SIDE_INSET,
           right: TAB_BAR_SIDE_INSET,
           bottom: bottomInset > 0 ? bottomInset : 24,
-          backgroundColor: "transparent",
+          // Helps Android elevation render a clean pill shadow (no polygon artifacts).
+          backgroundColor: "rgba(0, 15, 13, 0.92)",
           borderRadius: TAB_BAR_RADIUS,
           height: TAB_BAR_HEIGHT,
           borderTopWidth: 0,
           borderWidth: 1,
           borderColor: "rgba(171, 216, 189, 0.12)",
-          paddingTop: TAB_BAR_PADDING_Y,
-          paddingBottom: TAB_BAR_PADDING_Y,
+          paddingTop: 0,
+          paddingBottom: 0,
           elevation: 10,
           shadowColor: "#000",
           shadowOffset: { width: 0, height: 8 },
@@ -166,6 +167,8 @@ function TabIcon({
 
 const styles = StyleSheet.create({
   iconContainer: {
+    width: ICON_SIZE,
+    height: ICON_SIZE,
     alignItems: "center",
     justifyContent: "center",
   },

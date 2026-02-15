@@ -29,6 +29,7 @@ import {
   formatPlantPoints,
   WATERING_POINTS_PER_PLANT,
 } from "@/lib/plantPoints";
+import { syncWateringRemindersForUserAsync } from "@/lib/wateringNotifications";
 import {
   formatWaterDays,
   formatWaterTime,
@@ -218,6 +219,7 @@ export default function PlantDetailPage() {
           }
         : prev,
     );
+    void syncWateringRemindersForUserAsync(supabase, userId);
     setIsSavingSchedule(false);
   };
 
@@ -250,6 +252,7 @@ export default function PlantDetailPage() {
     );
     setWaterDaysDraft([]);
     setWaterTimeDraft("");
+    void syncWateringRemindersForUserAsync(supabase, userId);
     setIsSavingSchedule(false);
   };
 

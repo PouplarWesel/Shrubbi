@@ -846,13 +846,13 @@ select
   c.bbox_sw_lon,
   c.bbox_ne_lat,
   c.bbox_ne_lon,
-  c.boundary_geojson,
   coalesce(cm.member_count, 0)::bigint as member_count,
   coalesce(cp.total_plants, 0)::bigint as total_plants,
   coalesce(cp.total_co2_removed_kg, 0::numeric)::numeric(14,4) as total_co2_removed_kg,
   cta.best_plant_type,
   cta.best_plant_type_count,
-  coalesce(cta.type_breakdown, '{}'::jsonb) as type_breakdown
+  coalesce(cta.type_breakdown, '{}'::jsonb) as type_breakdown,
+  c.boundary_geojson
 from public.cities as c
 left join city_members as cm on cm.city_id = c.id
 left join city_plants as cp on cp.city_id = c.id

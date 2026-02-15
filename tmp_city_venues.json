@@ -1,0 +1,1802 @@
+{
+  "1e07ad2a-4a96-49dd-99f8-4cc9f88694b9": {
+    "parks": [
+      {
+        "name": "Aloe Greens Park",
+        "lat": 33.8019313,
+        "lon": -117.8928838
+      },
+      {
+        "name": "Aloe Promenade",
+        "lat": 33.8007372,
+        "lon": -117.8936165
+      },
+      {
+        "name": "Anaheim Coves Park",
+        "lat": 33.8276606,
+        "lon": -117.8696111
+      }
+    ],
+    "school": {
+      "name": "Abraham Lincoln Elementary School",
+      "lat": 33.8378813,
+      "lon": -117.8982476,
+      "amenity": "school"
+    }
+  },
+  "d54e6e24-b12f-4d99-8b96-21578625daf7": {
+    "parks": [
+      {
+        "name": "Almondridge Park",
+        "lat": 38.0011841,
+        "lon": -121.7627297
+      },
+      {
+        "name": "Antioch Community Park",
+        "lat": 37.9777201,
+        "lon": -121.817233
+      },
+      {
+        "name": "Bay Miwok Meadows Park",
+        "lat": 37.9506739,
+        "lon": -121.7623868
+      }
+    ],
+    "school": {
+      "name": "Antioch Adult and Community Education Center",
+      "lat": 38.0151989,
+      "lon": -121.8146783,
+      "amenity": "school"
+    }
+  },
+  "e32b0996-9e00-478a-b834-6154f81f9046": {
+    "parks": [
+      {
+        "name": "2800 Acre Water Bank",
+        "lat": 35.3265754,
+        "lon": -119.1975664
+      },
+      {
+        "name": "Aera Park",
+        "lat": 35.3550182,
+        "lon": -119.1335666
+      },
+      {
+        "name": "Almondale Park",
+        "lat": 35.4099025,
+        "lon": -119.1201992
+      }
+    ],
+    "school": {
+      "name": "American Elementary School",
+      "lat": 35.365115,
+      "lon": -119.1177886,
+      "amenity": "school"
+    }
+  },
+  "6ccc798d-e79f-4f65-8f85-2199c3f710b9": {
+    "parks": [
+      {
+        "name": "Aquatic Park",
+        "lat": 37.8579939,
+        "lon": -122.2993119
+      },
+      {
+        "name": "Ashby Place Park",
+        "lat": 37.857379,
+        "lon": -122.2514578
+      },
+      {
+        "name": "Bateman Mall Park",
+        "lat": 37.854402,
+        "lon": -122.2572128
+      }
+    ],
+    "school": {
+      "name": "American International Montessori",
+      "lat": 37.8474015,
+      "lon": -122.2706805,
+      "amenity": "school"
+    }
+  },
+  "9326ee1b-c1f7-4707-afa7-061877b603b8": {
+    "parks": [
+      {
+        "name": "Abraham Lincoln Park",
+        "lat": 34.1640893,
+        "lon": -118.3303234
+      },
+      {
+        "name": "Bel Aire Ballfield",
+        "lat": 34.2023503,
+        "lon": -118.3148241
+      },
+      {
+        "name": "Beverly Johnson Park",
+        "lat": 34.1592076,
+        "lon": -118.3378832
+      }
+    ],
+    "school": {
+      "name": "American Academy of Reflexology",
+      "lat": 34.1877834,
+      "lon": -118.3061883,
+      "amenity": "school"
+    }
+  },
+  "526def17-4be8-449e-a255-7d29f5acc3ea": {
+    "parks": [
+      {
+        "name": "Alga Norte Community Park",
+        "lat": 33.116137,
+        "lon": -117.2629984
+      },
+      {
+        "name": "Ann D. L'Heureux Memorial Dog Park",
+        "lat": 33.1719056,
+        "lon": -117.3161205
+      },
+      {
+        "name": "Aviara Community Park",
+        "lat": 33.1146742,
+        "lon": -117.2812277
+      }
+    ],
+    "school": {
+      "name": "Army and Navy Academy",
+      "lat": 33.1631303,
+      "lon": -117.3546425,
+      "amenity": "school"
+    }
+  },
+  "9dd6b35b-c2f0-41fa-be17-307d7ef0d055": {
+    "parks": [
+      {
+        "name": "All Seasons Park",
+        "lat": 32.6131087,
+        "lon": -116.9750056
+      },
+      {
+        "name": "Augusta Park",
+        "lat": 32.6468561,
+        "lon": -116.9570162
+      },
+      {
+        "name": "Bay Boulevard Park",
+        "lat": 32.636125,
+        "lon": -117.0999625
+      }
+    ],
+    "school": {
+      "name": "Arroyo Vista Elementary School",
+      "lat": 32.6386973,
+      "lon": -116.9534647,
+      "amenity": "school"
+    }
+  },
+  "c827ef5f-288a-4abd-80f6-0baba1fc615e": {
+    "parks": [
+      {
+        "name": "5th & Harvard Park",
+        "lat": 36.8242012,
+        "lon": -119.7055345
+      },
+      {
+        "name": "Arrowhead Park",
+        "lat": 36.7959585,
+        "lon": -119.6521086
+      },
+      {
+        "name": "Barclay Park",
+        "lat": 36.8606563,
+        "lon": -119.645999
+      }
+    ],
+    "school": {
+      "name": "Alta Sierra Intermediate School",
+      "lat": 36.8568508,
+      "lon": -119.7180502,
+      "amenity": "school"
+    }
+  },
+  "dfaed946-5e10-48eb-bd07-4a47b80111b0": {
+    "parks": [
+      {
+        "name": "Bart Linear Park",
+        "lat": 37.9942985,
+        "lon": -122.0293751
+      },
+      {
+        "name": "Bayview Circle Park",
+        "lat": 38.0075939,
+        "lon": -122.024568
+      },
+      {
+        "name": "Brazil Quarry Park",
+        "lat": 37.9608605,
+        "lon": -121.969391
+      }
+    ],
+    "school": {
+      "name": "Ayers Elementary School",
+      "lat": 37.9657036,
+      "lon": -121.9609723,
+      "amenity": "school"
+    }
+  },
+  "6213d0f7-a6d9-4554-8969-834891874fe9": {
+    "parks": [
+      {
+        "name": "Auburndale Park",
+        "lat": 33.901452,
+        "lon": -117.5799535
+      },
+      {
+        "name": "Border Park",
+        "lat": 33.8571117,
+        "lon": -117.6061828
+      },
+      {
+        "name": "Brentwood Park",
+        "lat": 33.86621,
+        "lon": -117.6005289
+      }
+    ],
+    "school": {
+      "name": "Auburndale Intermediate",
+      "lat": 33.9046088,
+      "lon": -117.5774341,
+      "amenity": "school"
+    }
+  },
+  "b0ce1708-56fe-446b-8960-e9a0108f431c": {
+    "parks": [
+      {
+        "name": "Balearic Park",
+        "lat": 33.6744117,
+        "lon": -117.9390136
+      },
+      {
+        "name": "Brentwood Park",
+        "lat": 33.6558008,
+        "lon": -117.8950838
+      },
+      {
+        "name": "California Scenario",
+        "lat": 33.6890253,
+        "lon": -117.8822258
+      }
+    ],
+    "school": {
+      "name": "Adams Elementary School",
+      "lat": 33.6743842,
+      "lon": -117.9320504,
+      "amenity": "school"
+    }
+  },
+  "71497b62-496c-460c-a84c-e05f0383684e": {
+    "parks": [
+      {
+        "name": "Apollo Park",
+        "lat": 33.9268254,
+        "lon": -118.1543868
+      },
+      {
+        "name": "Bench",
+        "lat": 33.9677996,
+        "lon": -118.1310081
+      },
+      {
+        "name": "Botanical Gardens",
+        "lat": 33.9667366,
+        "lon": -118.1334478
+      }
+    ],
+    "school": {
+      "name": "A.L. Gauldin Elementary School",
+      "lat": 33.9196983,
+      "lon": -118.1199179,
+      "amenity": "school"
+    }
+  },
+  "cc489c96-4aac-495c-9480-2e5805752ccf": {
+    "parks": [
+      {
+        "name": "Arceo Park",
+        "lat": 34.0655735,
+        "lon": -118.0364859
+      },
+      {
+        "name": "Fletcher Park",
+        "lat": 34.0712074,
+        "lon": -118.0476976
+      },
+      {
+        "name": "Lambert Park",
+        "lat": 34.0856826,
+        "lon": -118.0195449
+      }
+    ],
+    "school": {
+      "name": "Arroyo High School",
+      "lat": 34.0944926,
+      "lon": -118.0230742,
+      "amenity": "school"
+    }
+  },
+  "087f6648-eb06-4fc8-868c-c54265d5c5f6": {
+    "parks": [
+      {
+        "name": "Amundson Park",
+        "lat": 38.4465563,
+        "lon": -121.3682539
+      },
+      {
+        "name": "Backer, Sr. Park",
+        "lat": 38.38043,
+        "lon": -121.4302946
+      },
+      {
+        "name": "Baker Park",
+        "lat": 38.4072074,
+        "lon": -121.375607
+      }
+    ],
+    "school": {
+      "name": "Ability 2 Learn",
+      "lat": 38.3766023,
+      "lon": -121.358771,
+      "amenity": "school"
+    }
+  },
+  "51d1eb01-8456-420f-94b8-6b981f11474e": {
+    "parks": [
+      {
+        "name": "Conway Hawk Nest",
+        "lat": 33.170898,
+        "lon": -117.084496
+      },
+      {
+        "name": "Daley Ranch",
+        "lat": 33.18557,
+        "lon": -117.0561853
+      },
+      {
+        "name": "Dixon Dam and Lake City Park",
+        "lat": 33.1617054,
+        "lon": -117.0466974
+      }
+    ],
+    "school": {
+      "name": "Bernardo School",
+      "lat": 33.0858719,
+      "lon": -117.0917309,
+      "amenity": "school"
+    }
+  },
+  "6ee147a2-80cc-4f1a-8d31-7dabe56bf111": {
+    "parks": [
+      {
+        "name": "Allan Witt Park",
+        "lat": 38.2472137,
+        "lon": -122.0612588
+      },
+      {
+        "name": "Cordelia Community Park",
+        "lat": 38.1775874,
+        "lon": -122.1413955
+      },
+      {
+        "name": "Dover Park",
+        "lat": 38.259509,
+        "lon": -122.0232518
+      }
+    ],
+    "school": {
+      "name": "Accolade Christian School",
+      "lat": 38.2513026,
+      "lon": -122.0441332,
+      "amenity": "school"
+    }
+  },
+  "f4f9be83-770a-4063-9a57-b1cb886f9389": {
+    "parks": [
+      {
+        "name": "Almeria Park",
+        "lat": 34.1223709,
+        "lon": -117.4613227
+      },
+      {
+        "name": "Bill Martin Park",
+        "lat": 34.1116304,
+        "lon": -117.4423727
+      },
+      {
+        "name": "Cambria Park",
+        "lat": 34.133236,
+        "lon": -117.4305796
+      }
+    ],
+    "school": {
+      "name": "A B Miller High School",
+      "lat": 34.1294545,
+      "lon": -117.4481042,
+      "amenity": "school"
+    }
+  },
+  "784ca168-4c56-40c7-b599-dec4bcaa8003": {
+    "parks": [
+      {
+        "name": "Alameda County Veterans Memorial Park",
+        "lat": 37.5511606,
+        "lon": -121.9778558
+      },
+      {
+        "name": "Alameda Creek Quarries Regional Park_node",
+        "lat": 37.5721577,
+        "lon": -122.0027389
+      },
+      {
+        "name": "Ardenwood Regional Preserve",
+        "lat": 37.5579916,
+        "lon": -122.0480177
+      }
+    ],
+    "school": {
+      "name": "Alviso School",
+      "lat": 37.5766019,
+      "lon": -122.043851,
+      "amenity": "school"
+    }
+  },
+  "e84c8c1d-42c6-4e53-bdeb-ee4f115d0568": {
+    "parks": [
+      {
+        "name": "Al Radka Park",
+        "lat": 36.7517981,
+        "lon": -119.6877005
+      },
+      {
+        "name": "Beiden Field",
+        "lat": 36.813283,
+        "lon": -119.7551443
+      },
+      {
+        "name": "Belcher Park",
+        "lat": 36.8458843,
+        "lon": -119.7438502
+      }
+    ],
+    "school": {
+      "name": "A. Y. Easterby Elementary School",
+      "lat": 36.7441057,
+      "lon": -119.7170857,
+      "amenity": "school"
+    }
+  },
+  "5f21b6bc-5a16-4ed7-8eaa-581a0eb184f0": {
+    "parks": [
+      {
+        "name": "Acacia Park",
+        "lat": 33.8836158,
+        "lon": -117.8946894
+      },
+      {
+        "name": "Adlena Park",
+        "lat": 33.8726054,
+        "lon": -117.9547505
+      },
+      {
+        "name": "Amerige Park",
+        "lat": 33.8694997,
+        "lon": -117.9294881
+      }
+    ],
+    "school": {
+      "name": "Acacia Elementary School",
+      "lat": 33.8821435,
+      "lon": -117.8968548,
+      "amenity": "school"
+    }
+  },
+  "d1e4419b-52e0-4ad9-a8aa-99e75c22d891": {
+    "parks": [
+      {
+        "name": "Atlantis Play Center",
+        "lat": 33.7648336,
+        "lon": -117.9671722
+      },
+      {
+        "name": "Bicentennial Park (Spirit of 76)",
+        "lat": 33.781655,
+        "lon": -117.9588686
+      },
+      {
+        "name": "Chapman Sports Complex",
+        "lat": 33.789747,
+        "lon": -118.0093526
+      }
+    ],
+    "school": {
+      "name": "Agnes Ware Stanley Elementary School",
+      "lat": 33.7857061,
+      "lon": -117.9379769,
+      "amenity": "school"
+    }
+  },
+  "c8587346-865a-47d1-a117-e2d6cef4a90b": {
+    "parks": [
+      {
+        "name": "ADAMS SQUARE MINI PARK",
+        "lat": 34.1324169,
+        "lon": -118.2420393
+      },
+      {
+        "name": "Amable Park",
+        "lat": 34.1635869,
+        "lon": -118.2219535
+      },
+      {
+        "name": "Bella Park",
+        "lat": 34.1644913,
+        "lon": -118.2165144
+      }
+    ],
+    "school": {
+      "name": "Abraham Lincoln Elementary School",
+      "lat": 34.2275749,
+      "lon": -118.2519598,
+      "amenity": "school"
+    }
+  },
+  "3e251afe-6e74-4733-a7a5-dfad6e3b2d83": {
+    "parks": [
+      {
+        "name": "Alden E. Oliver Sports Park",
+        "lat": 37.6107117,
+        "lon": -122.0870113
+      },
+      {
+        "name": "Bidwell Park",
+        "lat": 37.6183355,
+        "lon": -122.0416832
+      },
+      {
+        "name": "Cannery Park",
+        "lat": 37.6658796,
+        "lon": -122.0970435
+      }
+    ],
+    "school": {
+      "name": "All Saints School",
+      "lat": 37.6725633,
+      "lon": -122.075902,
+      "amenity": "school"
+    }
+  },
+  "6f69a1ef-ddb0-4980-a074-462404e813b0": {
+    "parks": [
+      {
+        "name": "17th Street & Orange Avenue Park",
+        "lat": 33.6681,
+        "lon": -118.0098114
+      },
+      {
+        "name": "Arevalos Park",
+        "lat": 33.6771337,
+        "lon": -117.9455315
+      },
+      {
+        "name": "Bailey Park",
+        "lat": 33.6741801,
+        "lon": -118.0138587
+      }
+    ],
+    "school": {
+      "name": "Agnes L Smith Elementary School",
+      "lat": 33.6705745,
+      "lon": -118.0039489,
+      "amenity": "school"
+    }
+  },
+  "1edafc0e-cff4-402d-b7c6-55434d002938": {
+    "parks": [
+      {
+        "name": "Ashwood Park",
+        "lat": 33.9592065,
+        "lon": -118.3685365
+      },
+      {
+        "name": "Center Park",
+        "lat": 33.934361,
+        "lon": -118.3368667
+      },
+      {
+        "name": "Circle Park",
+        "lat": 33.9636611,
+        "lon": -118.3221438
+      }
+    ],
+    "school": {
+      "name": "Albert F Monroe Middle School",
+      "lat": 33.9393844,
+      "lon": -118.3287418,
+      "amenity": "school"
+    }
+  },
+  "e8a5f636-4f3c-462a-b5c8-a357ac254c46": {
+    "parks": [
+      {
+        "name": "Alderwood Park",
+        "lat": 33.7102274,
+        "lon": -117.759764
+      },
+      {
+        "name": "Aldrich Park",
+        "lat": 33.6459362,
+        "lon": -117.8427304
+      },
+      {
+        "name": "Arbor Park",
+        "lat": 33.6896999,
+        "lon": -117.7485115
+      }
+    ],
+    "school": {
+      "name": "A Wing",
+      "lat": 33.6632015,
+      "lon": -117.8080534,
+      "amenity": "school"
+    }
+  },
+  "3aad2cd9-c06f-49dd-96e5-91b90039e93f": {
+    "parks": [
+      {
+        "name": "American Heroes Park",
+        "lat": 34.7005319,
+        "lon": -118.1429939
+      },
+      {
+        "name": "Antelope Valley Fairgrounds",
+        "lat": 34.7063736,
+        "lon": -118.1272947
+      },
+      {
+        "name": "Apollo Park",
+        "lat": 34.7424845,
+        "lon": -118.2005274
+      }
+    ],
+    "school": {
+      "name": "Antelope Valley High School",
+      "lat": 34.7008336,
+      "lon": -118.1281851,
+      "amenity": "school"
+    }
+  },
+  "9b686a31-9c3d-4d3c-a290-f257ffae49a4": {
+    "parks": [
+      {
+        "name": "51st Street Greenbelt",
+        "lat": 33.8485898,
+        "lon": -118.2017218
+      },
+      {
+        "name": "72nd Street Equestrian Park and Arena",
+        "lat": 33.8841882,
+        "lon": -118.1871354
+      },
+      {
+        "name": "Admiral Kidd Park",
+        "lat": 33.7957441,
+        "lon": -118.216656
+      }
+    ],
+    "school": {
+      "name": "Addams Elementary School",
+      "lat": 33.8525566,
+      "lon": -118.1907891,
+      "amenity": "school"
+    }
+  },
+  "36d6db04-315f-45e6-9965-9f93db3fd41f": {
+    "parks": [
+      {
+        "name": "Los Angeles Community Park",
+        "lat": null,
+        "lon": null
+      },
+      {
+        "name": "Los Angeles Community Park",
+        "lat": null,
+        "lon": null
+      },
+      {
+        "name": "Los Angeles Community Park",
+        "lat": null,
+        "lon": null
+      }
+    ],
+    "school": {
+      "name": "Los Angeles High School",
+      "lat": null,
+      "lon": null,
+      "amenity": "school"
+    }
+  },
+  "82c84d6c-f825-43ee-9a24-fa8e80b09d99": {
+    "parks": [
+      {
+        "name": "10th Street Plaza",
+        "lat": 37.6409642,
+        "lon": -121.000883
+      },
+      {
+        "name": "Aquaduct Park",
+        "lat": 37.6931299,
+        "lon": -121.0232732
+      },
+      {
+        "name": "Ashby Park",
+        "lat": 37.6568745,
+        "lon": -120.9852116
+      }
+    ],
+    "school": {
+      "name": "Academics Plus",
+      "lat": 37.6856002,
+      "lon": -121.01281,
+      "amenity": "school"
+    }
+  },
+  "b35418e1-5646-4ff9-8e13-4894ca3a521b": {
+    "parks": [
+      {
+        "name": "Adrienne Mitchell Memorial Park",
+        "lat": 33.919531,
+        "lon": -117.2673243
+      },
+      {
+        "name": "Bayside Park",
+        "lat": 33.9206428,
+        "lon": -117.2361831
+      },
+      {
+        "name": "Bethune Park",
+        "lat": 33.877972,
+        "lon": -117.2186792
+      }
+    ],
+    "school": {
+      "name": "Alessandro Middle School",
+      "lat": 33.9263685,
+      "lon": -117.2584931,
+      "amenity": "school"
+    }
+  },
+  "6a56f862-bdde-4f09-b85c-00cf92833efc": {
+    "parks": [
+      {
+        "name": "Alderwood Park",
+        "lat": 33.6131231,
+        "lon": -117.160494
+      },
+      {
+        "name": "Alta Murrieta Sports Park",
+        "lat": 33.5626781,
+        "lon": -117.1784431
+      },
+      {
+        "name": "Antelope Hills Park",
+        "lat": 33.594384,
+        "lon": -117.1836383
+      }
+    ],
+    "school": {
+      "name": "Alta Murrieta Elementary School",
+      "lat": 33.5669015,
+      "lon": -117.1685038,
+      "amenity": "school"
+    }
+  },
+  "87c0a5b3-3df4-4495-903e-f576d3064c17": {
+    "parks": [
+      {
+        "name": "Foster Road Greenbelt",
+        "lat": 33.9098377,
+        "lon": -118.1016499
+      },
+      {
+        "name": "Gerdes Park",
+        "lat": 33.8972646,
+        "lon": -118.0901485
+      },
+      {
+        "name": "Glazier Park",
+        "lat": 33.8953034,
+        "lon": -118.1037802
+      }
+    ],
+    "school": {
+      "name": "Baptist Christian School",
+      "lat": 33.8871888,
+      "lon": -118.0723534,
+      "amenity": "school"
+    }
+  },
+  "6b8c8c42-82eb-455a-a447-58f602cf5699": {
+    "parks": [
+      {
+        "name": "25th Street Mini Park",
+        "lat": 37.8148133,
+        "lon": -122.2725227
+      },
+      {
+        "name": "88th Avenue Mini Park",
+        "lat": 37.7532413,
+        "lon": -122.1712116
+      },
+      {
+        "name": "Allendale Park",
+        "lat": 37.7893369,
+        "lon": -122.2036177
+      }
+    ],
+    "school": {
+      "name": "Acorn Woodland Elementary",
+      "lat": 37.7535022,
+      "lon": -122.1866775,
+      "amenity": "school"
+    }
+  },
+  "17b8d941-2762-4665-8cdc-c81c7e46c77a": {
+    "parks": [
+      {
+        "name": "Alamosa Park",
+        "lat": 33.2417018,
+        "lon": -117.2778139
+      },
+      {
+        "name": "Balderama Park",
+        "lat": 33.2040432,
+        "lon": -117.3713083
+      },
+      {
+        "name": "Buccaneer Beach Park",
+        "lat": 33.1762889,
+        "lon": -117.3683502
+      }
+    ],
+    "school": {
+      "name": "Alamosa Park Elementary School",
+      "lat": 33.2422573,
+      "lon": -117.2822585,
+      "amenity": "school"
+    }
+  },
+  "0e054a77-0f46-408c-8c4d-ae5c3a742b10": {
+    "parks": [
+      {
+        "name": "Anthony Munoz Hall of Fame Park",
+        "lat": 34.0796784,
+        "lon": -117.673718
+      },
+      {
+        "name": "Bon View Park",
+        "lat": 34.0525551,
+        "lon": -117.6379188
+      },
+      {
+        "name": "Brookfield Recreation Center",
+        "lat": 34.0019734,
+        "lon": -117.5805573
+      }
+    ],
+    "school": {
+      "name": "Arroyo Elementary School",
+      "lat": 34.0875655,
+      "lon": -117.616529,
+      "amenity": "school"
+    }
+  },
+  "75baedcf-dd57-4825-87ce-3d871e7b125e": {
+    "parks": [
+      {
+        "name": "Belmont Park",
+        "lat": 33.8333913,
+        "lon": -117.8050349
+      },
+      {
+        "name": "Broadmoor Park",
+        "lat": 33.7990405,
+        "lon": -117.7727112
+      },
+      {
+        "name": "Depot Park",
+        "lat": 33.7882638,
+        "lon": -117.8571965
+      }
+    ],
+    "school": {
+      "name": "Anaheim Hills Elementary School",
+      "lat": 33.8293403,
+      "lon": -117.7612477,
+      "amenity": "school"
+    }
+  },
+  "ce7dc99d-dc5a-4d3d-9855-1794d6fa9d05": {
+    "parks": [
+      {
+        "name": "'olokoy Beach Park",
+        "lat": 34.1825592,
+        "lon": -119.236893
+      },
+      {
+        "name": "Beck Park",
+        "lat": 34.1777972,
+        "lon": -119.1827528
+      },
+      {
+        "name": "Boachard Oak Park",
+        "lat": 34.2198525,
+        "lon": -119.1715218
+      }
+    ],
+    "school": {
+      "name": "Ansgar Larsen Elementary School",
+      "lat": 34.1693901,
+      "lon": -119.1716567,
+      "amenity": "school"
+    }
+  },
+  "c4e29f11-b643-4ae5-b7d9-a1d74fe8d9ec": {
+    "parks": [
+      {
+        "name": "Avenue S Park",
+        "lat": 34.5591138,
+        "lon": -118.0915674
+      },
+      {
+        "name": "Courson Park",
+        "lat": 34.5763294,
+        "lon": -118.1106484
+      },
+      {
+        "name": "Desert Sands Park",
+        "lat": 34.5930052,
+        "lon": -118.1276099
+      }
+    ],
+    "school": {
+      "name": "Barrel Springs Elementary School",
+      "lat": 34.5436773,
+      "lon": -118.065681,
+      "amenity": "school"
+    }
+  },
+  "4fafa0a1-121e-4da8-bc6f-db59b67b99be": {
+    "parks": [
+      {
+        "name": "Allendale Park",
+        "lat": 34.1261134,
+        "lon": -118.1448802
+      },
+      {
+        "name": "Annandale Canyon Park",
+        "lat": 34.1559461,
+        "lon": -118.1817391
+      },
+      {
+        "name": "Bechtel Mall",
+        "lat": 34.1368473,
+        "lon": -118.127086
+      }
+    ],
+    "school": {
+      "name": "Allendale Elementary School",
+      "lat": 34.1258414,
+      "lon": -118.1434042,
+      "amenity": "school"
+    }
+  },
+  "7b61ec2a-f182-490e-9207-b7df7193a3c9": {
+    "parks": [
+      {
+        "name": "Centennial Park",
+        "lat": 34.0576705,
+        "lon": -117.747644
+      },
+      {
+        "name": "Cesar Chavez Park",
+        "lat": 34.0572194,
+        "lon": -117.8029202
+      },
+      {
+        "name": "Country Crossing Park",
+        "lat": 34.0342783,
+        "lon": -117.7808153
+      }
+    ],
+    "school": {
+      "name": "Alcott Elementary School",
+      "lat": 34.0426231,
+      "lon": -117.7392949,
+      "amenity": "school"
+    }
+  },
+  "3953ae08-155c-4698-ab4c-e6aed014a42c": {
+    "parks": [
+      {
+        "name": "Bear Gulch Park",
+        "lat": 34.1003116,
+        "lon": -117.6072578
+      },
+      {
+        "name": "Beryl Park East",
+        "lat": 34.1359262,
+        "lon": -117.6094804
+      },
+      {
+        "name": "Beryl Park West",
+        "lat": 34.1359392,
+        "lon": -117.6138529
+      }
+    ],
+    "school": {
+      "name": "Alta Loma Christian School",
+      "lat": 34.1330573,
+      "lon": -117.5874215,
+      "amenity": "school"
+    }
+  },
+  "87895c7f-d3c7-4d5c-8571-bd2de31095ce": {
+    "parks": [
+      {
+        "name": "Alta Mesa Park",
+        "lat": 40.554521,
+        "lon": -122.3269946
+      },
+      {
+        "name": "Amethyst Park",
+        "lat": 40.5959898,
+        "lon": -122.4110832
+      },
+      {
+        "name": "Bob White Park",
+        "lat": 40.594135,
+        "lon": -122.3502887
+      }
+    ],
+    "school": {
+      "name": "Alta Mesa Elementary School",
+      "lat": 40.5548203,
+      "lon": -122.3286448,
+      "amenity": "school"
+    }
+  },
+  "ecd41e96-fcb0-4f35-9ce4-bac87f7b7e0f": {
+    "parks": [
+      {
+        "name": "Abraham Braxton Park",
+        "lat": 37.9243239,
+        "lon": -122.3223615
+      },
+      {
+        "name": "Albany Hill Park",
+        "lat": 37.8954138,
+        "lon": -122.3050125
+      },
+      {
+        "name": "Alvarado Park",
+        "lat": 37.9532262,
+        "lon": -122.320423
+      }
+    ],
+    "school": {
+      "name": "Argosy University - San Francisco Bay Area",
+      "lat": 37.9191179,
+      "lon": -122.3762827,
+      "amenity": "school"
+    }
+  },
+  "4c6a40da-03e9-4b36-9550-f7f800f09014": {
+    "parks": [
+      {
+        "name": "A D Shamel Park",
+        "lat": 33.9449806,
+        "lon": -117.3940031
+      },
+      {
+        "name": "Ab Brown Sports Complex",
+        "lat": 34.016692,
+        "lon": -117.358036
+      },
+      {
+        "name": "Andulka Park",
+        "lat": 33.9584244,
+        "lon": -117.3488073
+      }
+    ],
+    "school": {
+      "name": "Abraham Lincoln High School",
+      "lat": 33.9714388,
+      "lon": -117.3669821,
+      "amenity": "school"
+    }
+  },
+  "039507f2-5af2-42df-8f47-eb2d4698abda": {
+    "parks": [
+      {
+        "name": "Adam V. Baquera Park",
+        "lat": 38.7910038,
+        "lon": -121.3341039
+      },
+      {
+        "name": "Alberto and Carmen Heredia Park",
+        "lat": 38.782276,
+        "lon": -121.3691508
+      },
+      {
+        "name": "Aldo Conrad Pineschi Sr Park",
+        "lat": 38.7929829,
+        "lon": -121.2842647
+      }
+    ],
+    "school": {
+      "name": "Adelante High School",
+      "lat": 38.7526791,
+      "lon": -121.2799502,
+      "amenity": "school"
+    }
+  },
+  "7a3d7b7b-7b69-4310-aa27-135c10e27afe": {
+    "parks": [
+      {
+        "name": "Airport Park",
+        "lat": 38.5165735,
+        "lon": -121.478288
+      },
+      {
+        "name": "Alkali Flat Central Historic District",
+        "lat": 38.5846273,
+        "lon": -121.4913441
+      },
+      {
+        "name": "Alkali Flat North Historic District",
+        "lat": 38.5865718,
+        "lon": -121.4893995
+      }
+    ],
+    "school": {
+      "name": "Alethea B Smythe Elementary School",
+      "lat": 38.6154621,
+      "lon": -121.476077,
+      "amenity": "school"
+    }
+  },
+  "df7641d4-f77a-491e-8754-72b0ace0b158": {
+    "parks": [
+      {
+        "name": "All Veterans Memorial Park",
+        "lat": 36.6922515,
+        "lon": -121.62843
+      },
+      {
+        "name": "Bataan Memoiral Park",
+        "lat": 36.6780725,
+        "lon": -121.6552339
+      },
+      {
+        "name": "Central Park",
+        "lat": 36.6763512,
+        "lon": -121.6663531
+      }
+    ],
+    "school": {
+      "name": "Alisal Community School",
+      "lat": 36.6825562,
+      "lon": -121.6043113,
+      "amenity": "school"
+    }
+  },
+  "de5fa369-50e5-4a31-86b8-23b3695d14ab": {
+    "parks": [
+      {
+        "name": "8th Street Community Garden",
+        "lat": 34.1143183,
+        "lon": -117.2929536
+      },
+      {
+        "name": "Al Guhin Park",
+        "lat": 34.1987484,
+        "lon": -117.3689652
+      },
+      {
+        "name": "Anne Shirrells Park",
+        "lat": 34.1237492,
+        "lon": -117.3298992
+      }
+    ],
+    "school": {
+      "name": "Aquinas High School",
+      "lat": 34.1432301,
+      "lon": -117.2454305,
+      "amenity": "school"
+    }
+  },
+  "96555412-63a9-413c-8d96-0c6f49e776e9": {
+    "parks": [
+      {
+        "name": "Allied Gardens Park",
+        "lat": 32.795477,
+        "lon": -117.080954
+      },
+      {
+        "name": "America's Cup Harbor",
+        "lat": 32.7253595,
+        "lon": -117.2245541
+      },
+      {
+        "name": "Bennington Monument",
+        "lat": 32.6899207,
+        "lon": -117.2444382
+      }
+    ],
+    "school": {
+      "name": "Academy of our Lady of Peace",
+      "lat": 32.7650502,
+      "lon": -117.1355881,
+      "amenity": "school"
+    }
+  },
+  "f4307411-bc1f-441e-b3f1-64f412605bf0": {
+    "parks": [
+      {
+        "name": "San Francisco Community Park",
+        "lat": null,
+        "lon": null
+      },
+      {
+        "name": "San Francisco Community Park",
+        "lat": null,
+        "lon": null
+      },
+      {
+        "name": "San Francisco Community Park",
+        "lat": null,
+        "lon": null
+      }
+    ],
+    "school": {
+      "name": "San Francisco High School",
+      "lat": null,
+      "lon": null,
+      "amenity": "school"
+    }
+  },
+  "f6aaf9ff-cea7-46d2-b8a6-524d21a461a8": {
+    "parks": [
+      {
+        "name": "Backesto Park",
+        "lat": 37.3522385,
+        "lon": -121.8844179
+      },
+      {
+        "name": "Cataldi Park",
+        "lat": 37.4017884,
+        "lon": -121.8706704
+      },
+      {
+        "name": "Coyote Park",
+        "lat": 37.3763292,
+        "lon": -121.8899558
+      }
+    ],
+    "school": {
+      "name": "Alpha Public Schools",
+      "lat": 37.3445767,
+      "lon": -121.8357075,
+      "amenity": "school"
+    }
+  },
+  "e60b31a3-4fe6-447b-9286-7fc6f5bc0e56": {
+    "parks": [
+      {
+        "name": "Bay Tree Park",
+        "lat": 37.5596444,
+        "lon": -122.3279206
+      },
+      {
+        "name": "Bayside/Joinville Park",
+        "lat": 37.5691032,
+        "lon": -122.2917218
+      },
+      {
+        "name": "Beresford Park",
+        "lat": 37.5381191,
+        "lon": -122.3145282
+      }
+    ],
+    "school": {
+      "name": "Abbott Middle School",
+      "lat": 37.5304926,
+      "lon": -122.3094135,
+      "amenity": "school"
+    }
+  },
+  "65028128-2f29-4924-9ba0-acd1920b5e6b": {
+    "parks": [
+      {
+        "name": "Adams Park",
+        "lat": 33.7163469,
+        "lon": -117.8970398
+      },
+      {
+        "name": "Angels Community Park",
+        "lat": 33.7466724,
+        "lon": -117.8770734
+      },
+      {
+        "name": "Armstrong Ranch Community Park",
+        "lat": 33.7020089,
+        "lon": -117.8931846
+      }
+    ],
+    "school": {
+      "name": "Abraham Lincoln Elementary School",
+      "lat": 33.7408462,
+      "lon": -117.9014264,
+      "amenity": "school"
+    }
+  },
+  "4ea554fc-b5fc-453b-af30-3a370f1dfd53": {
+    "parks": [
+      {
+        "name": "Alameda Park",
+        "lat": 34.4278527,
+        "lon": -119.7054388
+      },
+      {
+        "name": "Alice Keck Park Memorial Gardens",
+        "lat": 34.4292845,
+        "lon": -119.7061051
+      },
+      {
+        "name": "Ambassador Park",
+        "lat": 34.410677,
+        "lon": -119.6919055
+      }
+    ],
+    "school": {
+      "name": "Adams Elementary School",
+      "lat": 34.4326294,
+      "lon": -119.7344889,
+      "amenity": "school"
+    }
+  },
+  "e30a9c1f-b6a7-47d0-b6d4-e43787354294": {
+    "parks": [
+      {
+        "name": "Agnew HIstoric Park",
+        "lat": 37.3922915,
+        "lon": -121.9564025
+      },
+      {
+        "name": "Agnew Park",
+        "lat": 37.3928337,
+        "lon": -121.9618526
+      },
+      {
+        "name": "Bowers Park",
+        "lat": 37.3582237,
+        "lon": -121.9735248
+      }
+    ],
+    "school": {
+      "name": "Automotive Training Center",
+      "lat": 37.3660345,
+      "lon": -121.9585431,
+      "amenity": "school"
+    }
+  },
+  "047b86ef-e8d6-4a7d-92de-e06b72c5c102": {
+    "parks": [
+      {
+        "name": "Alicante Recreation Center",
+        "lat": 34.4057454,
+        "lon": -118.5439646
+      },
+      {
+        "name": "Aliento Park",
+        "lat": 34.3865304,
+        "lon": -118.4467755
+      },
+      {
+        "name": "Almendra Park",
+        "lat": 34.4008053,
+        "lon": -118.544233
+      }
+    ],
+    "school": {
+      "name": "Arroyo Seco Junior High School",
+      "lat": 34.4413627,
+      "lon": -118.5384559,
+      "amenity": "school"
+    }
+  },
+  "449397a1-0803-41ad-90dd-666e08015229": {
+    "parks": [
+      {
+        "name": "Adam Park",
+        "lat": 34.9366385,
+        "lon": -120.4440229
+      },
+      {
+        "name": "Alice Trefts Park",
+        "lat": 34.9432906,
+        "lon": -120.4283956
+      },
+      {
+        "name": "Armstrong Park",
+        "lat": 34.9553659,
+        "lon": -120.4211068
+      }
+    ],
+    "school": {
+      "name": "Alvin Elementary School",
+      "lat": 34.961363,
+      "lon": -120.4329015,
+      "amenity": "school"
+    }
+  },
+  "779f653e-e966-497f-b726-6a2e5e6aec34": {
+    "parks": [
+      {
+        "name": "Airport Park",
+        "lat": 34.0171991,
+        "lon": -118.4459912
+      },
+      {
+        "name": "Ashland Park",
+        "lat": 34.0096986,
+        "lon": -118.4649902
+      },
+      {
+        "name": "Barnard Way Linear Park",
+        "lat": 34.0016794,
+        "lon": -118.4866277
+      }
+    ],
+    "school": {
+      "name": "Brown Mackie College - Los Angeles",
+      "lat": 34.0186085,
+      "lon": -118.4513167,
+      "amenity": "school"
+    }
+  },
+  "8ace22fe-890b-4a00-9dcc-91b397da7766": {
+    "parks": [
+      {
+        "name": "4th & Farmers Creek Trail",
+        "lat": 38.4492232,
+        "lon": -122.6857793
+      },
+      {
+        "name": "A Place To Play",
+        "lat": 38.4396606,
+        "lon": -122.7628098
+      },
+      {
+        "name": "Airfield Park",
+        "lat": 38.4145259,
+        "lon": -122.7573755
+      }
+    ],
+    "school": {
+      "name": "4C Wright Start Preschool",
+      "lat": 38.4228559,
+      "lon": -122.768039,
+      "amenity": "school"
+    }
+  },
+  "e19b2437-86cd-4ca5-8b41-0cf9d618c73d": {
+    "parks": [
+      {
+        "name": "Arroyo Park",
+        "lat": 34.2738566,
+        "lon": -118.7914435
+      },
+      {
+        "name": "Arroyo Simi Equestrian Center",
+        "lat": 34.2632169,
+        "lon": -118.7273875
+      },
+      {
+        "name": "Arroyostow Park",
+        "lat": 34.2683954,
+        "lon": -118.6818171
+      }
+    ],
+    "school": {
+      "name": "Apollo High School",
+      "lat": 34.2700029,
+      "lon": -118.7359248,
+      "amenity": "school"
+    }
+  },
+  "c54bb4d9-7c8a-442b-9cda-113b17ccb51c": {
+    "parks": [
+      {
+        "name": "American Legion Park",
+        "lat": 37.9671854,
+        "lon": -121.3080633
+      },
+      {
+        "name": "Angel Cruz Park",
+        "lat": 38.018079,
+        "lon": -121.3117469
+      },
+      {
+        "name": "Arnaiz Stadium",
+        "lat": 38.0382975,
+        "lon": -121.2710344
+      }
+    ],
+    "school": {
+      "name": "Adams Elementary School",
+      "lat": 38.0090893,
+      "lon": -121.3152255,
+      "amenity": "school"
+    }
+  },
+  "c7fce70a-eac2-4450-8585-8f2cb09382e7": {
+    "parks": [
+      {
+        "name": "Arques Place Open Space",
+        "lat": 37.3820499,
+        "lon": -122.0175267
+      },
+      {
+        "name": "Braly Park",
+        "lat": 37.363945,
+        "lon": -122.0195084
+      },
+      {
+        "name": "Cannery Park",
+        "lat": 37.3836553,
+        "lon": -122.041057
+      }
+    ],
+    "school": {
+      "name": "BASIS Independent Silicon Valley Lower School",
+      "lat": 37.3447099,
+      "lon": -122.0074065,
+      "amenity": "school"
+    }
+  },
+  "cda669dd-785f-49b2-a701-1df924019bfe": {
+    "parks": [
+      {
+        "name": "Bahia Vista Park",
+        "lat": 33.5077742,
+        "lon": -117.1155544
+      },
+      {
+        "name": "Belle Maison Children's Park",
+        "lat": 33.5221382,
+        "lon": -117.0988529
+      },
+      {
+        "name": "Butterfield Stage Park",
+        "lat": 33.4940796,
+        "lon": -117.0727768
+      }
+    ],
+    "school": {
+      "name": "Abby Reinke Elementary School",
+      "lat": 33.49181,
+      "lon": -117.0873598,
+      "amenity": "school"
+    }
+  },
+  "3f6febc3-e242-4d42-9cfe-9d916af53ff7": {
+    "parks": [
+      {
+        "name": "Banyan Park",
+        "lat": 34.1582454,
+        "lon": -118.9512052
+      },
+      {
+        "name": "Beyer Park",
+        "lat": 34.1776061,
+        "lon": -118.8427223
+      },
+      {
+        "name": "Borchard Community Park",
+        "lat": 34.1809738,
+        "lon": -118.951224
+      }
+    ],
+    "school": {
+      "name": "Acacia Magnet School for Enriched Learning",
+      "lat": 34.1978746,
+      "lon": -118.8763921,
+      "amenity": "school"
+    }
+  },
+  "8bedac11-00d0-451a-b982-39364ef00ea4": {
+    "parks": [
+      {
+        "name": "Alta Loma Park",
+        "lat": 33.7843266,
+        "lon": -118.3321811
+      },
+      {
+        "name": "Charles H Wilson Park",
+        "lat": 33.8256733,
+        "lon": -118.3238562
+      },
+      {
+        "name": "Columbia Park",
+        "lat": 33.8601883,
+        "lon": -118.3473932
+      }
+    ],
+    "school": {
+      "name": "Anza Elementary School",
+      "lat": 33.8340301,
+      "lon": -118.3645603,
+      "amenity": "school"
+    }
+  },
+  "5f216732-5b65-443a-bf87-14fcf89dcc01": {
+    "parks": [
+      {
+        "name": "Alden Park",
+        "lat": 38.0969711,
+        "lon": -122.2704241
+      },
+      {
+        "name": "Amador Park",
+        "lat": 38.1031356,
+        "lon": -122.2442583
+      },
+      {
+        "name": "Bennington Park",
+        "lat": 38.1591836,
+        "lon": -122.1798707
+      }
+    ],
+    "school": {
+      "name": "Admiral David Glascow Farragut Elementary School",
+      "lat": 38.1118639,
+      "lon": -122.2613592,
+      "amenity": "school"
+    }
+  },
+  "fae62923-5597-439c-9886-8c72c39568c5": {
+    "parks": [
+      {
+        "name": "Albinger Archeological Museum",
+        "lat": 34.2812445,
+        "lon": -119.298804
+      },
+      {
+        "name": "Arroyo Verde Park",
+        "lat": 34.2913017,
+        "lon": -119.225882
+      },
+      {
+        "name": "Arundell Linear Park",
+        "lat": 34.260145,
+        "lon": -119.2479931
+      }
+    ],
+    "school": {
+      "name": "Academy of Saint Catherines by the Sea",
+      "lat": 34.2811133,
+      "lon": -119.2698334,
+      "amenity": "school"
+    }
+  },
+  "fb7d8da2-a9e1-48d8-b12c-0e1f133a459e": {
+    "parks": [
+      {
+        "name": "Avalon Park",
+        "lat": 34.5381446,
+        "lon": -117.3072947
+      },
+      {
+        "name": "Brentwood Park",
+        "lat": 34.5225315,
+        "lon": -117.3565914
+      },
+      {
+        "name": "Center Street Park",
+        "lat": 34.5262538,
+        "lon": -117.2966681
+      }
+    ],
+    "school": {
+      "name": "Aviation, Medicine, and Engineering Academy",
+      "lat": 34.5774248,
+      "lon": -117.3679826,
+      "amenity": "school"
+    }
+  },
+  "fd3f7023-7d13-48bf-b246-f1c740a54580": {
+    "parks": [
+      {
+        "name": "Avalon Park",
+        "lat": 36.3581362,
+        "lon": -119.3342474
+      },
+      {
+        "name": "Blaine Park",
+        "lat": 36.303184,
+        "lon": -119.2927256
+      },
+      {
+        "name": "Burke Park",
+        "lat": 36.3026976,
+        "lon": -119.2835989
+      }
+    ],
+    "school": {
+      "name": "Annie R. Mitchell Elementary School",
+      "lat": 36.3101812,
+      "lon": -119.2682505,
+      "amenity": "school"
+    }
+  },
+  "67ab7f01-65da-4c8b-a6bb-48147ed1a975": {
+    "parks": [
+      {
+        "name": "Aroma Park",
+        "lat": 34.046523,
+        "lon": -117.9020487
+      },
+      {
+        "name": "Big League Dreams",
+        "lat": 34.0400918,
+        "lon": -117.910545
+      },
+      {
+        "name": "Cameron Park",
+        "lat": 34.0621248,
+        "lon": -117.9176919
+      }
+    ],
+    "school": {
+      "name": "Baldwin Park High School",
+      "lat": 34.0850892,
+      "lon": -117.9471333,
+      "amenity": "school"
+    }
+  },
+  "3f8db868-7b82-4db8-b753-fed337c393d8": {
+    "parks": [
+      {
+        "name": "Alta Park",
+        "lat": 39.1421142,
+        "lon": -121.6160775
+      },
+      {
+        "name": "Blackburn Talley Park",
+        "lat": 39.1065593,
+        "lon": -121.6146878
+      },
+      {
+        "name": "City Hall plaza",
+        "lat": 39.1453757,
+        "lon": -121.6380396
+      }
+    ],
+    "school": {
+      "name": "April Lane Elementary School",
+      "lat": 39.1553072,
+      "lon": -121.6289876,
+      "amenity": "school"
+    }
+  }
+}

@@ -949,6 +949,24 @@ SET default_tablespace = '';
 SET default_table_access_method = "heap";
 
 
+CREATE TABLE IF NOT EXISTS "public"."achievements" (
+    "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
+    "code" "text" NOT NULL,
+    "title" "text" NOT NULL,
+    "description" "text",
+    "points" integer DEFAULT 0 NOT NULL,
+    "icon" "text",
+    "is_active" boolean DEFAULT true NOT NULL,
+    "created_at" timestamp with time zone DEFAULT "timezone"('utc'::"text", "now"()) NOT NULL,
+    "updated_at" timestamp with time zone DEFAULT "timezone"('utc'::"text", "now"()) NOT NULL,
+    CONSTRAINT "achievements_points_nonnegative_chk" CHECK (("points" >= 0)),
+    CONSTRAINT "achievements_title_not_blank_chk" CHECK ((NULLIF("btrim"("title"), ''::"text") IS NOT NULL))
+);
+
+
+ALTER TABLE "public"."achievements" OWNER TO "postgres";
+
+
 CREATE TABLE IF NOT EXISTS "public"."chat_channels" (
     "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
     "scope" "public"."chat_channel_scope" NOT NULL,
@@ -1042,6 +1060,13 @@ CREATE TABLE IF NOT EXISTS "public"."cities" (
     "updated_at" timestamp with time zone DEFAULT "timezone"('utc'::"text", "now"()) NOT NULL,
     "state" "text",
     "country" "text" DEFAULT 'United States'::"text" NOT NULL,
+    "center_lat" double precision,
+    "center_lon" double precision,
+    "bbox_sw_lat" double precision,
+    "bbox_sw_lon" double precision,
+    "bbox_ne_lat" double precision,
+    "bbox_ne_lon" double precision,
+    "boundary_geojson" "jsonb",
     CONSTRAINT "cities_country_code_len_chk" CHECK (("char_length"("country_code") = 2))
 );
 
@@ -1098,16 +1123,22 @@ CREATE TABLE IF NOT EXISTS "public"."user_plants" (
     "created_at" timestamp with time zone DEFAULT "timezone"('utc'::"text", "now"()) NOT NULL,
     "updated_at" timestamp with time zone DEFAULT "timezone"('utc'::"text", "now"()) NOT NULL,
     "photo_path" "text",
+    "water_days" smallint[],
+    "water_time" time without time zone,
+    "last_watered_at" timestamp with time zone,
+    "watering_points" integer DEFAULT 0 NOT NULL,
     CONSTRAINT "user_plants_co2_override_nonnegative_chk" CHECK ((("co2_kg_per_year_override" IS NULL) OR ("co2_kg_per_year_override" >= (0)::numeric))),
     CONSTRAINT "user_plants_name_or_catalog_chk" CHECK ((("plant_id" IS NOT NULL) OR (NULLIF("btrim"("custom_name"), ''::"text") IS NOT NULL))),
-    CONSTRAINT "user_plants_quantity_positive_chk" CHECK (("quantity" > 0))
+    CONSTRAINT "user_plants_quantity_positive_chk" CHECK (("quantity" > 0)),
+    CONSTRAINT "user_plants_watering_points_nonnegative_chk" CHECK (("watering_points" >= 0)),
+    CONSTRAINT "user_plants_watering_schedule_valid_chk" CHECK (((("water_days" IS NULL) AND ("water_time" IS NULL)) OR (("water_days" IS NOT NULL) AND ("cardinality"("water_days") > 0) AND ("water_days" <@ ARRAY[(0)::smallint, (1)::smallint, (2)::smallint, (3)::smallint, (4)::smallint, (5)::smallint, (6)::smallint]) AND ("water_time" IS NOT NULL))))
 );
 
 
 ALTER TABLE "public"."user_plants" OWNER TO "postgres";
 
 
-CREATE OR REPLACE VIEW "public"."city_leaderboard" WITH ("security_invoker"='true') AS
+CREATE OR REPLACE VIEW "public"."city_leaderboard" WITH ("security_invoker"='false') AS
  SELECT "c"."id" AS "city_id",
     "c"."name" AS "city_name",
     "c"."state" AS "city_state",
@@ -1120,13 +1151,89 @@ CREATE OR REPLACE VIEW "public"."city_leaderboard" WITH ("security_invoker"='tru
      LEFT JOIN "public"."profiles" "p" ON (("p"."city_id" = "c"."id")))
      LEFT JOIN "public"."user_plants" "up" ON (("up"."user_id" = "p"."id")))
      LEFT JOIN "public"."plants" "pl" ON (("pl"."id" = "up"."plant_id")))
-  WHERE (EXISTS ( SELECT 1
-           FROM "public"."profiles" "viewer"
-          WHERE (("viewer"."id" = ( SELECT "auth"."uid"() AS "uid")) AND ("viewer"."city_id" IS NOT NULL))))
   GROUP BY "c"."id", "c"."name", "c"."state", "c"."country", "c"."country_code";
 
 
 ALTER VIEW "public"."city_leaderboard" OWNER TO "postgres";
+
+
+CREATE OR REPLACE VIEW "public"."city_map_stats" WITH ("security_invoker"='false') AS
+ WITH "city_members" AS (
+         SELECT "p"."city_id",
+            "count"(DISTINCT "p"."id") AS "member_count"
+           FROM "public"."profiles" "p"
+          WHERE ("p"."city_id" IS NOT NULL)
+          GROUP BY "p"."city_id"
+        ), "city_plants" AS (
+         SELECT "p"."city_id",
+            COALESCE("sum"("up"."quantity"), (0)::bigint) AS "total_plants",
+            (COALESCE("sum"((((COALESCE("up"."co2_kg_per_year_override", "pl"."default_co2_kg_per_year", (0)::numeric) * (GREATEST((CURRENT_DATE - "up"."planted_on"), 0))::numeric) / 365.0) * ("up"."quantity")::numeric)), (0)::numeric))::numeric(14,4) AS "total_co2_removed_kg"
+           FROM (("public"."user_plants" "up"
+             JOIN "public"."profiles" "p" ON (("p"."id" = "up"."user_id")))
+             LEFT JOIN "public"."plants" "pl" ON (("pl"."id" = "up"."plant_id")))
+          WHERE ("p"."city_id" IS NOT NULL)
+          GROUP BY "p"."city_id"
+        ), "city_type_counts" AS (
+         SELECT "p"."city_id",
+            "pl"."type" AS "plant_type",
+            "sum"("up"."quantity") AS "plant_count"
+           FROM (("public"."user_plants" "up"
+             JOIN "public"."profiles" "p" ON (("p"."id" = "up"."user_id")))
+             JOIN "public"."plants" "pl" ON (("pl"."id" = "up"."plant_id")))
+          WHERE ("p"."city_id" IS NOT NULL)
+          GROUP BY "p"."city_id", "pl"."type"
+        ), "city_type_agg" AS (
+         SELECT "city_type_counts"."city_id",
+            "jsonb_object_agg"("city_type_counts"."plant_type", "city_type_counts"."plant_count" ORDER BY "city_type_counts"."plant_count" DESC) AS "type_breakdown",
+            ("array_agg"("city_type_counts"."plant_type" ORDER BY "city_type_counts"."plant_count" DESC))[1] AS "best_plant_type",
+            ("array_agg"("city_type_counts"."plant_count" ORDER BY "city_type_counts"."plant_count" DESC))[1] AS "best_plant_type_count"
+           FROM "city_type_counts"
+          GROUP BY "city_type_counts"."city_id"
+        )
+ SELECT "c"."id" AS "city_id",
+    "c"."name" AS "city_name",
+    "c"."state" AS "city_state",
+    "c"."country" AS "city_country",
+    "c"."country_code",
+    "c"."center_lat",
+    "c"."center_lon",
+    "c"."bbox_sw_lat",
+    "c"."bbox_sw_lon",
+    "c"."bbox_ne_lat",
+    "c"."bbox_ne_lon",
+    COALESCE("cm"."member_count", (0)::bigint) AS "member_count",
+    COALESCE("cp"."total_plants", (0)::bigint) AS "total_plants",
+    (COALESCE("cp"."total_co2_removed_kg", (0)::numeric))::numeric(14,4) AS "total_co2_removed_kg",
+    "cta"."best_plant_type",
+    "cta"."best_plant_type_count",
+    COALESCE("cta"."type_breakdown", '{}'::"jsonb") AS "type_breakdown",
+    "c"."boundary_geojson"
+   FROM ((("public"."cities" "c"
+     LEFT JOIN "city_members" "cm" ON (("cm"."city_id" = "c"."id")))
+     LEFT JOIN "city_plants" "cp" ON (("cp"."city_id" = "c"."id")))
+     LEFT JOIN "city_type_agg" "cta" ON (("cta"."city_id" = "c"."id")));
+
+
+ALTER VIEW "public"."city_map_stats" OWNER TO "postgres";
+
+
+CREATE TABLE IF NOT EXISTS "public"."daily_quests" (
+    "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
+    "code" "text" NOT NULL,
+    "title" "text" NOT NULL,
+    "description" "text",
+    "points" integer DEFAULT 0 NOT NULL,
+    "target_count" integer DEFAULT 1 NOT NULL,
+    "is_active" boolean DEFAULT true NOT NULL,
+    "created_at" timestamp with time zone DEFAULT "timezone"('utc'::"text", "now"()) NOT NULL,
+    "updated_at" timestamp with time zone DEFAULT "timezone"('utc'::"text", "now"()) NOT NULL,
+    CONSTRAINT "daily_quests_points_nonnegative_chk" CHECK (("points" >= 0)),
+    CONSTRAINT "daily_quests_target_positive_chk" CHECK (("target_count" > 0)),
+    CONSTRAINT "daily_quests_title_not_blank_chk" CHECK ((NULLIF("btrim"("title"), ''::"text") IS NOT NULL))
+);
+
+
+ALTER TABLE "public"."daily_quests" OWNER TO "postgres";
 
 
 CREATE TABLE IF NOT EXISTS "public"."daily_tips" (
@@ -1266,7 +1373,7 @@ CREATE TABLE IF NOT EXISTS "public"."teams" (
 ALTER TABLE "public"."teams" OWNER TO "postgres";
 
 
-CREATE OR REPLACE VIEW "public"."team_leaderboard" WITH ("security_invoker"='true') AS
+CREATE OR REPLACE VIEW "public"."team_leaderboard" WITH ("security_invoker"='false') AS
  SELECT "t"."id" AS "team_id",
     "t"."name" AS "team_name",
     "t"."city_id",
@@ -1282,13 +1389,49 @@ CREATE OR REPLACE VIEW "public"."team_leaderboard" WITH ("security_invoker"='tru
      LEFT JOIN "public"."team_memberships" "tm" ON (("tm"."team_id" = "t"."id")))
      LEFT JOIN "public"."user_plants" "up" ON (("up"."user_id" = "tm"."user_id")))
      LEFT JOIN "public"."plants" "pl" ON (("pl"."id" = "up"."plant_id")))
-  WHERE (EXISTS ( SELECT 1
-           FROM "public"."profiles" "viewer"
-          WHERE (("viewer"."id" = ( SELECT "auth"."uid"() AS "uid")) AND ("viewer"."city_id" IS NOT NULL))))
   GROUP BY "t"."id", "t"."name", "t"."city_id", "c"."name", "c"."state", "c"."country", "c"."country_code";
 
 
 ALTER VIEW "public"."team_leaderboard" OWNER TO "postgres";
+
+
+CREATE TABLE IF NOT EXISTS "public"."user_achievements" (
+    "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
+    "user_id" "uuid" NOT NULL,
+    "achievement_id" "uuid" NOT NULL,
+    "earned_at" timestamp with time zone DEFAULT "timezone"('utc'::"text", "now"()) NOT NULL,
+    "created_at" timestamp with time zone DEFAULT "timezone"('utc'::"text", "now"()) NOT NULL
+);
+
+
+ALTER TABLE "public"."user_achievements" OWNER TO "postgres";
+
+
+CREATE TABLE IF NOT EXISTS "public"."user_daily_quests" (
+    "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
+    "user_id" "uuid" NOT NULL,
+    "quest_id" "uuid" NOT NULL,
+    "quest_date" "date" DEFAULT ("timezone"('utc'::"text", "now"()))::"date" NOT NULL,
+    "progress_count" integer DEFAULT 0 NOT NULL,
+    "completed_at" timestamp with time zone,
+    "claimed_at" timestamp with time zone,
+    "created_at" timestamp with time zone DEFAULT "timezone"('utc'::"text", "now"()) NOT NULL,
+    "updated_at" timestamp with time zone DEFAULT "timezone"('utc'::"text", "now"()) NOT NULL,
+    CONSTRAINT "user_daily_quests_progress_nonnegative_chk" CHECK (("progress_count" >= 0))
+);
+
+
+ALTER TABLE "public"."user_daily_quests" OWNER TO "postgres";
+
+
+ALTER TABLE ONLY "public"."achievements"
+    ADD CONSTRAINT "achievements_code_key" UNIQUE ("code");
+
+
+
+ALTER TABLE ONLY "public"."achievements"
+    ADD CONSTRAINT "achievements_pkey" PRIMARY KEY ("id");
+
 
 
 ALTER TABLE ONLY "public"."chat_channels"
@@ -1323,6 +1466,16 @@ ALTER TABLE ONLY "public"."chat_threads"
 
 ALTER TABLE ONLY "public"."cities"
     ADD CONSTRAINT "cities_pkey" PRIMARY KEY ("id");
+
+
+
+ALTER TABLE ONLY "public"."daily_quests"
+    ADD CONSTRAINT "daily_quests_code_key" UNIQUE ("code");
+
+
+
+ALTER TABLE ONLY "public"."daily_quests"
+    ADD CONSTRAINT "daily_quests_pkey" PRIMARY KEY ("id");
 
 
 
@@ -1386,8 +1539,32 @@ ALTER TABLE ONLY "public"."teams"
 
 
 
+ALTER TABLE ONLY "public"."user_achievements"
+    ADD CONSTRAINT "user_achievements_pkey" PRIMARY KEY ("id");
+
+
+
+ALTER TABLE ONLY "public"."user_achievements"
+    ADD CONSTRAINT "user_achievements_user_achievement_key" UNIQUE ("user_id", "achievement_id");
+
+
+
+ALTER TABLE ONLY "public"."user_daily_quests"
+    ADD CONSTRAINT "user_daily_quests_pkey" PRIMARY KEY ("id");
+
+
+
+ALTER TABLE ONLY "public"."user_daily_quests"
+    ADD CONSTRAINT "user_daily_quests_user_quest_date_key" UNIQUE ("user_id", "quest_id", "quest_date");
+
+
+
 ALTER TABLE ONLY "public"."user_plants"
     ADD CONSTRAINT "user_plants_pkey" PRIMARY KEY ("id");
+
+
+
+CREATE INDEX "achievements_active_idx" ON "public"."achievements" USING "btree" ("is_active");
 
 
 
@@ -1448,6 +1625,10 @@ CREATE INDEX "chat_threads_created_by_idx" ON "public"."chat_threads" USING "btr
 
 
 CREATE UNIQUE INDEX "cities_name_region_country_key" ON "public"."cities" USING "btree" ("lower"("name"), "lower"(COALESCE("region", ''::"text")), "upper"("country_code"));
+
+
+
+CREATE INDEX "daily_quests_active_idx" ON "public"."daily_quests" USING "btree" ("is_active");
 
 
 
@@ -1515,6 +1696,22 @@ CREATE UNIQUE INDEX "teams_city_name_key" ON "public"."teams" USING "btree" ("ci
 
 
 
+CREATE INDEX "user_achievements_achievement_idx" ON "public"."user_achievements" USING "btree" ("achievement_id");
+
+
+
+CREATE INDEX "user_achievements_user_idx" ON "public"."user_achievements" USING "btree" ("user_id");
+
+
+
+CREATE INDEX "user_daily_quests_quest_idx" ON "public"."user_daily_quests" USING "btree" ("quest_id");
+
+
+
+CREATE INDEX "user_daily_quests_user_date_idx" ON "public"."user_daily_quests" USING "btree" ("user_id", "quest_date");
+
+
+
 CREATE INDEX "user_plants_plant_id_idx" ON "public"."user_plants" USING "btree" ("plant_id");
 
 
@@ -1559,6 +1756,10 @@ CREATE OR REPLACE TRIGGER "events_prepare_write_before_write" BEFORE INSERT OR U
 
 
 
+CREATE OR REPLACE TRIGGER "set_achievements_updated_at" BEFORE UPDATE ON "public"."achievements" FOR EACH ROW EXECUTE FUNCTION "public"."set_updated_at"();
+
+
+
 CREATE OR REPLACE TRIGGER "set_chat_channels_updated_at" BEFORE UPDATE ON "public"."chat_channels" FOR EACH ROW EXECUTE FUNCTION "public"."set_updated_at"();
 
 
@@ -1572,6 +1773,10 @@ CREATE OR REPLACE TRIGGER "set_chat_threads_updated_at" BEFORE UPDATE ON "public
 
 
 CREATE OR REPLACE TRIGGER "set_cities_updated_at" BEFORE UPDATE ON "public"."cities" FOR EACH ROW EXECUTE FUNCTION "public"."set_updated_at"();
+
+
+
+CREATE OR REPLACE TRIGGER "set_daily_quests_updated_at" BEFORE UPDATE ON "public"."daily_quests" FOR EACH ROW EXECUTE FUNCTION "public"."set_updated_at"();
 
 
 
@@ -1600,6 +1805,10 @@ CREATE OR REPLACE TRIGGER "set_public_profiles_updated_at" BEFORE UPDATE ON "pub
 
 
 CREATE OR REPLACE TRIGGER "set_teams_updated_at" BEFORE UPDATE ON "public"."teams" FOR EACH ROW EXECUTE FUNCTION "public"."set_updated_at"();
+
+
+
+CREATE OR REPLACE TRIGGER "set_user_daily_quests_updated_at" BEFORE UPDATE ON "public"."user_daily_quests" FOR EACH ROW EXECUTE FUNCTION "public"."set_updated_at"();
 
 
 
@@ -1736,6 +1945,26 @@ ALTER TABLE ONLY "public"."teams"
 
 
 
+ALTER TABLE ONLY "public"."user_achievements"
+    ADD CONSTRAINT "user_achievements_achievement_id_fkey" FOREIGN KEY ("achievement_id") REFERENCES "public"."achievements"("id") ON DELETE CASCADE;
+
+
+
+ALTER TABLE ONLY "public"."user_achievements"
+    ADD CONSTRAINT "user_achievements_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "public"."profiles"("id") ON DELETE CASCADE;
+
+
+
+ALTER TABLE ONLY "public"."user_daily_quests"
+    ADD CONSTRAINT "user_daily_quests_quest_id_fkey" FOREIGN KEY ("quest_id") REFERENCES "public"."daily_quests"("id") ON DELETE CASCADE;
+
+
+
+ALTER TABLE ONLY "public"."user_daily_quests"
+    ADD CONSTRAINT "user_daily_quests_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "public"."profiles"("id") ON DELETE CASCADE;
+
+
+
 ALTER TABLE ONLY "public"."user_plants"
     ADD CONSTRAINT "user_plants_plant_id_fkey" FOREIGN KEY ("plant_id") REFERENCES "public"."plants"("id") ON DELETE SET NULL;
 
@@ -1743,6 +1972,13 @@ ALTER TABLE ONLY "public"."user_plants"
 
 ALTER TABLE ONLY "public"."user_plants"
     ADD CONSTRAINT "user_plants_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "public"."profiles"("id") ON DELETE CASCADE;
+
+
+
+ALTER TABLE "public"."achievements" ENABLE ROW LEVEL SECURITY;
+
+
+CREATE POLICY "achievements_select_all" ON "public"."achievements" FOR SELECT TO "authenticated" USING (true);
 
 
 
@@ -1825,6 +2061,13 @@ ALTER TABLE "public"."cities" ENABLE ROW LEVEL SECURITY;
 
 
 CREATE POLICY "cities_select_all" ON "public"."cities" FOR SELECT TO "authenticated" USING (true);
+
+
+
+ALTER TABLE "public"."daily_quests" ENABLE ROW LEVEL SECURITY;
+
+
+CREATE POLICY "daily_quests_select_all" ON "public"."daily_quests" FOR SELECT TO "authenticated" USING (true);
 
 
 
@@ -1930,6 +2173,32 @@ CREATE POLICY "teams_insert_own_city" ON "public"."teams" FOR INSERT TO "authent
 
 
 CREATE POLICY "teams_select_all" ON "public"."teams" FOR SELECT TO "authenticated" USING (true);
+
+
+
+ALTER TABLE "public"."user_achievements" ENABLE ROW LEVEL SECURITY;
+
+
+CREATE POLICY "user_achievements_insert_own" ON "public"."user_achievements" FOR INSERT TO "authenticated" WITH CHECK ((( SELECT "auth"."uid"() AS "uid") = "user_id"));
+
+
+
+CREATE POLICY "user_achievements_select_own" ON "public"."user_achievements" FOR SELECT TO "authenticated" USING ((( SELECT "auth"."uid"() AS "uid") = "user_id"));
+
+
+
+ALTER TABLE "public"."user_daily_quests" ENABLE ROW LEVEL SECURITY;
+
+
+CREATE POLICY "user_daily_quests_insert_own" ON "public"."user_daily_quests" FOR INSERT TO "authenticated" WITH CHECK ((( SELECT "auth"."uid"() AS "uid") = "user_id"));
+
+
+
+CREATE POLICY "user_daily_quests_select_own" ON "public"."user_daily_quests" FOR SELECT TO "authenticated" USING ((( SELECT "auth"."uid"() AS "uid") = "user_id"));
+
+
+
+CREATE POLICY "user_daily_quests_update_own" ON "public"."user_daily_quests" FOR UPDATE TO "authenticated" USING ((( SELECT "auth"."uid"() AS "uid") = "user_id")) WITH CHECK ((( SELECT "auth"."uid"() AS "uid") = "user_id"));
 
 
 
@@ -2114,6 +2383,12 @@ GRANT ALL ON FUNCTION "public"."sync_public_profile"() TO "service_role";
 
 
 
+GRANT ALL ON TABLE "public"."achievements" TO "anon";
+GRANT ALL ON TABLE "public"."achievements" TO "authenticated";
+GRANT ALL ON TABLE "public"."achievements" TO "service_role";
+
+
+
 GRANT ALL ON TABLE "public"."chat_channels" TO "anon";
 GRANT ALL ON TABLE "public"."chat_channels" TO "authenticated";
 GRANT ALL ON TABLE "public"."chat_channels" TO "service_role";
@@ -2164,9 +2439,20 @@ GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE "public"."user_plants" TO "authentica
 
 
 
-GRANT ALL ON TABLE "public"."city_leaderboard" TO "anon";
 GRANT ALL ON TABLE "public"."city_leaderboard" TO "authenticated";
 GRANT ALL ON TABLE "public"."city_leaderboard" TO "service_role";
+
+
+
+GRANT ALL ON TABLE "public"."city_map_stats" TO "anon";
+GRANT ALL ON TABLE "public"."city_map_stats" TO "authenticated";
+GRANT ALL ON TABLE "public"."city_map_stats" TO "service_role";
+
+
+
+GRANT ALL ON TABLE "public"."daily_quests" TO "anon";
+GRANT ALL ON TABLE "public"."daily_quests" TO "authenticated";
+GRANT ALL ON TABLE "public"."daily_quests" TO "service_role";
 
 
 
@@ -2220,9 +2506,20 @@ GRANT SELECT,INSERT ON TABLE "public"."teams" TO "authenticated";
 
 
 
-GRANT ALL ON TABLE "public"."team_leaderboard" TO "anon";
 GRANT ALL ON TABLE "public"."team_leaderboard" TO "authenticated";
 GRANT ALL ON TABLE "public"."team_leaderboard" TO "service_role";
+
+
+
+GRANT ALL ON TABLE "public"."user_achievements" TO "anon";
+GRANT ALL ON TABLE "public"."user_achievements" TO "authenticated";
+GRANT ALL ON TABLE "public"."user_achievements" TO "service_role";
+
+
+
+GRANT ALL ON TABLE "public"."user_daily_quests" TO "anon";
+GRANT ALL ON TABLE "public"."user_daily_quests" TO "authenticated";
+GRANT ALL ON TABLE "public"."user_daily_quests" TO "service_role";
 
 
 

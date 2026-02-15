@@ -8,10 +8,6 @@ import {
   View,
 } from "react-native";
 
-import {
-  BottomSheetModal,
-  BottomSheetModalProvider,
-} from "@gorhom/bottom-sheet";
 import { Ionicons } from "@expo/vector-icons";
 import {
   Camera,
@@ -77,6 +73,24 @@ const safeNumber = (value: unknown) => {
   return 0;
 };
 
+const normalizeCityId = (value: unknown) => {
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    return trimmed.length ? trimmed : null;
+  }
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return String(value);
+  }
+  return null;
+};
+
+const cityIdsMatch = (left: unknown, right: unknown) => {
+  const leftId = normalizeCityId(left);
+  const rightId = normalizeCityId(right);
+  if (!leftId || !rightId) return false;
+  return leftId.toLowerCase() === rightId.toLowerCase();
+};
+
 const sortBreakdown = (breakdown: Record<string, unknown>) => {
   return Object.entries(breakdown)
     .map(([key, val]) => ({ key, value: safeNumber(val) }))
@@ -106,6 +120,134 @@ const pickBoundaryGeometry = (
   return g as GeoJSONPolygonGeometry;
 };
 
+const isFiniteNumber = (value: unknown): value is number =>
+  typeof value === "number" && Number.isFinite(value);
+
+const isCoordinatePair = (value: unknown): value is [number, number] => {
+  return (
+    Array.isArray(value) &&
+    value.length >= 2 &&
+    isFiniteNumber(value[0]) &&
+    isFiniteNumber(value[1])
+  );
+};
+
+const isLinearRing = (value: unknown): value is [number, number][] => {
+  if (!Array.isArray(value) || value.length < 3) return false;
+  return value.every((point) => isCoordinatePair(point));
+};
+
+const collectCoordinatePairs = (value: unknown, out: [number, number][]) => {
+  if (isCoordinatePair(value)) {
+    out.push([value[0], value[1]]);
+    return;
+  }
+
+  if (!Array.isArray(value)) return;
+  for (const item of value) {
+    collectCoordinatePairs(item, out);
+  }
+};
+
+const boundsCenterFromCoordinates = (
+  coordinates: unknown,
+): [number, number] | null => {
+  const points: [number, number][] = [];
+  collectCoordinatePairs(coordinates, points);
+  if (!points.length) return null;
+
+  let minLon = points[0][0];
+  let maxLon = points[0][0];
+  let minLat = points[0][1];
+  let maxLat = points[0][1];
+
+  for (const [lon, lat] of points) {
+    if (lon < minLon) minLon = lon;
+    if (lon > maxLon) maxLon = lon;
+    if (lat < minLat) minLat = lat;
+    if (lat > maxLat) maxLat = lat;
+  }
+
+  return [(minLon + maxLon) / 2, (minLat + maxLat) / 2];
+};
+
+const accumulateRingMoments = (
+  ring: [number, number][],
+  totals: { cross: number; momentX: number; momentY: number },
+) => {
+  const count = ring.length;
+  if (count < 3) return;
+
+  for (let i = 0; i < count; i += 1) {
+    const [x0, y0] = ring[i];
+    const [x1, y1] = ring[(i + 1) % count];
+    const cross = x0 * y1 - x1 * y0;
+    totals.cross += cross;
+    totals.momentX += (x0 + x1) * cross;
+    totals.momentY += (y0 + y1) * cross;
+  }
+};
+
+const centroidFromBoundary = (
+  geometry: GeoJSONPolygonGeometry,
+): [number, number] | null => {
+  const totals = { cross: 0, momentX: 0, momentY: 0 };
+
+  if (geometry.type === "Polygon") {
+    for (const ring of geometry.coordinates as unknown[]) {
+      if (!isLinearRing(ring)) continue;
+      accumulateRingMoments(ring, totals);
+    }
+  } else {
+    for (const polygon of geometry.coordinates as unknown[]) {
+      if (!Array.isArray(polygon)) continue;
+      for (const ring of polygon) {
+        if (!isLinearRing(ring)) continue;
+        accumulateRingMoments(ring, totals);
+      }
+    }
+  }
+
+  if (Math.abs(totals.cross) < 1e-12) return null;
+
+  const cx = totals.momentX / (3 * totals.cross);
+  const cy = totals.momentY / (3 * totals.cross);
+  if (!Number.isFinite(cx) || !Number.isFinite(cy)) return null;
+
+  return [cx, cy];
+};
+
+const resolveCityCenter = (row: CityMapStatsRow): [number, number] => {
+  if (isFiniteNumber(row.center_lon) && isFiniteNumber(row.center_lat)) {
+    return [row.center_lon, row.center_lat];
+  }
+
+  const boundaryGeometry = pickBoundaryGeometry(row.boundary_geojson);
+  if (boundaryGeometry) {
+    const centroid = centroidFromBoundary(boundaryGeometry);
+    if (centroid) return centroid;
+  }
+
+  if (
+    isFiniteNumber(row.bbox_sw_lon) &&
+    isFiniteNumber(row.bbox_ne_lon) &&
+    isFiniteNumber(row.bbox_sw_lat) &&
+    isFiniteNumber(row.bbox_ne_lat)
+  ) {
+    return [
+      (row.bbox_sw_lon + row.bbox_ne_lon) / 2,
+      (row.bbox_sw_lat + row.bbox_ne_lat) / 2,
+    ];
+  }
+
+  if (boundaryGeometry) {
+    const center = boundsCenterFromCoordinates(boundaryGeometry.coordinates);
+    if (center) return center;
+  }
+
+  return DEFAULT_CENTER;
+};
+
 const buildStops = (max: number, colors: string[]) => {
   const clampedMax = Math.max(max, 1);
   const stops: (number | string)[] = [];
@@ -125,7 +267,6 @@ export default function MapTab() {
   const { supabase } = useSupabase();
 
   const cameraRef = useRef<Camera>(null);
-  const sheetRef = useRef<BottomSheetModal>(null);
   const selectedCityIdRef = useRef<string | null>(null);
 
   const [metric, setMetric] = useState<MetricKey>("co2");
@@ -276,7 +417,9 @@ export default function MapTab() {
 
   const selectedCity = useMemo(() => {
     if (!selectedCityId) return null;
-    return rows.find((row) => row.city_id === selectedCityId) ?? null;
+    return (
+      rows.find((row) => cityIdsMatch(row.city_id, selectedCityId)) ?? null
+    );
   }, [rows, selectedCityId]);
 
   const featureCollection = useMemo(() => {
@@ -295,16 +438,7 @@ export default function MapTab() {
         );
       })
       .map((row) => {
-        const centerLon =
-          row.center_lon ??
-          (row.bbox_sw_lon != null && row.bbox_ne_lon != null
-            ? (row.bbox_sw_lon + row.bbox_ne_lon) / 2
-            : DEFAULT_CENTER[0]);
-        const centerLat =
-          row.center_lat ??
-          (row.bbox_sw_lat != null && row.bbox_ne_lat != null
-            ? (row.bbox_sw_lat + row.bbox_ne_lat) / 2
-            : DEFAULT_CENTER[1]);
+        const [centerLon, centerLat] = resolveCityCenter(row);
 
         const swLon = row.bbox_sw_lon ?? centerLon - FALLBACK_BOX_DEG;
         const swLat = row.bbox_sw_lat ?? centerLat - FALLBACK_BOX_DEG;
@@ -386,23 +520,28 @@ export default function MapTab() {
     ];
   }, [fillColors, maxScore]);
 
-  const handleSelectCity = (cityId: string) => {
+  const handleSelectCity = (
+    cityId: string,
+    preferredCenter: [number, number] | null = null,
+  ) => {
     setSelectedCityId(cityId);
-    sheetRef.current?.present();
 
-    const row = rows.find((r) => r.city_id === cityId);
+    const row = rows.find((r) => cityIdsMatch(r.city_id, cityId));
     if (!row) return;
 
-    const centerLon =
-      row.center_lon ??
-      (row.bbox_sw_lon != null && row.bbox_ne_lon != null
-        ? (row.bbox_sw_lon + row.bbox_ne_lon) / 2
-        : DEFAULT_CENTER[0]);
-    const centerLat =
-      row.center_lat ??
-      (row.bbox_sw_lat != null && row.bbox_ne_lat != null
-        ? (row.bbox_sw_lat + row.bbox_ne_lat) / 2
-        : DEFAULT_CENTER[1]);
+    const [resolvedCenterLon, resolvedCenterLat] = resolveCityCenter(row);
+    let centerLon = resolvedCenterLon;
+    let centerLat = resolvedCenterLat;
+    if (preferredCenter) {
+      const [tapLon, tapLat] = preferredCenter;
+      const isLikelyOffByShapeBounds =
+        Math.abs(resolvedCenterLon - tapLon) > 0.08 ||
+        Math.abs(resolvedCenterLat - tapLat) > 0.08;
+      if (isLikelyOffByShapeBounds) {
+        centerLon = tapLon;
+        centerLat = tapLat;
+      }
+    }
 
     cameraRef.current?.setCamera({
       centerCoordinate: [centerLon, centerLat],
@@ -413,19 +552,33 @@ export default function MapTab() {
     });
   };
 
+  const handleCloseSelected = useCallback(() => {
+    setSelectedCityId(null);
+  }, []);
+
   const handleSourcePress = (event: {
+    coordinates?: [number, number];
     features?: { id?: string | number; properties?: any }[];
   }) => {
     const hit = event.features?.[0];
-    const cityId =
-      typeof hit?.properties?.city_id === "string"
-        ? hit.properties.city_id
-        : typeof hit?.id === "string"
-          ? hit.id
-          : null;
+    const pressCoordinate = isCoordinatePair(event.coordinates)
+      ? event.coordinates
+      : isCoordinatePair(hit?.geometry?.coordinates)
+        ? hit.geometry.coordinates
+        : null;
+    const candidateCityId =
+      normalizeCityId(hit?.properties?.city_id) ?? normalizeCityId(hit?.id);
+    const cityName =
+      typeof hit?.properties?.city_name === "string"
+        ? hit.properties.city_name
+        : null;
+    const matchedRow =
+      rows.find((row) => cityIdsMatch(row.city_id, candidateCityId)) ??
+      (cityName ? rows.find((row) => row.city_name === cityName) : null);
+    const cityId = normalizeCityId(matchedRow?.city_id) ?? candidateCityId;
 
     if (!cityId) return;
-    handleSelectCity(cityId);
+    handleSelectCity(cityId, pressCoordinate);
   };
 
   const statsBreakdown = useMemo(() => {
@@ -458,7 +611,10 @@ export default function MapTab() {
     };
   }, [userLocation]);
 
-  const locateButtonBottom = (insets.bottom > 0 ? insets.bottom : 24) + 68 + 16;
+  const bottomInset = insets.bottom > 0 ? insets.bottom : 24;
+  const tabBarHeight = 68;
+  const locateButtonBottom = bottomInset + tabBarHeight + 16;
+  const selectedCityCardBottom = bottomInset + tabBarHeight + 8;
 
   const handleLocatePress = useCallback(async () => {
     setIsLocating(true);
@@ -480,303 +636,277 @@ export default function MapTab() {
   }, [fetchUserLocation]);
 
   return (
-    <BottomSheetModalProvider>
-      <View style={styles.container}>
-        <MapView
-          style={styles.map}
-          styleURL={StyleURL.Dark}
-          pitchEnabled={false}
-          rotateEnabled
-          attributionEnabled
+    <View style={styles.container}>
+      <MapView
+        style={styles.map}
+        styleURL={StyleURL.Dark}
+        pitchEnabled={false}
+        rotateEnabled
+        attributionEnabled
+      >
+        <Camera
+          ref={cameraRef}
+          centerCoordinate={DEFAULT_CENTER}
+          zoomLevel={5.3}
+          pitch={0}
+          animationMode="flyTo"
+          animationDuration={0}
+        />
+
+        <ShapeSource
+          id="shrubbi-city-stats"
+          shape={featureCollection as any}
+          onPress={handleSourcePress}
+          hitbox={{ width: 12, height: 12 }}
         >
-          <Camera
-            ref={cameraRef}
-            centerCoordinate={DEFAULT_CENTER}
-            zoomLevel={5.3}
-            pitch={0}
-            animationMode="flyTo"
-            animationDuration={0}
+          <FillLayer
+            id="shrubbi-city-fill"
+            existing={false}
+            style={{
+              fillColor: fillColorExpression as any,
+              fillOpacity: 0.55,
+              fillAntialias: true,
+            }}
           />
 
+          <LineLayer
+            id="shrubbi-city-outline"
+            existing={false}
+            style={{
+              lineColor: COLORS.primary + "B3",
+              lineWidth: ["interpolate", ["linear"], ["zoom"], 4, 0.6, 9, 1.4],
+              lineOpacity: 0.9,
+            }}
+          />
+
+          <LineLayer
+            id="shrubbi-city-outline-selected"
+            existing={false}
+            filter={[
+              "==",
+              ["get", "city_id"],
+              selectedCityId ? selectedCityId : "",
+            ]}
+            style={{
+              lineColor: COLORS.primary,
+              lineWidth: ["interpolate", ["linear"], ["zoom"], 4, 1.2, 9, 2.6],
+              lineOpacity: 1,
+            }}
+          />
+
+          <SymbolLayer
+            id="shrubbi-city-label"
+            existing={false}
+            minZoomLevel={7}
+            style={{
+              textField: ["get", "city_name"],
+              textSize: 12,
+              textAllowOverlap: false,
+              textColor: COLORS.secondary,
+              textHaloColor: COLORS.background,
+              textHaloWidth: 1,
+              textHaloBlur: 0.6,
+            }}
+          />
+        </ShapeSource>
+
+        {userLocationFeatureCollection ? (
           <ShapeSource
-            id="shrubbi-city-stats"
-            shape={featureCollection as any}
-            onPress={handleSourcePress}
-            hitbox={{ width: 12, height: 12 }}
+            id="shrubbi-user-location"
+            shape={userLocationFeatureCollection as any}
           >
-            <FillLayer
-              id="shrubbi-city-fill"
-              existing={false}
+            <CircleLayer
+              id="shrubbi-user-location-halo"
               style={{
-                fillColor: fillColorExpression as any,
-                fillOpacity: 0.55,
-                fillAntialias: true,
+                circleRadius: 14,
+                circleColor: COLORS.primary,
+                circleOpacity: 0.18,
               }}
             />
-
-            <LineLayer
-              id="shrubbi-city-outline"
-              existing={false}
+            <CircleLayer
+              id="shrubbi-user-location-dot"
               style={{
-                lineColor: COLORS.primary + "B3",
-                lineWidth: [
-                  "interpolate",
-                  ["linear"],
-                  ["zoom"],
-                  4,
-                  0.6,
-                  9,
-                  1.4,
-                ],
-                lineOpacity: 0.9,
-              }}
-            />
-
-            <LineLayer
-              id="shrubbi-city-outline-selected"
-              existing={false}
-              filter={[
-                "==",
-                ["get", "city_id"],
-                selectedCityId ? selectedCityId : "",
-              ]}
-              style={{
-                lineColor: COLORS.primary,
-                lineWidth: [
-                  "interpolate",
-                  ["linear"],
-                  ["zoom"],
-                  4,
-                  1.2,
-                  9,
-                  2.6,
-                ],
-                lineOpacity: 1,
-              }}
-            />
-
-            <SymbolLayer
-              id="shrubbi-city-label"
-              existing={false}
-              minZoomLevel={7}
-              style={{
-                textField: ["get", "city_name"],
-                textSize: 12,
-                textAllowOverlap: false,
-                textColor: COLORS.secondary,
-                textHaloColor: COLORS.background,
-                textHaloWidth: 1,
-                textHaloBlur: 0.6,
+                circleRadius: 6,
+                circleColor: COLORS.primary,
+                circleOpacity: 0.95,
+                circleStrokeColor: COLORS.background,
+                circleStrokeWidth: 2,
               }}
             />
           </ShapeSource>
+        ) : null}
+      </MapView>
 
-          {userLocationFeatureCollection ? (
-            <ShapeSource
-              id="shrubbi-user-location"
-              shape={userLocationFeatureCollection as any}
-            >
-              <CircleLayer
-                id="shrubbi-user-location-halo"
-                style={{
-                  circleRadius: 14,
-                  circleColor: COLORS.primary,
-                  circleOpacity: 0.18,
-                }}
-              />
-              <CircleLayer
-                id="shrubbi-user-location-dot"
-                style={{
-                  circleRadius: 6,
-                  circleColor: COLORS.primary,
-                  circleOpacity: 0.95,
-                  circleStrokeColor: COLORS.background,
-                  circleStrokeWidth: 2,
-                }}
-              />
-            </ShapeSource>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel="Zoom to my location"
+        disabled={isLocating}
+        onPress={handleLocatePress}
+        style={[styles.locateButton, { bottom: locateButtonBottom }]}
+      >
+        {isLocating ? (
+          <ActivityIndicator color={COLORS.primary} />
+        ) : (
+          <Ionicons name="locate" size={20} color={COLORS.primary} />
+        )}
+      </Pressable>
+
+      <View style={[styles.overlay, { paddingTop: insets.top + 10 }]}>
+        <View style={styles.panel}>
+          {Platform.OS === "ios" ? (
+            <BlurView
+              tint="dark"
+              intensity={86}
+              style={StyleSheet.absoluteFill}
+            />
           ) : null}
-        </MapView>
 
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Zoom to my location"
-          disabled={isLocating}
-          onPress={handleLocatePress}
-          style={[styles.locateButton, { bottom: locateButtonBottom }]}
-        >
-          {isLocating ? (
-            <ActivityIndicator color={COLORS.primary} />
+          <View style={styles.panelHeader}>
+            <View style={styles.panelTitleWrap}>
+              <Text style={styles.panelTitle}>City Pulse</Text>
+              <Text style={styles.panelSubTitle}>
+                Tap a city for stats and top plant types.
+              </Text>
+            </View>
+          </View>
+
+          <View style={styles.segment}>
+            {(Object.keys(metricLabel) as MetricKey[]).map((key) => (
+              <Pressable
+                key={key}
+                onPress={() => setMetric(key)}
+                style={[
+                  styles.segmentItem,
+                  metric === key && styles.segmentItemActive,
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.segmentItemText,
+                    metric === key && styles.segmentItemTextActive,
+                  ]}
+                >
+                  {metricLabel[key]}
+                </Text>
+              </Pressable>
+            ))}
+          </View>
+
+          {isLoading ? (
+            <View style={styles.loadingRow}>
+              <ActivityIndicator color={COLORS.primary} />
+              <Text style={styles.loadingText}>Loading city stats...</Text>
+            </View>
+          ) : errorMessage ? (
+            <Text style={styles.errorText}>{errorMessage}</Text>
           ) : (
-            <Ionicons name="locate" size={20} color={COLORS.primary} />
+            <View style={styles.legendRow}>
+              <Text style={styles.legendLabel}>Low</Text>
+              <View style={styles.legendBar}>
+                {fillColors.map((color) => (
+                  <View
+                    key={color}
+                    style={[styles.legendStop, { backgroundColor: color }]}
+                  />
+                ))}
+              </View>
+              <Text style={styles.legendLabel}>High</Text>
+            </View>
           )}
-        </Pressable>
+        </View>
+      </View>
 
-        <View style={[styles.overlay, { paddingTop: insets.top + 10 }]}>
-          <View style={styles.panel}>
-            {Platform.OS === "ios" ? (
-              <BlurView
-                tint="dark"
-                intensity={86}
-                style={StyleSheet.absoluteFill}
-              />
-            ) : null}
+      {selectedCity ? (
+        <View
+          style={[styles.bottomOverlay, { bottom: selectedCityCardBottom }]}
+        >
+          <View style={styles.sheet}>
+            <View style={styles.sheetHeader}>
+              <View style={styles.sheetTitleWrap}>
+                <Text style={styles.sheetTitle}>{selectedCity.city_name}</Text>
+                <Text style={styles.sheetSubtitle}>
+                  {selectedCity.city_state
+                    ? `${selectedCity.city_state} - `
+                    : ""}
+                  {selectedCity.country_code ?? "US"}
+                </Text>
+              </View>
 
-            <View style={styles.panelHeader}>
-              <View style={styles.panelTitleWrap}>
-                <Text style={styles.panelTitle}>City Pulse</Text>
-                <Text style={styles.panelSubTitle}>
-                  Tap a city for stats and top plant types.
+              <Pressable
+                onPress={handleCloseSelected}
+                style={styles.closeButton}
+              >
+                <Ionicons name="close" size={18} color={COLORS.background} />
+              </Pressable>
+            </View>
+
+            <View style={styles.statRow}>
+              <View style={styles.statCard}>
+                <Text style={styles.statLabel}>Plants</Text>
+                <Text style={styles.statValue}>
+                  {formatCompactNumber(safeNumber(selectedCity.total_plants))}
+                </Text>
+              </View>
+              <View style={styles.statCard}>
+                <Text style={styles.statLabel}>People</Text>
+                <Text style={styles.statValue}>
+                  {formatCompactNumber(safeNumber(selectedCity.member_count))}
+                </Text>
+              </View>
+              <View style={styles.statCard}>
+                <Text style={styles.statLabel}>CO2 Removed</Text>
+                <Text style={styles.statValue}>
+                  {formatKg(safeNumber(selectedCity.total_co2_removed_kg))}
                 </Text>
               </View>
             </View>
 
-            <View style={styles.segment}>
-              {(Object.keys(metricLabel) as MetricKey[]).map((key) => (
-                <Pressable
-                  key={key}
-                  onPress={() => setMetric(key)}
-                  style={[
-                    styles.segmentItem,
-                    metric === key && styles.segmentItemActive,
-                  ]}
-                >
-                  <Text
-                    style={[
-                      styles.segmentItemText,
-                      metric === key && styles.segmentItemTextActive,
-                    ]}
-                  >
-                    {metricLabel[key]}
-                  </Text>
-                </Pressable>
-              ))}
+            <View style={styles.bestRow}>
+              <Ionicons name="leaf" size={16} color={COLORS.secondary} />
+              <Text style={styles.bestText}>
+                Best plant type:{" "}
+                <Text style={styles.bestStrong}>
+                  {selectedCity.best_plant_type ?? "N/A"}
+                </Text>
+                {selectedCity.best_plant_type_count != null
+                  ? ` (${formatCompactNumber(
+                      safeNumber(selectedCity.best_plant_type_count),
+                    )})`
+                  : ""}
+              </Text>
             </View>
 
-            {isLoading ? (
-              <View style={styles.loadingRow}>
-                <ActivityIndicator color={COLORS.primary} />
-                <Text style={styles.loadingText}>Loading city stats...</Text>
+            {statsBreakdown.length ? (
+              <View style={styles.breakdownWrap}>
+                <Text style={styles.breakdownTitle}>Plant Type Mix</Text>
+                {statsBreakdown.slice(0, 6).map((item) => (
+                  <View key={item.key} style={styles.breakdownRow}>
+                    <Text style={styles.breakdownKey}>{item.key}</Text>
+                    <View style={styles.breakdownBarTrack}>
+                      <View
+                        style={[
+                          styles.breakdownBarFill,
+                          {
+                            width: `${Math.round((item.value / breakdownMax) * 100)}%`,
+                          },
+                        ]}
+                      />
+                    </View>
+                    <Text style={styles.breakdownVal}>
+                      {formatCompactNumber(item.value)}
+                    </Text>
+                  </View>
+                ))}
               </View>
-            ) : errorMessage ? (
-              <Text style={styles.errorText}>{errorMessage}</Text>
-            ) : (
-              <View style={styles.legendRow}>
-                <Text style={styles.legendLabel}>Low</Text>
-                <View style={styles.legendBar}>
-                  {fillColors.map((color) => (
-                    <View
-                      key={color}
-                      style={[styles.legendStop, { backgroundColor: color }]}
-                    />
-                  ))}
-                </View>
-                <Text style={styles.legendLabel}>High</Text>
-              </View>
-            )}
-          </View>
-        </View>
-
-        <BottomSheetModal
-          ref={sheetRef}
-          snapPoints={["26%", "56%"]}
-          backgroundStyle={styles.sheetBackground}
-          handleIndicatorStyle={styles.sheetHandle}
-        >
-          <View style={styles.sheetContent}>
-            {selectedCity ? (
-              <>
-                <View style={styles.sheetHeader}>
-                  <Text style={styles.sheetTitle}>
-                    {selectedCity.city_name}
-                  </Text>
-                  <Text style={styles.sheetSubtitle}>
-                    {selectedCity.city_state
-                      ? `${selectedCity.city_state} - `
-                      : ""}
-                    {selectedCity.country_code ?? "US"}
-                  </Text>
-                </View>
-
-                <View style={styles.statRow}>
-                  <View style={styles.statCard}>
-                    <Text style={styles.statLabel}>Plants</Text>
-                    <Text style={styles.statValue}>
-                      {formatCompactNumber(
-                        safeNumber(selectedCity.total_plants),
-                      )}
-                    </Text>
-                  </View>
-                  <View style={styles.statCard}>
-                    <Text style={styles.statLabel}>People</Text>
-                    <Text style={styles.statValue}>
-                      {formatCompactNumber(
-                        safeNumber(selectedCity.member_count),
-                      )}
-                    </Text>
-                  </View>
-                  <View style={styles.statCard}>
-                    <Text style={styles.statLabel}>CO2 Removed</Text>
-                    <Text style={styles.statValue}>
-                      {formatKg(safeNumber(selectedCity.total_co2_removed_kg))}
-                    </Text>
-                  </View>
-                </View>
-
-                <View style={styles.bestRow}>
-                  <Ionicons name="leaf" size={16} color={COLORS.secondary} />
-                  <Text style={styles.bestText}>
-                    Best plant type:{" "}
-                    <Text style={styles.bestStrong}>
-                      {selectedCity.best_plant_type ?? "N/A"}
-                    </Text>
-                    {selectedCity.best_plant_type_count != null
-                      ? ` (${formatCompactNumber(
-                          safeNumber(selectedCity.best_plant_type_count),
-                        )})`
-                      : ""}
-                  </Text>
-                </View>
-
-                {statsBreakdown.length ? (
-                  <View style={styles.breakdownWrap}>
-                    <Text style={styles.breakdownTitle}>Plant Type Mix</Text>
-                    {statsBreakdown.slice(0, 6).map((item) => (
-                      <View key={item.key} style={styles.breakdownRow}>
-                        <Text style={styles.breakdownKey}>{item.key}</Text>
-                        <View style={styles.breakdownBarTrack}>
-                          <View
-                            style={[
-                              styles.breakdownBarFill,
-                              {
-                                width: `${Math.round(
-                                  (item.value / breakdownMax) * 100,
-                                )}%`,
-                              },
-                            ]}
-                          />
-                        </View>
-                        <Text style={styles.breakdownVal}>
-                          {formatCompactNumber(item.value)}
-                        </Text>
-                      </View>
-                    ))}
-                  </View>
-                ) : (
-                  <Text style={styles.breakdownEmpty}>
-                    No plant type data yet for this city.
-                  </Text>
-                )}
-              </>
             ) : (
               <Text style={styles.breakdownEmpty}>
-                Tap a city to see stats.
+                No plant type data yet for this city.
               </Text>
             )}
           </View>
-        </BottomSheetModal>
-      </View>
-    </BottomSheetModalProvider>
+        </View>
+      ) : null}
+    </View>
   );
 }
 
@@ -910,24 +1040,28 @@ const styles = StyleSheet.create({
   legendStop: {
     flex: 1,
   },
-  sheetBackground: {
+  bottomOverlay: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    padding: 14,
+  },
+  sheet: {
+    borderRadius: 20,
+    padding: 16,
     backgroundColor: COLORS.background + "F2",
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
     borderWidth: 1,
     borderColor: COLORS.primary + "1A",
   },
-  sheetHandle: {
-    backgroundColor: COLORS.secondary + "55",
-    width: 40,
-  },
-  sheetContent: {
-    paddingHorizontal: 16,
-    paddingTop: 10,
-    paddingBottom: 24,
-  },
   sheetHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
+    gap: 12,
     marginBottom: 10,
+  },
+  sheetTitleWrap: {
+    flex: 1,
   },
   sheetTitle: {
     color: COLORS.primary,
@@ -939,6 +1073,14 @@ const styles = StyleSheet.create({
     opacity: 0.9,
     marginTop: 4,
     fontSize: 12,
+  },
+  closeButton: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: COLORS.primary,
   },
   statRow: {
     flexDirection: "row",

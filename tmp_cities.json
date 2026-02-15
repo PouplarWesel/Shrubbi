@@ -1,0 +1,506 @@
+[
+  {
+    "id": "1e07ad2a-4a96-49dd-99f8-4cc9f88694b9",
+    "name": "Anaheim",
+    "state": "California",
+    "country": "United States",
+    "country_code": "US"
+  },
+  {
+    "id": "d54e6e24-b12f-4d99-8b96-21578625daf7",
+    "name": "Antioch",
+    "state": "California",
+    "country": "United States",
+    "country_code": "US"
+  },
+  {
+    "id": "e32b0996-9e00-478a-b834-6154f81f9046",
+    "name": "Bakersfield",
+    "state": "California",
+    "country": "United States",
+    "country_code": "US"
+  },
+  {
+    "id": "6ccc798d-e79f-4f65-8f85-2199c3f710b9",
+    "name": "Berkeley",
+    "state": "California",
+    "country": "United States",
+    "country_code": "US"
+  },
+  {
+    "id": "9326ee1b-c1f7-4707-afa7-061877b603b8",
+    "name": "Burbank",
+    "state": "California",
+    "country": "United States",
+    "country_code": "US"
+  },
+  {
+    "id": "526def17-4be8-449e-a255-7d29f5acc3ea",
+    "name": "Carlsbad",
+    "state": "California",
+    "country": "United States",
+    "country_code": "US"
+  },
+  {
+    "id": "9dd6b35b-c2f0-41fa-be17-307d7ef0d055",
+    "name": "Chula Vista",
+    "state": "California",
+    "country": "United States",
+    "country_code": "US"
+  },
+  {
+    "id": "c827ef5f-288a-4abd-80f6-0baba1fc615e",
+    "name": "Clovis",
+    "state": "California",
+    "country": "United States",
+    "country_code": "US"
+  },
+  {
+    "id": "dfaed946-5e10-48eb-bd07-4a47b80111b0",
+    "name": "Concord",
+    "state": "California",
+    "country": "United States",
+    "country_code": "US"
+  },
+  {
+    "id": "6213d0f7-a6d9-4554-8969-834891874fe9",
+    "name": "Corona",
+    "state": "California",
+    "country": "United States",
+    "country_code": "US"
+  },
+  {
+    "id": "b0ce1708-56fe-446b-8960-e9a0108f431c",
+    "name": "Costa Mesa",
+    "state": "California",
+    "country": "United States",
+    "country_code": "US"
+  },
+  {
+    "id": "71497b62-496c-460c-a84c-e05f0383684e",
+    "name": "Downey",
+    "state": "California",
+    "country": "United States",
+    "country_code": "US"
+  },
+  {
+    "id": "cc489c96-4aac-495c-9480-2e5805752ccf",
+    "name": "El Monte",
+    "state": "California",
+    "country": "United States",
+    "country_code": "US"
+  },
+  {
+    "id": "087f6648-eb06-4fc8-868c-c54265d5c5f6",
+    "name": "Elk Grove",
+    "state": "California",
+    "country": "United States",
+    "country_code": "US"
+  },
+  {
+    "id": "51d1eb01-8456-420f-94b8-6b981f11474e",
+    "name": "Escondido",
+    "state": "California",
+    "country": "United States",
+    "country_code": "US"
+  },
+  {
+    "id": "6ee147a2-80cc-4f1a-8d31-7dabe56bf111",
+    "name": "Fairfield",
+    "state": "California",
+    "country": "United States",
+    "country_code": "US"
+  },
+  {
+    "id": "f4f9be83-770a-4063-9a57-b1cb886f9389",
+    "name": "Fontana",
+    "state": "California",
+    "country": "United States",
+    "country_code": "US"
+  },
+  {
+    "id": "784ca168-4c56-40c7-b599-dec4bcaa8003",
+    "name": "Fremont",
+    "state": "California",
+    "country": "United States",
+    "country_code": "US"
+  },
+  {
+    "id": "e84c8c1d-42c6-4e53-bdeb-ee4f115d0568",
+    "name": "Fresno",
+    "state": "California",
+    "country": "United States",
+    "country_code": "US"
+  },
+  {
+    "id": "5f21b6bc-5a16-4ed7-8eaa-581a0eb184f0",
+    "name": "Fullerton",
+    "state": "California",
+    "country": "United States",
+    "country_code": "US"
+  },
+  {
+    "id": "d1e4419b-52e0-4ad9-a8aa-99e75c22d891",
+    "name": "Garden Grove",
+    "state": "California",
+    "country": "United States",
+    "country_code": "US"
+  },
+  {
+    "id": "c8587346-865a-47d1-a117-e2d6cef4a90b",
+    "name": "Glendale",
+    "state": "California",
+    "country": "United States",
+    "country_code": "US"
+  },
+  {
+    "id": "3e251afe-6e74-4733-a7a5-dfad6e3b2d83",
+    "name": "Hayward",
+    "state": "California",
+    "country": "United States",
+    "country_code": "US"
+  },
+  {
+    "id": "6f69a1ef-ddb0-4980-a074-462404e813b0",
+    "name": "Huntington Beach",
+    "state": "California",
+    "country": "United States",
+    "country_code": "US"
+  },
+  {
+    "id": "1edafc0e-cff4-402d-b7c6-55434d002938",
+    "name": "Inglewood",
+    "state": "California",
+    "country": "United States",
+    "country_code": "US"
+  },
+  {
+    "id": "e8a5f636-4f3c-462a-b5c8-a357ac254c46",
+    "name": "Irvine",
+    "state": "California",
+    "country": "United States",
+    "country_code": "US"
+  },
+  {
+    "id": "3aad2cd9-c06f-49dd-96e5-91b90039e93f",
+    "name": "Lancaster",
+    "state": "California",
+    "country": "United States",
+    "country_code": "US"
+  },
+  {
+    "id": "9b686a31-9c3d-4d3c-a290-f257ffae49a4",
+    "name": "Long Beach",
+    "state": "California",
+    "country": "United States",
+    "country_code": "US"
+  },
+  {
+    "id": "36d6db04-315f-45e6-9965-9f93db3fd41f",
+    "name": "Los Angeles",
+    "state": "California",
+    "country": "United States",
+    "country_code": "US"
+  },
+  {
+    "id": "82c84d6c-f825-43ee-9a24-fa8e80b09d99",
+    "name": "Modesto",
+    "state": "California",
+    "country": "United States",
+    "country_code": "US"
+  },
+  {
+    "id": "b35418e1-5646-4ff9-8e13-4894ca3a521b",
+    "name": "Moreno Valley",
+    "state": "California",
+    "country": "United States",
+    "country_code": "US"
+  },
+  {
+    "id": "6a56f862-bdde-4f09-b85c-00cf92833efc",
+    "name": "Murrieta",
+    "state": "California",
+    "country": "United States",
+    "country_code": "US"
+  },
+  {
+    "id": "87c0a5b3-3df4-4495-903e-f576d3064c17",
+    "name": "Norwalk",
+    "state": "California",
+    "country": "United States",
+    "country_code": "US"
+  },
+  {
+    "id": "6b8c8c42-82eb-455a-a447-58f602cf5699",
+    "name": "Oakland",
+    "state": "California",
+    "country": "United States",
+    "country_code": "US"
+  },
+  {
+    "id": "17b8d941-2762-4665-8cdc-c81c7e46c77a",
+    "name": "Oceanside",
+    "state": "California",
+    "country": "United States",
+    "country_code": "US"
+  },
+  {
+    "id": "0e054a77-0f46-408c-8c4d-ae5c3a742b10",
+    "name": "Ontario",
+    "state": "California",
+    "country": "United States",
+    "country_code": "US"
+  },
+  {
+    "id": "75baedcf-dd57-4825-87ce-3d871e7b125e",
+    "name": "Orange",
+    "state": "California",
+    "country": "United States",
+    "country_code": "US"
+  },
+  {
+    "id": "ce7dc99d-dc5a-4d3d-9855-1794d6fa9d05",
+    "name": "Oxnard",
+    "state": "California",
+    "country": "United States",
+    "country_code": "US"
+  },
+  {
+    "id": "c4e29f11-b643-4ae5-b7d9-a1d74fe8d9ec",
+    "name": "Palmdale",
+    "state": "California",
+    "country": "United States",
+    "country_code": "US"
+  },
+  {
+    "id": "4fafa0a1-121e-4da8-bc6f-db59b67b99be",
+    "name": "Pasadena",
+    "state": "California",
+    "country": "United States",
+    "country_code": "US"
+  },
+  {
+    "id": "7b61ec2a-f182-490e-9207-b7df7193a3c9",
+    "name": "Pomona",
+    "state": "California",
+    "country": "United States",
+    "country_code": "US"
+  },
+  {
+    "id": "3953ae08-155c-4698-ab4c-e6aed014a42c",
+    "name": "Rancho Cucamonga",
+    "state": "California",
+    "country": "United States",
+    "country_code": "US"
+  },
+  {
+    "id": "87895c7f-d3c7-4d5c-8571-bd2de31095ce",
+    "name": "Redding",
+    "state": "California",
+    "country": "United States",
+    "country_code": "US"
+  },
+  {
+    "id": "ecd41e96-fcb0-4f35-9ce4-bac87f7b7e0f",
+    "name": "Richmond",
+    "state": "California",
+    "country": "United States",
+    "country_code": "US"
+  },
+  {
+    "id": "4c6a40da-03e9-4b36-9550-f7f800f09014",
+    "name": "Riverside",
+    "state": "California",
+    "country": "United States",
+    "country_code": "US"
+  },
+  {
+    "id": "039507f2-5af2-42df-8f47-eb2d4698abda",
+    "name": "Roseville",
+    "state": "California",
+    "country": "United States",
+    "country_code": "US"
+  },
+  {
+    "id": "7a3d7b7b-7b69-4310-aa27-135c10e27afe",
+    "name": "Sacramento",
+    "state": "California",
+    "country": "United States",
+    "country_code": "US"
+  },
+  {
+    "id": "df7641d4-f77a-491e-8754-72b0ace0b158",
+    "name": "Salinas",
+    "state": "California",
+    "country": "United States",
+    "country_code": "US"
+  },
+  {
+    "id": "de5fa369-50e5-4a31-86b8-23b3695d14ab",
+    "name": "San Bernardino",
+    "state": "California",
+    "country": "United States",
+    "country_code": "US"
+  },
+  {
+    "id": "96555412-63a9-413c-8d96-0c6f49e776e9",
+    "name": "San Diego",
+    "state": "California",
+    "country": "United States",
+    "country_code": "US"
+  },
+  {
+    "id": "f4307411-bc1f-441e-b3f1-64f412605bf0",
+    "name": "San Francisco",
+    "state": "California",
+    "country": "United States",
+    "country_code": "US"
+  },
+  {
+    "id": "f6aaf9ff-cea7-46d2-b8a6-524d21a461a8",
+    "name": "San Jose",
+    "state": "California",
+    "country": "United States",
+    "country_code": "US"
+  },
+  {
+    "id": "e60b31a3-4fe6-447b-9286-7fc6f5bc0e56",
+    "name": "San Mateo",
+    "state": "California",
+    "country": "United States",
+    "country_code": "US"
+  },
+  {
+    "id": "65028128-2f29-4924-9ba0-acd1920b5e6b",
+    "name": "Santa Ana",
+    "state": "California",
+    "country": "United States",
+    "country_code": "US"
+  },
+  {
+    "id": "4ea554fc-b5fc-453b-af30-3a370f1dfd53",
+    "name": "Santa Barbara",
+    "state": "California",
+    "country": "United States",
+    "country_code": "US"
+  },
+  {
+    "id": "e30a9c1f-b6a7-47d0-b6d4-e43787354294",
+    "name": "Santa Clara",
+    "state": "California",
+    "country": "United States",
+    "country_code": "US"
+  },
+  {
+    "id": "047b86ef-e8d6-4a7d-92de-e06b72c5c102",
+    "name": "Santa Clarita",
+    "state": "California",
+    "country": "United States",
+    "country_code": "US"
+  },
+  {
+    "id": "449397a1-0803-41ad-90dd-666e08015229",
+    "name": "Santa Maria",
+    "state": "California",
+    "country": "United States",
+    "country_code": "US"
+  },
+  {
+    "id": "779f653e-e966-497f-b726-6a2e5e6aec34",
+    "name": "Santa Monica",
+    "state": "California",
+    "country": "United States",
+    "country_code": "US"
+  },
+  {
+    "id": "8ace22fe-890b-4a00-9dcc-91b397da7766",
+    "name": "Santa Rosa",
+    "state": "California",
+    "country": "United States",
+    "country_code": "US"
+  },
+  {
+    "id": "e19b2437-86cd-4ca5-8b41-0cf9d618c73d",
+    "name": "Simi Valley",
+    "state": "California",
+    "country": "United States",
+    "country_code": "US"
+  },
+  {
+    "id": "c54bb4d9-7c8a-442b-9cda-113b17ccb51c",
+    "name": "Stockton",
+    "state": "California",
+    "country": "United States",
+    "country_code": "US"
+  },
+  {
+    "id": "c7fce70a-eac2-4450-8585-8f2cb09382e7",
+    "name": "Sunnyvale",
+    "state": "California",
+    "country": "United States",
+    "country_code": "US"
+  },
+  {
+    "id": "cda669dd-785f-49b2-a701-1df924019bfe",
+    "name": "Temecula",
+    "state": "California",
+    "country": "United States",
+    "country_code": "US"
+  },
+  {
+    "id": "3f6febc3-e242-4d42-9cfe-9d916af53ff7",
+    "name": "Thousand Oaks",
+    "state": "California",
+    "country": "United States",
+    "country_code": "US"
+  },
+  {
+    "id": "8bedac11-00d0-451a-b982-39364ef00ea4",
+    "name": "Torrance",
+    "state": "California",
+    "country": "United States",
+    "country_code": "US"
+  },
+  {
+    "id": "5f216732-5b65-443a-bf87-14fcf89dcc01",
+    "name": "Vallejo",
+    "state": "California",
+    "country": "United States",
+    "country_code": "US"
+  },
+  {
+    "id": "fae62923-5597-439c-9886-8c72c39568c5",
+    "name": "Ventura",
+    "state": "California",
+    "country": "United States",
+    "country_code": "US"
+  },
+  {
+    "id": "fb7d8da2-a9e1-48d8-b12c-0e1f133a459e",
+    "name": "Victorville",
+    "state": "California",
+    "country": "United States",
+    "country_code": "US"
+  },
+  {
+    "id": "fd3f7023-7d13-48bf-b246-f1c740a54580",
+    "name": "Visalia",
+    "state": "California",
+    "country": "United States",
+    "country_code": "US"
+  },
+  {
+    "id": "67ab7f01-65da-4c8b-a6bb-48147ed1a975",
+    "name": "West Covina",
+    "state": "California",
+    "country": "United States",
+    "country_code": "US"
+  },
+  {
+    "id": "3f8db868-7b82-4db8-b753-fed337c393d8",
+    "name": "Yuba City",
+    "state": "California",
+    "country": "United States",
+    "country_code": "US"
+  }
+]

@@ -26,7 +26,20 @@ import { SettingsSection } from "@/components/Settings";
 import type { SettingsSectionHandle } from "@/components/Settings";
 import { COLORS } from "@/constants/colors";
 import { useSupabase } from "@/hooks/useSupabase";
-import { isDueToWaterNow } from "@/lib/wateringSchedule";
+import { WATERING_POINTS_PER_PLANT } from "@/lib/plantPoints";
+import {
+  getWateringNotificationPermissionStateAsync,
+  requestWateringNotificationPermissionAsync,
+  syncWateringRemindersForUserAsync,
+  type WateringReminderPermissionState,
+} from "@/lib/wateringNotifications";
+import {
+  formatWaterTime,
+  getLatestScheduledAt,
+  isDueToWaterNow,
+  normalizeWaterDays,
+  parseWaterTimeToMinutes,
+} from "@/lib/wateringSchedule";
 
 const { width } = Dimensions.get("window");
 const FALLBACK_DAILY_TIP =
@@ -64,17 +77,41 @@ type TipHistoryRow = {
 };
 
 type PlantScheduleRow = {
+  id: string;
+  custom_name: string | null;
   quantity: number;
   co2_kg_per_year_override: number | null;
   water_days: number[] | null;
   water_time: string | null;
   last_watered_at: string | null;
-  watering_points: number;
+  watering_points: number | null;
   plant:
-    | { is_native: boolean; default_co2_kg_per_year: number }
-    | { is_native: boolean; default_co2_kg_per_year: number }[]
+    | {
+        common_name: string | null;
+        is_native: boolean;
+        default_co2_kg_per_year: number;
+      }
+    | {
+        common_name: string | null;
+        is_native: boolean;
+        default_co2_kg_per_year: number;
+      }[]
     | null;
 };
+
+type WateringTask = {
+  id: string;
+  name: string;
+  quantity: number;
+  water_days: number[] | null;
+  water_time: string | null;
+  last_watered_at: string | null;
+  watering_points: number | null;
+  scheduledAt: Date;
+  isOverdue: boolean;
+};
+
+type WateringPermissionUiState = WateringReminderPermissionState | "unknown";
 
 type DailyQuestDefinitionRow = {
   id: string;
@@ -160,14 +197,24 @@ export default function Page() {
   const [tipHistoryError, setTipHistoryError] = useState("");
   const [plantTotal, setPlantTotal] = useState(0);
   const [toWaterTotal, setToWaterTotal] = useState(0);
+  const [wateringDueTasks, setWateringDueTasks] = useState<WateringTask[]>([]);
+  const [wateringUpcomingTasks, setWateringUpcomingTasks] = useState<
+    WateringTask[]
+  >([]);
+  const [wateringPermission, setWateringPermission] =
+    useState<WateringPermissionUiState>("unknown");
+  const [wateringMarkingId, setWateringMarkingId] = useState<string | null>(
+    null,
+  );
   const [dailyQuest, setDailyQuest] = useState<DailyQuestCard | null>(null);
   const [achievements, setAchievements] = useState<AchievementCard[]>([]);
   const settingsBottomSheetModalRef = useRef<BottomSheetModal>(null);
   const tipsHistoryBottomSheetModalRef = useRef<BottomSheetModal>(null);
   const achievementsBottomSheetModalRef = useRef<BottomSheetModal>(null);
-  const settingsSnapPoints = useMemo(() => ["72%", "95%"], []);
-  const tipHistorySnapPoints = useMemo(() => ["92%", "100%"], []);
-  const achievementsSnapPoints = useMemo(() => ["72%", "92%"], []);
+  const settingsSnapPoints = useMemo(() => ["72%", "92%"], []);
+  const tipHistorySnapPoints = useMemo(() => ["88%", "94%"], []);
+  const achievementsSnapPoints = useMemo(() => ["72%", "90%"], []);
+  const bottomSheetTopInset = insets.top + 12;
 
   const settingsRef = useRef<SettingsSectionHandle>(null);
 
@@ -245,6 +292,27 @@ export default function Page() {
   const userId = session?.user?.id ?? null;
 
   useEffect(() => {
+    let isCancelled = false;
+
+    const loadWateringPermission = async () => {
+      const status = await getWateringNotificationPermissionStateAsync();
+      if (isCancelled) return;
+      setWateringPermission(status);
+
+      // If the user granted notifications during onboarding, we still need to schedule reminders.
+      if (status === "granted" && userId) {
+        void syncWateringRemindersForUserAsync(supabase, userId);
+      }
+    };
+
+    void loadWateringPermission();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [supabase, userId]);
+
+  useEffect(() => {
     if (!isLoaded || !userId) return;
     let isCancelled = false;
 
@@ -281,7 +349,7 @@ export default function Page() {
       return;
     }
 
-    setIsDailyTipLoading(true);
+    setIsTipHistoryLoading(true);
     setTipHistoryError("");
 
     const today = formatLocalDate(new Date());
@@ -456,6 +524,8 @@ export default function Page() {
       if (!isLoaded || !userId) {
         setPlantTotal(0);
         setToWaterTotal(0);
+        setWateringDueTasks([]);
+        setWateringUpcomingTasks([]);
         setDailyQuest(null);
         setAchievements([]);
         return;
@@ -469,7 +539,7 @@ export default function Page() {
         supabase
           .from("user_plants")
           .select(
-            "quantity, co2_kg_per_year_override, water_days, water_time, last_watered_at, watering_points, plant:plants(is_native, default_co2_kg_per_year)",
+            "id, custom_name, quantity, co2_kg_per_year_override, water_days, water_time, last_watered_at, watering_points, plant:plants(common_name, is_native, default_co2_kg_per_year)",
           )
           .eq("user_id", userId),
         supabase
@@ -482,6 +552,8 @@ export default function Page() {
       if (error) {
         setPlantTotal(0);
         setToWaterTotal(0);
+        setWateringDueTasks([]);
+        setWateringUpcomingTasks([]);
         return;
       }
 
@@ -495,6 +567,8 @@ export default function Page() {
       let wateredPointsTotal = 0;
       let wateredToday = false;
       let carbonPerYearKg = 0;
+      const nextDueTasks: WateringTask[] = [];
+      const nextUpcomingTasks: WateringTask[] = [];
 
       for (const row of rows) {
         const quantity = row.quantity ?? 0;
@@ -502,6 +576,8 @@ export default function Page() {
         wateredPointsTotal += row.watering_points ?? 0;
 
         const plantInfo = takeOne(row.plant);
+        const displayName =
+          row.custom_name?.trim() || plantInfo?.common_name || "Plant";
         if (plantInfo?.is_native) {
           nativePlantTotal += quantity;
         }
@@ -518,20 +594,82 @@ export default function Page() {
           wateredToday = true;
         }
 
-        if (
-          isDueToWaterNow(
+        const isDue = isDueToWaterNow(
+          row.water_days,
+          row.water_time,
+          row.last_watered_at,
+          now,
+        );
+
+        if (isDue) {
+          nextToWaterTotal += quantity;
+
+          const scheduledAt = getLatestScheduledAt(
             row.water_days,
             row.water_time,
-            row.last_watered_at,
             now,
-          )
-        ) {
-          nextToWaterTotal += quantity;
+          );
+          if (scheduledAt) {
+            nextDueTasks.push({
+              id: row.id,
+              name: displayName,
+              quantity,
+              water_days: row.water_days,
+              water_time: row.water_time,
+              last_watered_at: row.last_watered_at,
+              watering_points: row.watering_points,
+              scheduledAt,
+              isOverdue: formatLocalDate(scheduledAt) !== today,
+            });
+          }
+        } else {
+          const normalizedDays = normalizeWaterDays(row.water_days);
+          const minutesScheduled = parseWaterTimeToMinutes(row.water_time);
+
+          if (
+            normalizedDays.includes(now.getDay()) &&
+            minutesScheduled != null &&
+            minutesScheduled >= 0 &&
+            minutesScheduled < 24 * 60
+          ) {
+            const scheduledAtToday = new Date(now);
+            scheduledAtToday.setHours(0, 0, 0, 0);
+            scheduledAtToday.setHours(
+              Math.floor(minutesScheduled / 60),
+              minutesScheduled % 60,
+              0,
+              0,
+            );
+
+            if (scheduledAtToday.getTime() > now.getTime()) {
+              nextUpcomingTasks.push({
+                id: row.id,
+                name: displayName,
+                quantity,
+                water_days: row.water_days,
+                water_time: row.water_time,
+                last_watered_at: row.last_watered_at,
+                watering_points: row.watering_points,
+                scheduledAt: scheduledAtToday,
+                isOverdue: false,
+              });
+            }
+          }
         }
       }
 
       setPlantTotal(nextPlantTotal);
       setToWaterTotal(nextToWaterTotal);
+      setWateringDueTasks(
+        nextDueTasks.sort(
+          (a, b) => a.scheduledAt.getTime() - b.scheduledAt.getTime(),
+        ),
+      );
+      setWateringUpcomingTasks(
+        nextUpcomingTasks.sort(
+          (a, b) => a.scheduledAt.getTime() - b.scheduledAt.getTime(),
+        ),
+      );
 
       const memberTeamIds = (membershipRows ?? [])
         .map((row) => row.team_id)
@@ -664,6 +802,88 @@ export default function Page() {
     };
   }, [isLoaded, userId, supabase]);
 
+  const openPlantDetail = (id: string) => {
+    router.push({ pathname: "/(protected)/plant/[id]", params: { id } });
+  };
+
+  const formatTaskWhenLabel = (task: WateringTask) => {
+    const now = new Date();
+    const isToday = formatLocalDate(task.scheduledAt) === formatLocalDate(now);
+    const timeLabel = formatWaterTime(task.water_time);
+
+    if (task.isOverdue) {
+      const weekday = task.scheduledAt.toLocaleDateString(undefined, {
+        weekday: "short",
+      });
+      return `Overdue since ${weekday} ${timeLabel}`;
+    }
+
+    return task.scheduledAt.getTime() <= now.getTime() && isToday
+      ? `Due since ${timeLabel}`
+      : `Today at ${timeLabel}`;
+  };
+
+  const handleEnableWateringReminders = async () => {
+    const status = await requestWateringNotificationPermissionAsync();
+    setWateringPermission(status);
+
+    if (status === "granted" && userId) {
+      await syncWateringRemindersForUserAsync(supabase, userId);
+      return;
+    }
+
+    if (status === "denied") {
+      Alert.alert(
+        "Notifications disabled",
+        "Enable notifications in your device settings to get watering reminders.",
+      );
+    }
+  };
+
+  const handleMarkWatered = async (task: WateringTask) => {
+    if (!isLoaded || !userId || wateringMarkingId) return;
+
+    const latestScheduleForMark = getLatestScheduledAt(
+      task.water_days,
+      task.water_time,
+    );
+    const canMarkNow =
+      !!latestScheduleForMark &&
+      (!task.last_watered_at ||
+        new Date(task.last_watered_at).getTime() <
+          latestScheduleForMark.getTime());
+
+    if (!canMarkNow) {
+      Alert.alert(
+        "Not due yet",
+        "This plant is not due for watering yet. You can adjust its schedule on the plant page.",
+      );
+      return;
+    }
+
+    const nowIso = new Date().toISOString();
+    const nextWateringPoints =
+      (task.watering_points ?? 0) + task.quantity * WATERING_POINTS_PER_PLANT;
+
+    setWateringMarkingId(task.id);
+    const { error } = await supabase
+      .from("user_plants")
+      .update({
+        last_watered_at: nowIso,
+        watering_points: nextWateringPoints,
+      })
+      .eq("id", task.id)
+      .eq("user_id", userId);
+    setWateringMarkingId(null);
+
+    if (error) {
+      Alert.alert("Update failed", error.message);
+      return;
+    }
+
+    void loadPlantStats(true);
+  };
+
   const todayKey = formatLocalDate(new Date());
   const userEmail = session?.user?.email || "Gardener";
   const fallbackName = userEmail.split("@")[0];
@@ -743,6 +963,229 @@ export default function Page() {
                 <Text style={[styles.statValue, { color: COLORS.secondary }]}>{toWaterTotal}</Text>
                 <Text style={styles.statLabel}>Need Water</Text>
               </LinearGradient>
+            </View>
+          </View>
+
+          <View style={styles.wateringContainer}>
+            <View style={styles.wateringHeaderRow}>
+              <Text style={[styles.sectionTitle, { marginBottom: 0 }]}>
+                Watering
+              </Text>
+              <Pressable
+                onPress={() => router.push("/(protected)/(tabs)/plants")}
+                style={({ pressed }) => [
+                  styles.wateringManageButton,
+                  pressed && styles.pressed,
+                ]}
+              >
+                <Text style={styles.wateringManageText}>Manage</Text>
+                <Ionicons
+                  name="chevron-forward"
+                  size={16}
+                  color={COLORS.primary}
+                />
+              </Pressable>
+            </View>
+
+            <View style={styles.wateringCard}>
+              <View style={styles.wateringRemindersRow}>
+                <View style={styles.wateringRemindersLeft}>
+                  <View style={styles.wateringRemindersIcon}>
+                    <Ionicons
+                      name="notifications"
+                      size={18}
+                      color={COLORS.primary}
+                    />
+                  </View>
+                  <View style={styles.wateringRemindersText}>
+                    <Text style={styles.wateringRemindersTitle}>Reminders</Text>
+                    <Text style={styles.wateringRemindersSubtitle}>
+                      {wateringPermission === "granted"
+                        ? "On"
+                        : wateringPermission === "denied"
+                          ? "Off"
+                          : wateringPermission === "undetermined"
+                            ? "Not enabled"
+                            : wateringPermission === "unavailable"
+                              ? "Unavailable on web"
+                              : "Checking..."}
+                    </Text>
+                  </View>
+                </View>
+                {wateringPermission !== "granted" &&
+                wateringPermission !== "unavailable" ? (
+                  <Pressable
+                    onPress={() => void handleEnableWateringReminders()}
+                    style={({ pressed }) => [
+                      styles.wateringRemindersButton,
+                      pressed && styles.pressed,
+                    ]}
+                  >
+                    <LinearGradient
+                      colors={[COLORS.primary, COLORS.secondary]}
+                      start={{ x: 0, y: 0 }}
+                      end={{ x: 1, y: 1 }}
+                      style={styles.wateringRemindersButtonGradient}
+                    >
+                      <Text style={styles.wateringRemindersButtonText}>
+                        Enable
+                      </Text>
+                    </LinearGradient>
+                  </Pressable>
+                ) : null}
+              </View>
+
+              {wateringDueTasks.length === 0 &&
+              wateringUpcomingTasks.length === 0 ? (
+                <View style={styles.wateringEmpty}>
+                  <Ionicons
+                    name="water-outline"
+                    size={22}
+                    color={COLORS.secondary}
+                  />
+                  <Text style={styles.wateringEmptyTitle}>
+                    No watering scheduled
+                  </Text>
+                  <Text style={styles.wateringEmptyText}>
+                    Set watering days and a time for each plant to get reminders
+                    and show tasks here.
+                  </Text>
+                  <Pressable
+                    onPress={() => router.push("/(protected)/(tabs)/plants")}
+                    style={({ pressed }) => [
+                      styles.wateringEmptyButton,
+                      pressed && styles.pressed,
+                    ]}
+                  >
+                    <Text style={styles.wateringEmptyButtonText}>
+                      Go to Plants
+                    </Text>
+                  </Pressable>
+                </View>
+              ) : (
+                <View style={styles.wateringList}>
+                  {wateringDueTasks.length > 0 ? (
+                    <>
+                      <Text style={styles.wateringSubheading}>Due now</Text>
+                      {wateringDueTasks.map((task) => {
+                        const points =
+                          task.quantity * WATERING_POINTS_PER_PLANT;
+                        const isMarking = wateringMarkingId === task.id;
+
+                        return (
+                          <View key={task.id} style={styles.wateringTaskRow}>
+                            <View style={styles.wateringTaskIcon}>
+                              <Ionicons
+                                name={
+                                  task.isOverdue ? "alert-circle" : "water"
+                                }
+                                size={18}
+                                color={
+                                  task.isOverdue
+                                    ? COLORS.warning
+                                    : COLORS.secondary
+                                }
+                              />
+                            </View>
+                            <View style={styles.wateringTaskInfo}>
+                              <Text
+                                style={styles.wateringTaskName}
+                                numberOfLines={1}
+                              >
+                                {task.name}
+                              </Text>
+                              <Text style={styles.wateringTaskMeta}>
+                                {formatTaskWhenLabel(task)} â€¢ +{points} pts
+                              </Text>
+                            </View>
+                            <View style={styles.wateringTaskRight}>
+                              <View style={styles.wateringQtyBadge}>
+                                <Text style={styles.wateringQtyText}>
+                                  x{task.quantity}
+                                </Text>
+                              </View>
+                              <Pressable
+                                onPress={() => void handleMarkWatered(task)}
+                                disabled={isMarking}
+                                style={({ pressed }) => [
+                                  styles.wateringDoneButton,
+                                  pressed && styles.pressed,
+                                  isMarking && styles.disabledButton,
+                                ]}
+                              >
+                                <Text style={styles.wateringDoneButtonText}>
+                                  {isMarking ? "Saving..." : "Watered"}
+                                </Text>
+                              </Pressable>
+                              <Pressable
+                                onPress={() => openPlantDetail(task.id)}
+                                style={({ pressed }) => [
+                                  styles.wateringDetailsButton,
+                                  pressed && styles.pressed,
+                                ]}
+                              >
+                                <Ionicons
+                                  name="chevron-forward"
+                                  size={18}
+                                  color={COLORS.primary}
+                                />
+                              </Pressable>
+                            </View>
+                          </View>
+                        );
+                      })}
+                    </>
+                  ) : null}
+
+                  {wateringUpcomingTasks.length > 0 ? (
+                    <>
+                      <Text style={styles.wateringSubheading}>Later today</Text>
+                      {wateringUpcomingTasks.map((task) => (
+                        <View key={task.id} style={styles.wateringTaskRow}>
+                          <View style={styles.wateringTaskIcon}>
+                            <Ionicons
+                              name="time"
+                              size={18}
+                              color={COLORS.secondary}
+                            />
+                          </View>
+                          <View style={styles.wateringTaskInfo}>
+                            <Text
+                              style={styles.wateringTaskName}
+                              numberOfLines={1}
+                            >
+                              {task.name}
+                            </Text>
+                            <Text style={styles.wateringTaskMeta}>
+                              {formatTaskWhenLabel(task)}
+                            </Text>
+                          </View>
+                          <View style={styles.wateringTaskRight}>
+                            <View style={styles.wateringQtyBadge}>
+                              <Text style={styles.wateringQtyText}>
+                                x{task.quantity}
+                              </Text>
+                            </View>
+                            <Pressable
+                              onPress={() => openPlantDetail(task.id)}
+                              style={({ pressed }) => [
+                                styles.wateringDetailsButton,
+                                pressed && styles.pressed,
+                              ]}
+                            >
+                              <Ionicons
+                                name="chevron-forward"
+                                size={18}
+                                color={COLORS.primary}
+                              />
+                            </Pressable>
+                          </View>
+                        </View>
+                      ))}
+                    </>
+                  ) : null}
+                </View>
+              )}
             </View>
           </View>
 
@@ -855,6 +1298,7 @@ export default function Page() {
           ref={settingsBottomSheetModalRef}
           index={0}
           snapPoints={settingsSnapPoints}
+          topInset={bottomSheetTopInset}
           enableDismissOnClose
           enablePanDownToClose
           keyboardBehavior="interactive"
@@ -889,6 +1333,7 @@ export default function Page() {
           ref={tipsHistoryBottomSheetModalRef}
           index={1}
           snapPoints={tipHistorySnapPoints}
+          topInset={bottomSheetTopInset}
           enablePanDownToClose
           backgroundStyle={styles.bottomSheetBackground}
           handleIndicatorStyle={styles.bottomSheetHandle}
@@ -977,6 +1422,7 @@ export default function Page() {
           ref={achievementsBottomSheetModalRef}
           index={0}
           snapPoints={achievementsSnapPoints}
+          topInset={bottomSheetTopInset}
           enablePanDownToClose
           backgroundStyle={styles.bottomSheetBackground}
           handleIndicatorStyle={styles.bottomSheetHandle}
@@ -1185,6 +1631,203 @@ const styles = StyleSheet.create({
     marginBottom: 12,
     marginLeft: 4,
   },
+  wateringContainer: {
+    marginTop: 4,
+  },
+  wateringHeaderRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingHorizontal: 4,
+    marginBottom: 12,
+  },
+  wateringManageButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    backgroundColor: COLORS.accent + "40",
+    borderWidth: 1,
+    borderColor: COLORS.primary + "20",
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 16,
+  },
+  wateringManageText: {
+    color: COLORS.primary,
+    fontSize: 14,
+    fontFamily: "Boogaloo_400Regular",
+    opacity: 0.9,
+  },
+  wateringCard: {
+    backgroundColor: COLORS.accent + "30",
+    borderRadius: 28,
+    padding: 18,
+    borderWidth: 1,
+    borderColor: COLORS.secondary + "20",
+    gap: 14,
+  },
+  wateringRemindersRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  wateringRemindersLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+  },
+  wateringRemindersIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 14,
+    backgroundColor: COLORS.primary + "14",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  wateringRemindersText: {
+    gap: 2,
+  },
+  wateringRemindersTitle: {
+    color: COLORS.primary,
+    fontSize: 18,
+    fontFamily: "Boogaloo_400Regular",
+  },
+  wateringRemindersSubtitle: {
+    color: COLORS.text,
+    fontSize: 14,
+    fontFamily: "Boogaloo_400Regular",
+    opacity: 0.6,
+  },
+  wateringRemindersButton: {
+    borderRadius: 16,
+    overflow: "hidden",
+  },
+  wateringRemindersButtonGradient: {
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 16,
+  },
+  wateringRemindersButtonText: {
+    color: COLORS.background,
+    fontSize: 16,
+    fontFamily: "Boogaloo_400Regular",
+  },
+  wateringEmpty: {
+    paddingVertical: 10,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+  },
+  wateringEmptyTitle: {
+    color: COLORS.primary,
+    fontSize: 20,
+    fontFamily: "Boogaloo_400Regular",
+  },
+  wateringEmptyText: {
+    color: COLORS.text,
+    fontSize: 14,
+    fontFamily: "Boogaloo_400Regular",
+    opacity: 0.65,
+    textAlign: "center",
+    lineHeight: 18,
+    paddingHorizontal: 8,
+  },
+  wateringEmptyButton: {
+    marginTop: 6,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 14,
+    backgroundColor: COLORS.primary,
+  },
+  wateringEmptyButtonText: {
+    color: COLORS.background,
+    fontSize: 16,
+    fontFamily: "Boogaloo_400Regular",
+  },
+  wateringList: {
+    gap: 10,
+  },
+  wateringSubheading: {
+    color: COLORS.secondary,
+    fontSize: 18,
+    fontFamily: "Boogaloo_400Regular",
+    marginTop: 8,
+    marginBottom: 2,
+  },
+  wateringTaskRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    borderRadius: 20,
+    backgroundColor: COLORS.background + "70",
+    borderWidth: 1,
+    borderColor: COLORS.secondary + "18",
+  },
+  wateringTaskIcon: {
+    width: 38,
+    height: 38,
+    borderRadius: 14,
+    backgroundColor: COLORS.secondary + "18",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  wateringTaskInfo: {
+    flex: 1,
+    gap: 2,
+    minWidth: 0,
+  },
+  wateringTaskName: {
+    color: COLORS.primary,
+    fontSize: 18,
+    fontFamily: "Boogaloo_400Regular",
+  },
+  wateringTaskMeta: {
+    color: COLORS.text,
+    fontSize: 14,
+    fontFamily: "Boogaloo_400Regular",
+    opacity: 0.6,
+  },
+  wateringTaskRight: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  wateringQtyBadge: {
+    backgroundColor: COLORS.secondary + "16",
+    borderWidth: 1,
+    borderColor: COLORS.secondary + "24",
+    borderRadius: 12,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
+  wateringQtyText: {
+    color: COLORS.secondary,
+    fontSize: 14,
+    fontFamily: "Boogaloo_400Regular",
+  },
+  wateringDoneButton: {
+    backgroundColor: COLORS.primary,
+    borderRadius: 14,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+  },
+  wateringDoneButtonText: {
+    color: COLORS.background,
+    fontSize: 14,
+    fontFamily: "Boogaloo_400Regular",
+  },
+  wateringDetailsButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 14,
+    backgroundColor: COLORS.accent + "50",
+    borderWidth: 1,
+    borderColor: COLORS.primary + "18",
+    alignItems: "center",
+    justifyContent: "center",
+  },
   featuredContainer: {
     marginTop: 4,
   },
@@ -1238,6 +1881,9 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: COLORS.primary + "20",
     gap: 16,
+  },
+  questInfo: {
+    gap: 8,
   },
   questHeader: {
     flexDirection: "row",
@@ -1381,6 +2027,12 @@ const styles = StyleSheet.create({
     fontFamily: "Boogaloo_400Regular",
     opacity: 0.7,
     marginBottom: 8,
+  },
+  cardText: {
+    color: COLORS.text,
+    fontSize: 16,
+    fontFamily: "Boogaloo_400Regular",
+    opacity: 0.7,
   },
   tipHistoryStateContainer: {
     alignItems: "center",
