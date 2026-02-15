@@ -64,6 +64,7 @@ type PlantDetailRow = {
   plant_id: string | null;
   quantity: number;
   planted_on: string;
+  notes: string | null;
   photo_path: string | null;
   custom_name: string | null;
   water_days: number[] | null;
@@ -140,8 +141,11 @@ export default function PlantDetailPage() {
   const [isDeleting, setIsDeleting] = useState(false);
   const [isEditingName, setIsEditingName] = useState(false);
   const [isSavingName, setIsSavingName] = useState(false);
+  const [isEditingNotes, setIsEditingNotes] = useState(false);
+  const [isSavingNotes, setIsSavingNotes] = useState(false);
   const [isCameraOpen, setIsCameraOpen] = useState(false);
   const [nameDraft, setNameDraft] = useState("");
+  const [notesDraft, setNotesDraft] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
   const [plant, setPlant] = useState<PlantDetailRow | null>(null);
   const [photoUrl, setPhotoUrl] = useState<string | null>(null);
@@ -168,7 +172,7 @@ export default function PlantDetailPage() {
     const { data, error } = await supabase
       .from("user_plants")
       .select(
-        "id, user_id, plant_id, quantity, planted_on, photo_path, custom_name, water_days, water_time, last_watered_at, watering_points, plant:plants(common_name, scientific_name, default_co2_kg_per_year, type, plant_type:plant_types(display_name), is_native, is_endangered, is_invasive)",
+        "id, user_id, plant_id, quantity, planted_on, notes, photo_path, custom_name, water_days, water_time, last_watered_at, watering_points, plant:plants(common_name, scientific_name, default_co2_kg_per_year, type, plant_type:plant_types(display_name), is_native, is_endangered, is_invasive)",
       )
       .eq("id", userPlantId)
       .eq("user_id", userId)
@@ -220,6 +224,11 @@ export default function PlantDetailPage() {
     const plantRow = takeOne(plant?.plant);
     setNameDraft(plant?.custom_name || plantRow?.common_name || "");
   }, [isEditingName, plant]);
+
+  useEffect(() => {
+    if (isEditingNotes) return;
+    setNotesDraft(plant?.notes ?? "");
+  }, [isEditingNotes, plant?.notes]);
 
   useEffect(() => {
     setWaterDaysDraft(normalizeWaterDays(plant?.water_days));
@@ -405,6 +414,40 @@ export default function PlantDetailPage() {
     setPlant((prev) => (prev ? { ...prev, custom_name: trimmed } : prev));
     setIsSavingName(false);
     setIsEditingName(false);
+  };
+
+  const onStartEditNotes = () => {
+    setErrorMessage("");
+    setIsEditingNotes(true);
+  };
+
+  const onCancelEditNotes = () => {
+    setNotesDraft(plant?.notes ?? "");
+    setIsEditingNotes(false);
+  };
+
+  const onSaveNotes = async () => {
+    if (!userId || !userPlantId || !plant || isSavingNotes) return;
+    const trimmed = notesDraft.trim();
+
+    setErrorMessage("");
+    setIsSavingNotes(true);
+
+    const { error } = await supabase
+      .from("user_plants")
+      .update({ notes: trimmed || null })
+      .eq("id", userPlantId)
+      .eq("user_id", userId);
+
+    if (error) {
+      setErrorMessage(error.message);
+      setIsSavingNotes(false);
+      return;
+    }
+
+    setPlant((prev) => (prev ? { ...prev, notes: trimmed || null } : prev));
+    setIsSavingNotes(false);
+    setIsEditingNotes(false);
   };
 
   const uploadPlantPhotoAsset = useCallback(
@@ -646,6 +689,72 @@ export default function PlantDetailPage() {
             <Text style={styles.cardTitle}>Planted On</Text>
           </View>
           <Text style={styles.cardContent}>{plant?.planted_on}</Text>
+        </View>
+
+        <View style={styles.card}>
+          <View style={styles.cardHeader}>
+            <Ionicons
+              name="document-text-outline"
+              size={20}
+              color={COLORS.primary}
+            />
+            <Text style={styles.cardTitle}>Notes</Text>
+          </View>
+          {isEditingNotes ? (
+            <>
+              <TextInput
+                value={notesDraft}
+                onChangeText={setNotesDraft}
+                placeholder="Where is it? How is it doing?"
+                placeholderTextColor={COLORS.secondary + "70"}
+                style={styles.notesInput}
+                multiline
+                numberOfLines={4}
+              />
+              <View style={styles.notesActions}>
+                <Pressable
+                  onPress={onCancelEditNotes}
+                  disabled={isSavingNotes}
+                  style={[styles.notesButton, styles.notesButtonSecondary]}
+                >
+                  <Text style={styles.notesButtonSecondaryText}>Cancel</Text>
+                </Pressable>
+                <Pressable
+                  onPress={onSaveNotes}
+                  disabled={isSavingNotes}
+                  style={[
+                    styles.notesButton,
+                    isSavingNotes && styles.scheduleActionButtonDisabled,
+                  ]}
+                >
+                  {isSavingNotes ? (
+                    <ActivityIndicator size="small" color={COLORS.background} />
+                  ) : (
+                    <Text style={styles.notesButtonText}>Save Notes</Text>
+                  )}
+                </Pressable>
+              </View>
+            </>
+          ) : (
+            <>
+              <Text style={styles.cardContent}>
+                {plant?.notes?.trim() || "No notes yet."}
+              </Text>
+              <Pressable
+                onPress={onStartEditNotes}
+                style={styles.notesEditLink}
+              >
+                <Ionicons
+                  name="create-outline"
+                  size={16}
+                  color={COLORS.secondary}
+                />
+                <Text style={styles.notesEditLinkText}>
+                  {plant?.notes?.trim() ? "Edit notes" : "Add notes"}
+                </Text>
+              </Pressable>
+            </>
+          )}
         </View>
 
         <View style={styles.card}>
@@ -1030,6 +1139,61 @@ const styles = StyleSheet.create({
   cardContent: {
     color: COLORS.primary,
     fontSize: 20,
+    fontFamily: "Boogaloo_400Regular",
+  },
+  notesInput: {
+    minHeight: 100,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: COLORS.secondary + "35",
+    backgroundColor: COLORS.accent + "40",
+    color: COLORS.text,
+    fontSize: 16,
+    fontFamily: "Boogaloo_400Regular",
+    textAlignVertical: "top",
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    marginTop: 2,
+  },
+  notesActions: {
+    flexDirection: "row",
+    justifyContent: "flex-end",
+    gap: 10,
+    marginTop: 10,
+  },
+  notesButton: {
+    minHeight: 38,
+    paddingHorizontal: 14,
+    borderRadius: 10,
+    backgroundColor: COLORS.primary,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  notesButtonText: {
+    color: COLORS.background,
+    fontSize: 15,
+    fontFamily: "Boogaloo_400Regular",
+  },
+  notesButtonSecondary: {
+    backgroundColor: "transparent",
+    borderWidth: 1,
+    borderColor: COLORS.secondary + "50",
+  },
+  notesButtonSecondaryText: {
+    color: COLORS.secondary,
+    fontSize: 15,
+    fontFamily: "Boogaloo_400Regular",
+  },
+  notesEditLink: {
+    marginTop: 8,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    alignSelf: "flex-start",
+  },
+  notesEditLinkText: {
+    color: COLORS.secondary,
+    fontSize: 15,
     fontFamily: "Boogaloo_400Regular",
   },
   scheduleHint: {
