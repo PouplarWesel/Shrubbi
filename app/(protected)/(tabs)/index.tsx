@@ -1392,7 +1392,7 @@ export default function Page() {
           </View>
 
           <View style={styles.statsGrid}>
-            <View style={styles.statCard}>
+            <View style={[styles.statCard, styles.statCardHalf]}>
               <LinearGradient
                 colors={[COLORS.accent + "90", COLORS.accent + "40"]}
                 style={styles.cardGradient}
@@ -1404,7 +1404,7 @@ export default function Page() {
                 <Text style={styles.statLabel}>Plants</Text>
               </LinearGradient>
             </View>
-            <View style={styles.statCard}>
+            <View style={[styles.statCard, styles.statCardHalf]}>
               <LinearGradient
                 colors={[COLORS.accent + "90", COLORS.accent + "40"]}
                 style={styles.cardGradient}
@@ -2312,14 +2312,17 @@ const styles = StyleSheet.create({
     gap: 16,
   },
   statCard: {
-    flex: 1,
     height: 140,
     borderRadius: 28,
     overflow: "hidden",
     borderWidth: 1,
     borderColor: COLORS.secondary + "20",
   },
+  statCardHalf: {
+    flex: 1,
+  },
   co2StatCard: {
+    flex: 0,
     marginTop: 16,
   },
   cardGradient: {

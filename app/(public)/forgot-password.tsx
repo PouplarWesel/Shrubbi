@@ -1,9 +1,9 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
-  Pressable,
   Platform,
+  Pressable,
   ScrollView,
   StyleSheet,
   Text,
@@ -14,7 +14,7 @@ import {
 } from "react-native";
 
 import { Ionicons } from "@expo/vector-icons";
-import { router } from "expo-router";
+import { router, useLocalSearchParams } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { COLORS } from "@/constants/colors";
@@ -36,16 +36,20 @@ const getErrorMessage = (err: unknown, fallback: string) => {
 
 const isValidEmail = (value: string) => /\S+@\S+\.\S+/.test(value.trim());
 
-export default function Page() {
-  const { signInWithPassword, isLoaded } = useSignIn();
+export default function ForgotPasswordPage() {
+  const { resetPasswordForEmail, isLoaded } = useSignIn();
+  const params = useLocalSearchParams<{ email?: string | string[] }>();
+  const initialEmail = useMemo(() => {
+    if (Array.isArray(params.email)) return params.email[0] ?? "";
+    return typeof params.email === "string" ? params.email : "";
+  }, [params.email]);
 
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [showPassword, setShowPassword] = useState(false);
+  const [email, setEmail] = useState(initialEmail);
   const [errorMessage, setErrorMessage] = useState("");
+  const [statusMessage, setStatusMessage] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const onSignInPress = async () => {
+  const onSendResetLinkPress = async () => {
     if (!isLoaded || isSubmitting) return;
     if (!isValidEmail(email)) {
       setErrorMessage("Enter a valid email address.");
@@ -54,19 +58,18 @@ export default function Page() {
 
     try {
       setErrorMessage("");
+      setStatusMessage("");
       setIsSubmitting(true);
-      await signInWithPassword({
-        email,
-        password,
-      });
+      await resetPasswordForEmail(email);
+      setStatusMessage("Reset link sent. Check your email.");
     } catch (err) {
-      setErrorMessage(getErrorMessage(err, "Could not sign in. Try again."));
+      setErrorMessage(getErrorMessage(err, "Could not send reset link."));
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  const isDisabled = !email || !password || !isLoaded || isSubmitting;
+  const sendDisabled = !isLoaded || isSubmitting || !email;
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -98,9 +101,9 @@ export default function Page() {
                 resizeMode="contain"
               />
             </View>
-            <Text style={styles.title}>Welcome Back</Text>
+            <Text style={styles.title}>Reset Password</Text>
             <Text style={styles.subtitle}>
-              Sign in to continue growing with Shrubbi
+              Enter your email and we&apos;ll send a reset link
             </Text>
           </View>
 
@@ -127,52 +130,16 @@ export default function Page() {
               </View>
             </View>
 
-            <View style={styles.inputGroup}>
-              <Text style={styles.label}>Password</Text>
-              <View style={styles.inputWrapper}>
+            {!!statusMessage && (
+              <View style={styles.messageContainer}>
                 <Ionicons
-                  name="lock-closed-outline"
-                  size={20}
-                  color={COLORS.secondary}
-                  style={styles.inputIcon}
+                  name="information-circle-outline"
+                  size={18}
+                  color={COLORS.text}
                 />
-                <TextInput
-                  placeholder="Enter password"
-                  placeholderTextColor={COLORS.secondary + "80"}
-                  secureTextEntry={!showPassword}
-                  style={[styles.input, styles.passwordInput]}
-                  value={password}
-                  onChangeText={setPassword}
-                />
-                <Pressable
-                  onPress={() => setShowPassword((prev) => !prev)}
-                  style={styles.toggleButton}
-                >
-                  <Ionicons
-                    name={showPassword ? "eye-off-outline" : "eye-outline"}
-                    size={22}
-                    color={COLORS.secondary}
-                  />
-                </Pressable>
+                <Text style={styles.statusMessage}>{statusMessage}</Text>
               </View>
-            </View>
-
-            <Pressable
-              onPress={() => {
-                if (isValidEmail(email)) {
-                  router.push(
-                    `/forgot-password?email=${encodeURIComponent(
-                      email.trim(),
-                    )}`,
-                  );
-                  return;
-                }
-                router.push("/forgot-password");
-              }}
-              style={styles.forgotPassword}
-            >
-              <Text style={styles.forgotPasswordText}>Forgot password?</Text>
-            </Pressable>
+            )}
 
             {!!errorMessage && (
               <View style={styles.messageContainer}>
@@ -186,19 +153,19 @@ export default function Page() {
             )}
 
             <Pressable
-              disabled={isDisabled}
-              onPress={onSignInPress}
+              disabled={sendDisabled}
+              onPress={onSendResetLinkPress}
               style={({ pressed }) => [
                 styles.primaryButton,
-                isDisabled && styles.disabledButton,
-                pressed && !isDisabled && styles.pressedButton,
+                sendDisabled && styles.disabledButton,
+                pressed && !sendDisabled && styles.pressedButton,
               ]}
             >
               {isSubmitting ? (
                 <ActivityIndicator color={COLORS.background} />
               ) : (
                 <>
-                  <Text style={styles.primaryButtonText}>Continue</Text>
+                  <Text style={styles.primaryButtonText}>Send Reset Link</Text>
                   <Ionicons
                     name="arrow-forward"
                     size={20}
@@ -207,12 +174,18 @@ export default function Page() {
                 </>
               )}
             </Pressable>
-          </View>
 
-          <View style={styles.footer}>
-            <Text style={styles.linkHint}>Don&apos;t have an account? </Text>
-            <Pressable onPress={() => router.replace("/sign-up")}>
-              <Text style={styles.linkText}>Sign up</Text>
+            <Pressable
+              onPress={() => {
+                if (router.canGoBack()) {
+                  router.back();
+                  return;
+                }
+                router.replace("/sign-in");
+              }}
+              style={styles.secondaryButton}
+            >
+              <Text style={styles.secondaryButtonText}>Back to Sign In</Text>
             </Pressable>
           </View>
         </ScrollView>
@@ -323,20 +296,6 @@ const styles = StyleSheet.create({
     fontSize: 16,
     height: "100%",
   },
-  passwordInput: {
-    paddingRight: 8,
-  },
-  toggleButton: {
-    padding: 4,
-  },
-  forgotPassword: {
-    alignSelf: "flex-end",
-  },
-  forgotPasswordText: {
-    color: COLORS.secondary,
-    fontSize: 15,
-    fontFamily: "Boogaloo_400Regular",
-  },
   messageContainer: {
     flexDirection: "row",
     alignItems: "center",
@@ -346,6 +305,12 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     borderWidth: 1,
     borderColor: COLORS.secondary + "20",
+  },
+  statusMessage: {
+    flex: 1,
+    color: COLORS.text,
+    fontSize: 14,
+    fontFamily: "Boogaloo_400Regular",
   },
   errorMessage: {
     flex: 1,
@@ -382,21 +347,14 @@ const styles = StyleSheet.create({
     shadowOpacity: 0,
     elevation: 0,
   },
-  footer: {
-    flexDirection: "row",
-    justifyContent: "center",
-    alignItems: "center",
-    marginTop: "auto",
-    paddingTop: 40,
-    paddingBottom: 20,
+  secondaryButton: {
+    alignSelf: "center",
+    marginTop: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
   },
-  linkHint: {
-    color: COLORS.text,
-    fontSize: 16,
-    fontFamily: "Boogaloo_400Regular",
-  },
-  linkText: {
-    color: COLORS.primary,
+  secondaryButtonText: {
+    color: COLORS.secondary,
     fontSize: 16,
     fontFamily: "Boogaloo_400Regular",
     textDecorationLine: "underline",

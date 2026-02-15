@@ -23,6 +23,7 @@ export default function PublicLayout() {
       />
       <Stack.Screen name="sign-up" />
       <Stack.Screen name="sign-in" />
+      <Stack.Screen name="forgot-password" />
     </Stack>
   );
 }
