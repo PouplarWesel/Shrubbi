@@ -168,6 +168,46 @@ type ProgressSnapshot = {
   carbonPerYearKg: number;
 };
 
+type LeaderboardMode = "group" | "region";
+
+type TeamIdentityRow = {
+  id: string;
+  name: string;
+  city_id: string;
+};
+
+type TeamMembershipRow = {
+  user_id: string;
+  team_id: string;
+};
+
+type GroupLeaderboardEntry = {
+  rank: number;
+  teamId: string;
+  teamName: string;
+  cityLabel: string;
+  memberCount: number;
+  co2KgPerYear: number;
+  isCurrentUsersTeam: boolean;
+};
+
+type CityLeaderboardEntry = {
+  rank: number;
+  cityId: string;
+  cityName: string;
+  cityLabel: string;
+  memberCount: number;
+  co2KgPerYear: number;
+  isCurrentUsersCity: boolean;
+};
+
+type CityRegionAnchorRow = {
+  id: string;
+  country_code: string;
+  region: string | null;
+  state: string | null;
+};
+
 function takeOne<T>(value: T | T[] | null | undefined): T | null {
   if (!value) return null;
   return Array.isArray(value) ? (value[0] ?? null) : value;
@@ -209,6 +249,17 @@ export default function Page() {
   );
   const [dailyQuest, setDailyQuest] = useState<DailyQuestCard | null>(null);
   const [achievements, setAchievements] = useState<AchievementCard[]>([]);
+  const [leaderboardMode, setLeaderboardMode] =
+    useState<LeaderboardMode>("group");
+  const [isLeaderboardLoading, setIsLeaderboardLoading] = useState(false);
+  const [leaderboardError, setLeaderboardError] = useState("");
+  const [primaryTeamName, setPrimaryTeamName] = useState<string | null>(null);
+  const [groupLeaderboard, setGroupLeaderboard] = useState<
+    GroupLeaderboardEntry[]
+  >([]);
+  const [regionalLeaderboard, setRegionalLeaderboard] = useState<
+    CityLeaderboardEntry[]
+  >([]);
   const settingsBottomSheetModalRef = useRef<BottomSheetModal>(null);
   const tipsHistoryBottomSheetModalRef = useRef<BottomSheetModal>(null);
   const achievementsBottomSheetModalRef = useRef<BottomSheetModal>(null);
@@ -520,6 +571,191 @@ export default function Page() {
     [supabase, userId],
   );
 
+  const loadLeaderboards = useCallback(async () => {
+    if (!isLoaded || !userId) {
+      setPrimaryTeamName(null);
+      setGroupLeaderboard([]);
+      setRegionalLeaderboard([]);
+      setLeaderboardError("");
+      setIsLeaderboardLoading(false);
+      return;
+    }
+
+    setIsLeaderboardLoading(true);
+    setLeaderboardError("");
+
+    const [
+      { data: memberships },
+      { data: createdTeams },
+      { data: profileRow },
+    ] = await Promise.all([
+      supabase
+        .from("team_memberships")
+        .select("user_id, team_id")
+        .eq("user_id", userId),
+      supabase
+        .from("teams")
+        .select("id, name, city_id")
+        .eq("created_by", userId),
+      supabase
+        .from("profiles")
+        .select("city_id")
+        .eq("id", userId)
+        .maybeSingle(),
+    ]);
+
+    const membershipRows = (memberships ?? []) as TeamMembershipRow[];
+    const createdTeamRows = (createdTeams ?? []) as TeamIdentityRow[];
+    const membershipTeamId = membershipRows[0]?.team_id ?? null;
+
+    let primaryTeam: TeamIdentityRow | null = createdTeamRows[0] ?? null;
+    if (membershipTeamId) {
+      const existing = createdTeamRows.find(
+        (team) => team.id === membershipTeamId,
+      );
+      if (existing) {
+        primaryTeam = existing;
+      } else {
+        const { data: membershipTeamData } = await supabase
+          .from("teams")
+          .select("id, name, city_id")
+          .eq("id", membershipTeamId)
+          .maybeSingle();
+        if (membershipTeamData) {
+          primaryTeam = membershipTeamData as TeamIdentityRow;
+        }
+      }
+    }
+
+    if (!primaryTeam) {
+      setPrimaryTeamName(null);
+      setGroupLeaderboard([]);
+      setRegionalLeaderboard([]);
+      setIsLeaderboardLoading(false);
+      return;
+    }
+
+    setPrimaryTeamName(primaryTeam.name);
+
+    const { data: allTeamRows, error: allTeamsError } = await supabase
+      .from("team_leaderboard")
+      .select(
+        "team_id, team_name, city_id, city_name, city_state, member_count, total_co2_removed_kg",
+      )
+      .order("total_co2_removed_kg", { ascending: false });
+
+    if (allTeamsError) {
+      setGroupLeaderboard([]);
+      setLeaderboardError("Could not load group rankings.");
+    } else {
+      const allGroupRows = (allTeamRows ?? [])
+        .filter((row) => !!row.team_id)
+        .map((row) => {
+          const cityName = row.city_name ?? "Unknown";
+          const cityState = row.city_state ?? "";
+          const cityLabel = cityState ? `${cityName}, ${cityState}` : cityName;
+          return {
+            teamId: row.team_id as string,
+            teamName: row.team_name ?? "Unnamed Group",
+            cityLabel,
+            memberCount: row.member_count ?? 0,
+            co2KgPerYear: row.total_co2_removed_kg ?? 0,
+            isCurrentUsersTeam: row.team_id === primaryTeam.id,
+          };
+        })
+        .sort(
+          (a, b) =>
+            b.co2KgPerYear - a.co2KgPerYear ||
+            a.teamName.localeCompare(b.teamName),
+        )
+        .map((row, index) => ({ ...row, rank: index + 1 }));
+
+      setGroupLeaderboard(allGroupRows);
+    }
+
+    const anchorCityId = primaryTeam.city_id || profileRow?.city_id || null;
+    if (!anchorCityId) {
+      setRegionalLeaderboard([]);
+      setIsLeaderboardLoading(false);
+      return;
+    }
+
+    const { data: anchorCityData } = await supabase
+      .from("cities")
+      .select("id, country_code, region, state")
+      .eq("id", anchorCityId)
+      .maybeSingle();
+
+    const anchorCity = (anchorCityData ?? null) as CityRegionAnchorRow | null;
+    if (!anchorCity) {
+      setRegionalLeaderboard([]);
+      setIsLeaderboardLoading(false);
+      return;
+    }
+
+    let regionalCitiesQuery = supabase
+      .from("cities")
+      .select("id")
+      .eq("country_code", anchorCity.country_code);
+    if (anchorCity.region) {
+      regionalCitiesQuery = regionalCitiesQuery.eq("region", anchorCity.region);
+    } else if (anchorCity.state) {
+      regionalCitiesQuery = regionalCitiesQuery.eq("state", anchorCity.state);
+    }
+
+    const { data: regionalCityRows } = await regionalCitiesQuery;
+    const regionalCityIds = (regionalCityRows ?? [])
+      .map((row) => row.id)
+      .filter((value): value is string => typeof value === "string");
+
+    if (regionalCityIds.length === 0) {
+      setRegionalLeaderboard([]);
+      setIsLeaderboardLoading(false);
+      return;
+    }
+
+    const { data: regionalCityLeaderboardRows, error: regionalCitiesError } =
+      await supabase
+        .from("city_leaderboard")
+        .select(
+          "city_id, city_name, city_state, member_count, total_co2_removed_kg",
+        )
+        .in("city_id", regionalCityIds)
+        .order("total_co2_removed_kg", { ascending: false });
+
+    if (regionalCitiesError) {
+      setRegionalLeaderboard([]);
+      setLeaderboardError("Could not load city rankings.");
+      setIsLeaderboardLoading(false);
+      return;
+    }
+
+    const regionalRows = (regionalCityLeaderboardRows ?? [])
+      .filter((row) => !!row.city_id)
+      .map((row) => {
+        const cityName = row.city_name ?? "Unknown";
+        const cityState = row.city_state ?? "";
+        const cityLabel = cityState ? `${cityName}, ${cityState}` : cityName;
+        return {
+          cityId: row.city_id as string,
+          cityName,
+          cityLabel,
+          memberCount: row.member_count ?? 0,
+          co2KgPerYear: row.total_co2_removed_kg ?? 0,
+          isCurrentUsersCity: row.city_id === anchorCityId,
+        };
+      })
+      .sort(
+        (a, b) =>
+          b.co2KgPerYear - a.co2KgPerYear ||
+          a.cityName.localeCompare(b.cityName),
+      )
+      .map((row, index) => ({ ...row, rank: index + 1 }));
+
+    setRegionalLeaderboard(regionalRows);
+    setIsLeaderboardLoading(false);
+  }, [isLoaded, supabase, userId]);
+
   const loadPlantStats = useCallback(
     async (syncProgress = false) => {
       if (!isLoaded || !userId) {
@@ -725,23 +961,26 @@ export default function Page() {
 
   useEffect(() => {
     void loadPlantStats(true);
-  }, [loadPlantStats]);
+    void loadLeaderboards();
+  }, [loadLeaderboards, loadPlantStats]);
 
   useFocusEffect(
     useCallback(() => {
       void loadPlantStats(true);
-    }, [loadPlantStats]),
+      void loadLeaderboards();
+    }, [loadLeaderboards, loadPlantStats]),
   );
 
   useEffect(() => {
     const interval = setInterval(() => {
       void loadPlantStats(false);
+      void loadLeaderboards();
     }, 60 * 1000);
 
     return () => {
       clearInterval(interval);
     };
-  }, [loadPlantStats]);
+  }, [loadLeaderboards, loadPlantStats]);
 
   useEffect(() => {
     if (!isLoaded) return;
@@ -893,6 +1132,14 @@ export default function Page() {
   const fallbackName = userEmail.split("@")[0];
   const userName = profileName || fallbackName;
   const co2CapturedDisplay = Math.round(co2CapturedKgPerYear).toLocaleString();
+  const leaderboardRows =
+    leaderboardMode === "group" ? groupLeaderboard : regionalLeaderboard;
+  const leaderboardEmptyText =
+    leaderboardMode === "group"
+      ? primaryTeamName
+        ? "No team rankings available yet."
+        : "Join or create a group to see team rankings."
+      : "No cities found in your region yet.";
 
   return (
     <BottomSheetModalProvider>
@@ -922,11 +1169,7 @@ export default function Page() {
                   pressed && styles.pressed,
                 ]}
               >
-                <Ionicons
-                  name="trophy"
-                  size={20}
-                  color={COLORS.primary}
-                />
+                <Ionicons name="trophy" size={20} color={COLORS.primary} />
               </Pressable>
               <Pressable
                 onPress={handleOpenSettings}
@@ -935,11 +1178,7 @@ export default function Page() {
                   pressed && styles.pressed,
                 ]}
               >
-                <Ionicons
-                  name="settings"
-                  size={22}
-                  color={COLORS.primary}
-                />
+                <Ionicons name="settings" size={22} color={COLORS.primary} />
               </Pressable>
             </View>
           </View>
@@ -962,10 +1201,17 @@ export default function Page() {
                 colors={[COLORS.accent + "90", COLORS.accent + "40"]}
                 style={styles.cardGradient}
               >
-                <View style={[styles.statIconContainer, { backgroundColor: COLORS.secondary + "20" }]}>
+                <View
+                  style={[
+                    styles.statIconContainer,
+                    { backgroundColor: COLORS.secondary + "20" },
+                  ]}
+                >
                   <Ionicons name="water" size={20} color={COLORS.secondary} />
                 </View>
-                <Text style={[styles.statValue, { color: COLORS.secondary }]}>{toWaterTotal}</Text>
+                <Text style={[styles.statValue, { color: COLORS.secondary }]}>
+                  {toWaterTotal}
+                </Text>
                 <Text style={styles.statLabel}>Need Water</Text>
               </LinearGradient>
             </View>
@@ -1098,9 +1344,7 @@ export default function Page() {
                           <View key={task.id} style={styles.wateringTaskRow}>
                             <View style={styles.wateringTaskIcon}>
                               <Ionicons
-                                name={
-                                  task.isOverdue ? "alert-circle" : "water"
-                                }
+                                name={task.isOverdue ? "alert-circle" : "water"}
                                 size={18}
                                 color={
                                   task.isOverdue
@@ -1217,7 +1461,7 @@ export default function Page() {
           </View>
 
           <View style={styles.featuredContainer}>
-            <Text style={styles.sectionTitle}>Today's Tip</Text>
+            <Text style={styles.sectionTitle}>Today&apos;s Tip</Text>
             <Pressable onPress={handleOpenTipsHistory}>
               <LinearGradient
                 colors={[COLORS.primary, COLORS.secondary]}
@@ -1226,7 +1470,11 @@ export default function Page() {
                 style={styles.tipCard}
               >
                 <View style={styles.tipHeader}>
-                  <Ionicons name="sparkles" size={18} color={COLORS.background} />
+                  <Ionicons
+                    name="sparkles"
+                    size={18}
+                    color={COLORS.background}
+                  />
                   <Text style={styles.tipTitle}>Green Insights</Text>
                 </View>
                 <Text style={styles.tipText}>
@@ -1234,7 +1482,11 @@ export default function Page() {
                 </Text>
                 <View style={styles.tipFooter}>
                   <Text style={styles.tipActionText}>View previous tips</Text>
-                  <Ionicons name="arrow-forward" size={16} color={COLORS.background} />
+                  <Ionicons
+                    name="arrow-forward"
+                    size={16}
+                    color={COLORS.background}
+                  />
                 </View>
               </LinearGradient>
             </Pressable>
@@ -1246,21 +1498,29 @@ export default function Page() {
               <View style={styles.questCard}>
                 <View style={styles.questInfo}>
                   <View style={styles.questHeader}>
-                    <Text style={styles.questCardTitle}>{dailyQuest.title}</Text>
+                    <Text style={styles.questCardTitle}>
+                      {dailyQuest.title}
+                    </Text>
                     <View style={styles.pointsBadge}>
-                      <Text style={styles.pointsBadgeText}>+{dailyQuest.points} pts</Text>
+                      <Text style={styles.pointsBadgeText}>
+                        +{dailyQuest.points} pts
+                      </Text>
                     </View>
                   </View>
-                  <Text style={styles.questDescription}>{dailyQuest.description}</Text>
+                  <Text style={styles.questDescription}>
+                    {dailyQuest.description}
+                  </Text>
                 </View>
-                
+
                 <View style={styles.progressContainer}>
                   <View style={styles.progressBarBackground}>
-                    <View 
+                    <View
                       style={[
-                        styles.progressBarFill, 
-                        { width: `${Math.min((dailyQuest.progress / dailyQuest.target) * 100, 100)}%` }
-                      ]} 
+                        styles.progressBarFill,
+                        {
+                          width: `${Math.min((dailyQuest.progress / dailyQuest.target) * 100, 100)}%`,
+                        },
+                      ]}
                     />
                   </View>
                   <View style={styles.progressLabelRow}>
@@ -1269,7 +1529,11 @@ export default function Page() {
                     </Text>
                     {dailyQuest.completed && (
                       <View style={styles.completedBadge}>
-                        <Ionicons name="checkmark-circle" size={14} color={COLORS.primary} />
+                        <Ionicons
+                          name="checkmark-circle"
+                          size={14}
+                          color={COLORS.primary}
+                        />
                         <Text style={styles.completedBadgeText}>Done</Text>
                       </View>
                     )}
@@ -1278,9 +1542,168 @@ export default function Page() {
               </View>
             ) : (
               <View style={styles.emptyQuestCard}>
-                <Text style={styles.emptyQuestText}>No active quests right now. Take a break!</Text>
+                <Text style={styles.emptyQuestText}>
+                  No active quests right now. Take a break!
+                </Text>
               </View>
             )}
+          </View>
+
+          <View style={styles.leaderboardContainer}>
+            <Text style={styles.sectionTitle}>CO2 Leaderboard</Text>
+            <View style={styles.leaderboardToggleRow}>
+              <Pressable
+                onPress={() => setLeaderboardMode("group")}
+                style={({ pressed }) => [
+                  styles.leaderboardToggleButton,
+                  leaderboardMode === "group" &&
+                    styles.leaderboardToggleButtonActive,
+                  pressed && styles.pressed,
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.leaderboardToggleText,
+                    leaderboardMode === "group" &&
+                      styles.leaderboardToggleTextActive,
+                  ]}
+                >
+                  Teams
+                </Text>
+              </Pressable>
+              <Pressable
+                onPress={() => setLeaderboardMode("region")}
+                style={({ pressed }) => [
+                  styles.leaderboardToggleButton,
+                  leaderboardMode === "region" &&
+                    styles.leaderboardToggleButtonActive,
+                  pressed && styles.pressed,
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.leaderboardToggleText,
+                    leaderboardMode === "region" &&
+                      styles.leaderboardToggleTextActive,
+                  ]}
+                >
+                  Cities
+                </Text>
+              </Pressable>
+            </View>
+
+            <View style={styles.leaderboardCard}>
+              {leaderboardMode === "group" && primaryTeamName ? (
+                <Text style={styles.leaderboardContextText}>
+                  Ranked teams by CO2 absorption. Your group is highlighted.
+                </Text>
+              ) : null}
+
+              {leaderboardMode === "region" ? (
+                <Text style={styles.leaderboardContextText}>
+                  Ranked cities in your region by CO2 absorption.
+                </Text>
+              ) : null}
+
+              {isLeaderboardLoading ? (
+                <View style={styles.leaderboardState}>
+                  <ActivityIndicator size="small" color={COLORS.primary} />
+                  <Text style={styles.leaderboardStateText}>
+                    Loading rankings...
+                  </Text>
+                </View>
+              ) : leaderboardError ? (
+                <View style={styles.leaderboardState}>
+                  <Ionicons
+                    name="alert-circle-outline"
+                    size={18}
+                    color={COLORS.warning}
+                  />
+                  <Text style={styles.leaderboardStateText}>
+                    {leaderboardError}
+                  </Text>
+                </View>
+              ) : leaderboardRows.length === 0 ? (
+                <View style={styles.leaderboardState}>
+                  <Ionicons
+                    name="people-outline"
+                    size={18}
+                    color={COLORS.secondary}
+                  />
+                  <Text style={styles.leaderboardStateText}>
+                    {leaderboardEmptyText}
+                  </Text>
+                </View>
+              ) : leaderboardMode === "group" ? (
+                <View style={styles.leaderboardList}>
+                  {groupLeaderboard.slice(0, 8).map((row) => (
+                    <View key={row.teamId} style={styles.leaderboardRow}>
+                      <View
+                        style={[
+                          styles.rankBadge,
+                          row.rank === 1 && styles.rankBadgeTop,
+                        ]}
+                      >
+                        <Text style={styles.rankBadgeText}>#{row.rank}</Text>
+                      </View>
+                      <View style={styles.leaderboardRowMain}>
+                        <Text
+                          style={[
+                            styles.leaderboardName,
+                            row.isCurrentUsersTeam &&
+                              styles.leaderboardNameCurrent,
+                          ]}
+                          numberOfLines={1}
+                        >
+                          {row.teamName}
+                          {row.isCurrentUsersTeam ? " (Your Group)" : ""}
+                        </Text>
+                        <Text style={styles.leaderboardMeta}>
+                          {row.cityLabel} - {row.memberCount} members
+                        </Text>
+                      </View>
+                      <Text style={styles.leaderboardValue}>
+                        {Math.round(row.co2KgPerYear).toLocaleString()} kg/yr
+                      </Text>
+                    </View>
+                  ))}
+                </View>
+              ) : (
+                <View style={styles.leaderboardList}>
+                  {regionalLeaderboard.slice(0, 8).map((row) => (
+                    <View key={row.cityId} style={styles.leaderboardRow}>
+                      <View
+                        style={[
+                          styles.rankBadge,
+                          row.rank === 1 && styles.rankBadgeTop,
+                        ]}
+                      >
+                        <Text style={styles.rankBadgeText}>#{row.rank}</Text>
+                      </View>
+                      <View style={styles.leaderboardRowMain}>
+                        <Text
+                          style={[
+                            styles.leaderboardName,
+                            row.isCurrentUsersCity &&
+                              styles.leaderboardNameCurrent,
+                          ]}
+                          numberOfLines={1}
+                        >
+                          {row.cityName}
+                          {row.isCurrentUsersCity ? " (Your City)" : ""}
+                        </Text>
+                        <Text style={styles.leaderboardMeta}>
+                          {row.memberCount} members
+                        </Text>
+                      </View>
+                      <Text style={styles.leaderboardValue}>
+                        {Math.round(row.co2KgPerYear).toLocaleString()} kg/yr
+                      </Text>
+                    </View>
+                  ))}
+                </View>
+              )}
+            </View>
           </View>
 
           <View style={styles.quickActions}>
@@ -1291,7 +1714,11 @@ export default function Page() {
               ]}
               onPress={() => router.push("/(protected)/onboarding")}
             >
-              <Ionicons name="help-circle-outline" size={20} color={COLORS.primary} />
+              <Ionicons
+                name="help-circle-outline"
+                size={20}
+                color={COLORS.primary}
+              />
               <Text style={styles.actionButtonText}>Help</Text>
             </Pressable>
             <Pressable
@@ -1302,7 +1729,9 @@ export default function Page() {
               onPress={handleSignOut}
             >
               <Ionicons name="log-out-outline" size={20} color={COLORS.text} />
-              <Text style={[styles.actionButtonText, { color: COLORS.text }]}>Logout</Text>
+              <Text style={[styles.actionButtonText, { color: COLORS.text }]}>
+                Logout
+              </Text>
             </Pressable>
           </View>
 
@@ -2004,6 +2433,122 @@ const styles = StyleSheet.create({
     fontFamily: "Boogaloo_400Regular",
     textAlign: "center",
     opacity: 0.5,
+  },
+  leaderboardContainer: {
+    marginTop: 4,
+  },
+  leaderboardToggleRow: {
+    flexDirection: "row",
+    gap: 10,
+    marginBottom: 12,
+    paddingHorizontal: 4,
+  },
+  leaderboardToggleButton: {
+    flex: 1,
+    paddingVertical: 10,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: COLORS.secondary + "28",
+    backgroundColor: COLORS.accent + "30",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  leaderboardToggleButtonActive: {
+    backgroundColor: COLORS.primary + "18",
+    borderColor: COLORS.primary + "56",
+  },
+  leaderboardToggleText: {
+    color: COLORS.text,
+    fontSize: 15,
+    fontFamily: "Boogaloo_400Regular",
+    opacity: 0.8,
+  },
+  leaderboardToggleTextActive: {
+    color: COLORS.primary,
+    opacity: 1,
+  },
+  leaderboardCard: {
+    backgroundColor: COLORS.accent + "30",
+    borderRadius: 28,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: COLORS.secondary + "20",
+    gap: 10,
+  },
+  leaderboardContextText: {
+    color: COLORS.text,
+    fontSize: 14,
+    fontFamily: "Boogaloo_400Regular",
+    opacity: 0.7,
+  },
+  leaderboardState: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    paddingVertical: 12,
+  },
+  leaderboardStateText: {
+    color: COLORS.text,
+    fontSize: 14,
+    fontFamily: "Boogaloo_400Regular",
+    opacity: 0.75,
+    textAlign: "center",
+  },
+  leaderboardList: {
+    gap: 10,
+  },
+  leaderboardRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    backgroundColor: COLORS.background + "82",
+    borderWidth: 1,
+    borderColor: COLORS.secondary + "16",
+    borderRadius: 18,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+  },
+  rankBadge: {
+    minWidth: 44,
+    paddingVertical: 6,
+    paddingHorizontal: 8,
+    borderRadius: 12,
+    backgroundColor: COLORS.secondary + "14",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  rankBadgeTop: {
+    backgroundColor: COLORS.primary + "22",
+  },
+  rankBadgeText: {
+    color: COLORS.primary,
+    fontSize: 13,
+    fontFamily: "Boogaloo_400Regular",
+  },
+  leaderboardRowMain: {
+    flex: 1,
+    minWidth: 0,
+    gap: 2,
+  },
+  leaderboardName: {
+    color: COLORS.primary,
+    fontSize: 18,
+    fontFamily: "Boogaloo_400Regular",
+  },
+  leaderboardNameCurrent: {
+    color: COLORS.secondary,
+  },
+  leaderboardMeta: {
+    color: COLORS.text,
+    fontSize: 13,
+    fontFamily: "Boogaloo_400Regular",
+    opacity: 0.65,
+  },
+  leaderboardValue: {
+    color: COLORS.secondary,
+    fontSize: 14,
+    fontFamily: "Boogaloo_400Regular",
   },
   quickActions: {
     flexDirection: "row",
